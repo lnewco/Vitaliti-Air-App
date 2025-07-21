@@ -13,17 +13,40 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your pulse oximeter device for monitoring SpO2 and heart rate.",
+        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to your pulse oximeter device for monitoring SpO2 and heart rate.",
+        "UIBackgroundModes": [
+          "bluetooth-central",
+          "bluetooth-central"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.sophiafay24.VitalitiAirApp"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "74175400-2942-45ba-9279-347208edf08a"
+      }
     }
   }
 }
