@@ -4,6 +4,7 @@ import { useBluetooth } from '../context/BluetoothContext';
 import SpO2Display from '../components/SpO2Display';
 import HeartRateDisplay from '../components/HeartRateDisplay';
 import DeviceScanner from '../components/DeviceScanner';
+import SessionControls from '../components/SessionControls';
 
 const DashboardScreen = () => {
   const { isConnected, pulseOximeterData, connectedDevice } = useBluetooth();
@@ -31,6 +32,14 @@ const DashboardScreen = () => {
             <HeartRateDisplay data={pulseOximeterData} isConnected={isConnected} />
           </View>
         )}
+
+        {/* Session controls - always visible but disabled when not connected */}
+        <SessionControls 
+          isConnected={isConnected}
+          onSessionChanged={(event, data) => {
+            console.log('Session event:', event, data);
+          }}
+        />
 
         {/* Device scanner takes priority when not connected */}
         <View style={styles.scannerContainer}>
