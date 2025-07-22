@@ -1,6 +1,7 @@
 import { BleManager } from 'react-native-ble-plx';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { Buffer } from 'buffer';
+import SessionManager from './SessionManager';
 
 class BluetoothService {
   constructor() {
@@ -239,8 +240,16 @@ class BluetoothService {
   handleBCIDataReceived(data) {
     try {
       const parsedData = this.parseBCIData(data);
-      if (parsedData && this.onDataReceived) {
-        this.onDataReceived(parsedData);
+      if (parsedData) {
+        // Send to UI callback if available
+        if (this.onDataReceived) {
+          this.onDataReceived(parsedData);
+        }
+        
+        // Send to session manager if session is active
+        if (SessionManager.isSessionActive()) {
+          SessionManager.addReading(parsedData);
+        }
       }
     } catch (error) {
       console.error('Error handling BCI data:', error);
