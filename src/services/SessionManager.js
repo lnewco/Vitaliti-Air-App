@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DatabaseService from './DatabaseService';
+import SupabaseService from './SupabaseService';
 
 class SessionManager {
   constructor() {
@@ -13,6 +14,18 @@ class SessionManager {
     // Buffer settings
     this.BATCH_SIZE = 50; // Insert readings in batches of 50
     this.BATCH_INTERVAL = 2000; // Every 2 seconds
+
+    // Initialize Supabase
+    this.initializeSupabase();
+  }
+
+  async initializeSupabase() {
+    try {
+      await SupabaseService.initialize();
+      console.log('☁️ Supabase service initialized');
+    } catch (error) {
+      console.error('❌ Failed to initialize Supabase:', error);
+    }
   }
 
   // Event system for UI updates
@@ -48,8 +61,14 @@ class SessionManager {
         await DatabaseService.init();
       }
 
-      // Create session in database
+      // Create session in local database
       await DatabaseService.createSession(sessionId);
+
+      // Create session in Supabase (will queue if offline)
+      await SupabaseService.createSession({
+        id: sessionId,
+        startTime: Date.now()
+      });
 
       // Set session state
       this.currentSession = {
@@ -69,7 +88,7 @@ class SessionManager {
       // Save session state
       await AsyncStorage.setItem('activeSession', JSON.stringify(this.currentSession));
 
-      console.log(`🎬 Session started: ${sessionId}`);
+      console.log(`🎬 Session started: ${sessionId} (Local + Cloud)`);
       this.notify('sessionStarted', this.currentSession);
 
       return sessionId;
@@ -91,8 +110,11 @@ class SessionManager {
       // Stop batch processing
       this.stopBatchProcessing();
 
-      // End session in database and get stats
+      // End session in local database and get stats
       const stats = await DatabaseService.endSession(this.currentSession.id);
+
+      // End session in Supabase (will queue if offline)
+      await SupabaseService.endSession(this.currentSession.id, stats);
 
       // Update session object
       const completedSession = {
@@ -102,7 +124,7 @@ class SessionManager {
         status: 'completed'
       };
 
-      console.log(`🏁 Session completed: ${this.currentSession.id}`, stats);
+      console.log(`🏁 Session completed: ${this.currentSession.id} (Local + Cloud)`, stats);
 
       // Reset state
       this.isActive = false;
@@ -181,8 +203,13 @@ class SessionManager {
       const readings = [...this.readingBuffer];
       this.readingBuffer = [];
       
+      // Write to local database
       await DatabaseService.addReadingsBatch(readings);
-      console.log(`💾 Flushed ${readings.length} readings to database`);
+      
+      // Write to Supabase (will queue if offline)
+      await SupabaseService.addReadingsBatch(readings);
+      
+      console.log(`💾 Flushed ${readings.length} readings to local + cloud storage`);
     } catch (error) {
       console.error('❌ Failed to flush readings:', error);
       // Put readings back in buffer on error
