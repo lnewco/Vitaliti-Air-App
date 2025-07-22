@@ -1,3 +1,4 @@
+
 -- Vitaliti Air App - Supabase Database Schema
 -- Run this in Supabase SQL Editor
 
