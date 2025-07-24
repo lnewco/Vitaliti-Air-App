@@ -75,13 +75,6 @@ const SessionControls = ({ isConnected, onSessionChanged, navigation }) => {
   }, [onSessionChanged]);
 
   const handleStartSession = async () => {
-    if (!isConnected) {
-      Alert.alert(
-        'Device Not Connected',
-        'Please connect to a pulse oximeter before starting a session.',
-        [{ text: 'OK', style: 'default' }]
-      );
-      return;
     }
 
     try {
@@ -150,13 +143,13 @@ const SessionControls = ({ isConnected, onSessionChanged, navigation }) => {
         <TouchableOpacity
           style={[
             styles.startButton,
-            !isConnected && styles.buttonDisabled
+            false && styles.buttonDisabled
           ]}
           onPress={handleStartSession}
-          disabled={!isConnected}
+          disabled={false}
         >
           <Text style={styles.startButtonText}>Start Training Session</Text>
-          {!isConnected && (
+          {false && (
             <Text style={styles.disabledText}>Connect device first</Text>
           )}
         </TouchableOpacity>
