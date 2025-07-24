@@ -259,6 +259,11 @@ class SessionManager {
   // Recovery methods
   async recoverSession() {
     try {
+      // Initialize database if needed before recovery
+      if (!DatabaseService.db) {
+        await DatabaseService.init();
+      }
+      
       const savedSession = await AsyncStorage.getItem('activeSession');
       if (savedSession) {
         const session = JSON.parse(savedSession);

@@ -5,6 +5,13 @@ import { BluetoothProvider } from './src/context/BluetoothContext';
 import DashboardScreen from './src/screens/DashboardScreen';
 import SessionHistoryScreen from './src/screens/SessionHistoryScreen';
 
+// Authentication imports
+import { AuthProvider } from './src/auth/AuthContext';
+import AppNavigator from './src/navigation/AppNavigator';
+
+// Enable authentication now that core functionality is working
+const USE_AUTHENTICATION = true;
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
 
@@ -19,6 +26,18 @@ export default function App() {
     }
   };
 
+  if (USE_AUTHENTICATION) {
+    // Use authentication system
+    return (
+      <AuthProvider>
+        <BluetoothProvider>
+          <AppNavigator />
+        </BluetoothProvider>
+      </AuthProvider>
+    );
+  }
+
+  // Use original app without authentication
   return (
     <BluetoothProvider>
       <SafeAreaView style={styles.container}>
@@ -90,3 +109,5 @@ const styles = StyleSheet.create({
     color: '#2196F3',
   },
 });
+
+
