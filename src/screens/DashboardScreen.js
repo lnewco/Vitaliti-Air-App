@@ -1,52 +1,44 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
-import { useBluetooth } from '../context/BluetoothContext';
-import SpO2Display from '../components/SpO2Display';
-import HeartRateDisplay from '../components/HeartRateDisplay';
-import DeviceScanner from '../components/DeviceScanner';
-import SessionControls from '../components/SessionControls';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
 
 const DashboardScreen = ({ navigation }) => {
-  console.log("🔍 DashboardScreen received navigation prop:", navigation);
-  const { isConnected, pulseOximeterData, connectedDevice } = useBluetooth();
+  const handleStartSession = () => {
+    navigation.navigate('SessionSetup');
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Vitaliti Air</Text>
-          <Text style={styles.subtitle}>Pulse Oximeter Monitor</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Vitaliti Air</Text>
+        <Text style={styles.subtitle}>Intermittent Hypoxic-Hyperoxic Training</Text>
+      </View>
+
+      {/* Main Content */}
+      <View style={styles.content}>
+        <View style={styles.welcomeSection}>
+          <Text style={styles.welcomeIcon}>🫁</Text>
+          <Text style={styles.welcomeText}>Ready to start your training session?</Text>
+          <Text style={styles.welcomeSubtext}>
+            Connect your pulse oximeter and begin monitoring your oxygen levels
+          </Text>
         </View>
 
-        {isConnected && connectedDevice && (
-          <View style={styles.deviceInfo}>
-            <Text style={styles.deviceInfoText}>
-              📱 Connected to: {connectedDevice.name || connectedDevice.localName || 'Unknown Device'}
-            </Text>
-          </View>
-        )}
+        <TouchableOpacity 
+          style={styles.startButton}
+          onPress={handleStartSession}
+        >
+          <Text style={styles.startButtonText}>Start Session</Text>
+        </TouchableOpacity>
 
-        {/* Show data displays only when connected */}
-        {isConnected && (
-          <View style={styles.displayContainer}>
-            <SpO2Display data={pulseOximeterData} isConnected={isConnected} />
-            <HeartRateDisplay data={pulseOximeterData} isConnected={isConnected} />
-          </View>
-        )}
-
-        {/* Session controls - always visible but disabled when not connected */}
-        <SessionControls navigation={navigation} 
-          isConnected={isConnected}
-          onSessionChanged={(event, data) => {
-            console.log('Session event:', event, data);
-          }}
-        />
-
-        {/* Device scanner takes priority when not connected */}
-        <View style={styles.scannerContainer}>
-          <DeviceScanner />
+        <View style={styles.infoSection}>
+          <Text style={styles.infoText}>
+            🔹 Connect your pulse oximeter{'\n'}
+            🔹 Follow the guided setup{'\n'}
+            🔹 Begin your IHHT training
+          </Text>
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 };
@@ -54,23 +46,18 @@ const DashboardScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingBottom: 20, // Add bottom padding for scroll
+    backgroundColor: '#F9FAFB',
   },
   header: {
     alignItems: 'center',
-    paddingVertical: 20,
-    marginBottom: 20,
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#1F2937',
     marginBottom: 8,
@@ -78,24 +65,66 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#6B7280',
-  },
-  deviceInfo: {
-    backgroundColor: '#10B981',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 20,
-  },
-  deviceInfoText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
     textAlign: 'center',
   },
-  displayContainer: {
-    marginBottom: 20,
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  scannerContainer: {
-    minHeight: 400, // Ensure minimum height for scanner
+  welcomeSection: {
+    alignItems: 'center',
+    marginBottom: 60,
+  },
+  welcomeIcon: {
+    fontSize: 80,
+    marginBottom: 24,
+  },
+  welcomeText: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#1F2937',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  welcomeSubtext: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    maxWidth: 300,
+  },
+  startButton: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 48,
+    paddingVertical: 20,
+    borderRadius: 16,
+    marginBottom: 40,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  startButtonText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  infoSection: {
+    backgroundColor: '#F3F4F6',
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  infoText: {
+    fontSize: 16,
+    color: '#4B5563',
+    lineHeight: 24,
+    textAlign: 'left',
   },
 });
 

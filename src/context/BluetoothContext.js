@@ -104,7 +104,10 @@ export const BluetoothProvider = ({ children }) => {
 
   const disconnect = async () => {
     try {
+      console.log('🔌 BluetoothContext: Initiating disconnect...');
       await BluetoothService.disconnect();
+      
+      // Reset all connection state
       setIsConnected(false);
       setConnectedDevice(null);
       setPulseOximeterData({
@@ -116,8 +119,23 @@ export const BluetoothProvider = ({ children }) => {
         pleth: null,
         timestamp: null
       });
+      
+      console.log('✅ BluetoothContext: Disconnect completed, state reset');
     } catch (error) {
-      console.error('Error disconnecting:', error);
+      console.error('❌ BluetoothContext: Error disconnecting:', error);
+      
+      // Still reset state even if disconnect failed
+      setIsConnected(false);
+      setConnectedDevice(null);
+      setPulseOximeterData({
+        spo2: null,
+        heartRate: null,
+        signalStrength: null,
+        isFingerDetected: false,
+        isSearchingForPulse: false,
+        pleth: null,
+        timestamp: null
+      });
     }
   };
 

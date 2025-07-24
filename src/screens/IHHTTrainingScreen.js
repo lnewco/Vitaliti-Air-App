@@ -9,7 +9,8 @@ import {
   StatusBar,
 } from 'react-native';
 import { useBluetooth } from '../context/BluetoothContext';
-import SessionManager from '../services/SessionManager';
+import EnhancedSessionManager from '../services/EnhancedSessionManager';
+import SafetyIndicator from '../components/SafetyIndicator';
 
 const PHASE_TYPES = {
   HYPOXIC: 'HYPOXIC',
@@ -27,136 +28,114 @@ const TOTAL_DURATION = (HYPOXIC_DURATION + HYPEROXIC_DURATION) * TOTAL_CYCLES; /
 const IHHTTrainingScreen = ({ navigation }) => {
   const { pulseOximeterData, isConnected } = useBluetooth();
   
-  // Session state
-  const [currentPhase, setCurrentPhase] = useState(PHASE_TYPES.HYPOXIC);
-  const [currentCycle, setCurrentCycle] = useState(1);
-  const [phaseTimeRemaining, setPhaseTimeRemaining] = useState(HYPOXIC_DURATION);
+  // Enhanced session state - using the enhanced session manager
+  const [sessionInfo, setSessionInfo] = useState(EnhancedSessionManager.getSessionInfo());
   const [totalTimeElapsed, setTotalTimeElapsed] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
-  const [sessionStarted, setSessionStarted] = useState(false);
   
   // Safety state
-  const [showCriticalAlert, setShowCriticalAlert] = useState(false);
   const [warningActive, setWarningActive] = useState(false);
 
-  // Start session when component mounts
+  // Start session when component mounts (device is already connected from setup)
   useEffect(() => {
     startSession();
+    
+    // Set up session event listeners
+    const removeListener = EnhancedSessionManager.addListener((event, data) => {
+      console.log('📱 Session event:', event, data);
+      
+      switch (event) {
+        case 'sessionStarted':
+        case 'phaseUpdate':
+        case 'phaseAdvanced':
+        case 'sessionPaused':
+        case 'sessionResumed':
+        case 'sessionSynced':
+          setSessionInfo(EnhancedSessionManager.getSessionInfo());
+          break;
+        case 'sessionEnded':
+          handleSessionComplete(data);
+          break;
+      }
+    });
+
     return () => {
       // Cleanup on unmount
-      if (sessionStarted) {
-        SessionManager.stopSession().catch(console.error);
+      removeListener();
+      if (sessionInfo.isActive) {
+        EnhancedSessionManager.stopSession().catch(console.error);
       }
     };
   }, []);
 
-  // Main timer effect
+  // Timer for total elapsed time
   useEffect(() => {
-    if (!sessionStarted || isPaused || showCriticalAlert) return;
+    if (!sessionInfo.isActive || sessionInfo.isPaused) return;
 
     const timer = setInterval(() => {
       setTotalTimeElapsed(prev => prev + 1);
-      setPhaseTimeRemaining(prev => {
-        if (prev <= 1) {
-          // Phase completed, advance to next
-          advancePhase();
-          return getNextPhaseDuration();
-        }
-        return prev - 1;
-      });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [sessionStarted, isPaused, showCriticalAlert, currentPhase, currentCycle]);
+  }, [sessionInfo.isActive, sessionInfo.isPaused]);
 
   // Safety monitoring effect
   useEffect(() => {
-    if (!pulseOximeterData || !sessionStarted) return;
+    if (!pulseOximeterData || !sessionInfo.isActive) return;
 
     const spo2 = pulseOximeterData.spo2;
     
-    // Critical safety check (< 78%)
-    if (spo2 < 78) {
-      triggerCriticalAlert();
-      return;
-    }
-    
-    // Warning zone check (78-82%)
+    // Warning zone check (78-82%) for data card border styling
     if (spo2 >= 78 && spo2 < 82) {
       setWarningActive(true);
     } else {
       setWarningActive(false);
     }
     
-    // Add reading to session
-    SessionManager.addReading(pulseOximeterData);
-  }, [pulseOximeterData, sessionStarted]);
+    // Add reading to enhanced session
+    EnhancedSessionManager.addReading(pulseOximeterData);
+  }, [pulseOximeterData, sessionInfo.isActive]);
 
   const startSession = async () => {
     try {
-      await SessionManager.startSession();
-      setSessionStarted(true);
+      await EnhancedSessionManager.startSession();
+      setSessionInfo(EnhancedSessionManager.getSessionInfo());
     } catch (error) {
-      console.error('Failed to start session:', error);
+      console.error('Failed to start enhanced session:', error);
       Alert.alert('Error', 'Failed to start training session');
       navigation.goBack();
     }
   };
 
-  const advancePhase = () => {
-    if (currentPhase === PHASE_TYPES.HYPOXIC) {
-      // Move to hyperoxic phase
-      setCurrentPhase(PHASE_TYPES.HYPEROXIC);
-    } else if (currentPhase === PHASE_TYPES.HYPEROXIC) {
-      // Complete cycle, check if more cycles needed
-      if (currentCycle >= TOTAL_CYCLES) {
-        // All cycles completed
-        setCurrentPhase(PHASE_TYPES.COMPLETED);
-        completeSession();
-      } else {
-        // Move to next cycle
-        setCurrentCycle(prev => prev + 1);
-        setCurrentPhase(PHASE_TYPES.HYPOXIC);
-      }
-    }
+  const handleSessionComplete = (completedSessionData) => {
+    Alert.alert(
+      'Training Complete!',
+      `Congratulations! You've completed all ${completedSessionData.currentCycle || TOTAL_CYCLES} cycles of IHHT training.`,
+      [{ text: 'View Results', onPress: () => navigation.navigate('History') }]
+    );
   };
 
-  const getNextPhaseDuration = () => {
-    if (currentPhase === PHASE_TYPES.HYPOXIC) {
-      return HYPEROXIC_DURATION;
-    } else {
-      return HYPOXIC_DURATION;
-    }
-  };
-
-  const triggerCriticalAlert = () => {
-    setShowCriticalAlert(true);
-    setIsPaused(true);
-    Vibration.vibrate([500, 500, 500], true); // Continuous vibration
-    
-    // Auto-terminate session
-    setTimeout(() => {
-      terminateSession();
-    }, 100);
-  };
-
-  const completeSession = async () => {
+  const pauseSession = async () => {
     try {
-      await SessionManager.stopSession();
-      Alert.alert(
-        'Training Complete!',
-        `Congratulations! You've completed all ${TOTAL_CYCLES} cycles of IHHT training.`,
-        [{ text: 'View Results', onPress: () => navigation.navigate('History') }]
-      );
+      await EnhancedSessionManager.pauseSession();
+      setSessionInfo(EnhancedSessionManager.getSessionInfo());
     } catch (error) {
-      console.error('Failed to complete session:', error);
+      console.error('Failed to pause session:', error);
+    }
+  };
+
+  const resumeSession = async () => {
+    try {
+      await EnhancedSessionManager.resumeSession();
+      setSessionInfo(EnhancedSessionManager.getSessionInfo());
+    } catch (error) {
+      console.error('Failed to resume session:', error);
     }
   };
 
   const terminateSession = async () => {
     try {
       Vibration.cancel();
-      await SessionManager.stopSession();
+      await EnhancedSessionManager.stopSession();
       navigation.goBack();
     } catch (error) {
       console.error('Failed to terminate session:', error);
@@ -164,15 +143,7 @@ const IHHTTrainingScreen = ({ navigation }) => {
     }
   };
 
-  const handlePause = () => {
-    if (isPaused) {
-      setIsPaused(false);
-      SessionManager.resumeSession();
-    } else {
-      setIsPaused(true);
-      SessionManager.pauseSession();
-    }
-  };
+
 
   const handleEndSession = () => {
     Alert.alert(
@@ -208,15 +179,16 @@ const IHHTTrainingScreen = ({ navigation }) => {
   };
 
   const formatTotalTime = (seconds) => {
-    const totalMins = Math.floor(TOTAL_DURATION / 60);
+    const totalDuration = (HYPOXIC_DURATION + HYPEROXIC_DURATION) * sessionInfo.totalCycles;
+    const totalMins = Math.floor(totalDuration / 60);
     const currentMins = Math.floor(seconds / 60);
     const currentSecs = seconds % 60;
     return `${currentMins}:${currentSecs.toString().padStart(2, '0')} / ${totalMins}:00`;
   };
 
   const getPhaseProgress = () => {
-    const totalPhases = TOTAL_CYCLES * 2; // 5 cycles × 2 phases each
-    const completedPhases = (currentCycle - 1) * 2 + (currentPhase === PHASE_TYPES.HYPEROXIC ? 1 : 0);
+    const totalPhases = sessionInfo.totalCycles * 2; // cycles × 2 phases each
+    const completedPhases = (sessionInfo.currentCycle - 1) * 2 + (sessionInfo.currentPhase === 'HYPEROXIC' ? 1 : 0);
     return completedPhases / totalPhases;
   };
 
@@ -224,57 +196,44 @@ const IHHTTrainingScreen = ({ navigation }) => {
   const currentHR = pulseOximeterData?.heartRate || 0;
   const spo2Status = getSpO2Status(currentSpo2);
 
-  if (showCriticalAlert) {
-    return (
-      <View style={styles.criticalAlertContainer}>
-        <StatusBar backgroundColor="#F44336" barStyle="light-content" />
-        <View style={styles.criticalAlert}>
-          <Text style={styles.criticalIcon}>🚨</Text>
-          <Text style={styles.criticalTitle}>CRITICAL SpO2</Text>
-          <Text style={styles.criticalMessage}>SpO2 below 78% - Training terminated</Text>
-          <Text style={styles.criticalSubMessage}>Please remove mask immediately</Text>
-          <TouchableOpacity
-            style={styles.criticalButton}
-            onPress={terminateSession}
-          >
-            <Text style={styles.criticalButtonText}>Acknowledge & Exit</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <StatusBar backgroundColor={currentPhase === PHASE_TYPES.HYPOXIC ? '#2196F3' : '#4CAF50'} barStyle="light-content" />
+      <StatusBar backgroundColor={sessionInfo.currentPhase === 'HYPOXIC' ? '#2196F3' : '#4CAF50'} barStyle="light-content" />
       
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: currentPhase === PHASE_TYPES.HYPOXIC ? '#2196F3' : '#4CAF50' }]}>
+      <View style={[styles.header, { backgroundColor: sessionInfo.currentPhase === 'HYPOXIC' ? '#2196F3' : '#4CAF50' }]}>
         <TouchableOpacity style={styles.backButton} onPress={handleEndSession}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>IHHT Training Session</Text>
-        <TouchableOpacity style={styles.pauseButton} onPress={handlePause}>
-          <Text style={styles.pauseButtonText}>{isPaused ? 'Resume' : 'Pause'}</Text>
+        <TouchableOpacity style={styles.pauseButton} onPress={sessionInfo.isPaused ? resumeSession : pauseSession}>
+          <Text style={styles.pauseButtonText}>{sessionInfo.isPaused ? 'Resume' : 'Pause'}</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Safety Indicator */}
+      <SafetyIndicator 
+        spo2={currentSpo2}
+        isConnected={isConnected}
+        isFingerDetected={pulseOximeterData?.isFingerDetected}
+      />
 
       {/* Main Timer */}
       <View style={styles.mainTimer}>
         <Text style={styles.timerText}>⏱️ {formatTotalTime(totalTimeElapsed)}</Text>
-        <Text style={styles.cycleText}>🔄 Cycle {currentCycle} of {TOTAL_CYCLES}</Text>
+        <Text style={styles.cycleText}>🔄 Cycle {sessionInfo.currentCycle} of {sessionInfo.totalCycles}</Text>
       </View>
 
       {/* Phase Status Card */}
-      <View style={[styles.phaseCard, { backgroundColor: currentPhase === PHASE_TYPES.HYPOXIC ? '#E3F2FD' : '#E8F5E8' }]}>
-        <Text style={styles.phaseIcon}>{currentPhase === PHASE_TYPES.HYPOXIC ? '🫁' : '🌱'}</Text>
+      <View style={[styles.phaseCard, { backgroundColor: sessionInfo.currentPhase === 'HYPOXIC' ? '#E3F2FD' : '#E8F5E8' }]}>
+        <Text style={styles.phaseIcon}>{sessionInfo.currentPhase === 'HYPOXIC' ? '🫁' : '🌱'}</Text>
         <Text style={styles.phaseTitle}>
-          {currentPhase === PHASE_TYPES.HYPOXIC ? 'HYPOXIC PHASE' : 'RECOVERY PHASE'}
+          {sessionInfo.currentPhase === 'HYPOXIC' ? 'HYPOXIC PHASE' : 'RECOVERY PHASE'}
         </Text>
         <Text style={styles.phaseMessage}>
-          {currentPhase === PHASE_TYPES.HYPOXIC ? 'Put on your mask' : 'Remove mask - Breathing fresh air'}
+          {sessionInfo.currentPhase === 'HYPOXIC' ? 'Put on your mask' : 'Remove mask - Breathing fresh air'}
         </Text>
-        <Text style={styles.phaseTimer}>⏰ {formatTime(phaseTimeRemaining)} remaining</Text>
+        <Text style={styles.phaseTimer}>⏰ {formatTime(sessionInfo.phaseTimeRemaining)} remaining</Text>
       </View>
 
       {/* Live Data Display */}
@@ -297,7 +256,7 @@ const IHHTTrainingScreen = ({ navigation }) => {
       {/* Phase Target */}
       <View style={styles.targetContainer}>
         <Text style={styles.targetText}>
-          🎯 {currentPhase === PHASE_TYPES.HYPOXIC ? 'Target Range: 82-87% SpO2' : 'Recovering to 95%+ SpO2'}
+          🎯 {sessionInfo.currentPhase === 'HYPOXIC' ? 'Target Range: 82-87% SpO2' : 'Recovering to 95%+ SpO2'}
         </Text>
       </View>
 
@@ -315,21 +274,21 @@ const IHHTTrainingScreen = ({ navigation }) => {
           <Text style={styles.endButtonText}>End Session</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.pauseControlButton, isPaused ? styles.resumeButton : styles.pauseControlButtonActive]} 
-          onPress={handlePause}
+          style={[styles.pauseControlButton, sessionInfo.isPaused ? styles.resumeButton : styles.pauseControlButtonActive]} 
+          onPress={sessionInfo.isPaused ? resumeSession : pauseSession}
         >
-          <Text style={styles.pauseControlButtonText}>{isPaused ? '▶️ Resume' : '⏸️ Pause'}</Text>
+          <Text style={styles.pauseControlButtonText}>{sessionInfo.isPaused ? '▶️ Resume' : '⏸️ Pause'}</Text>
         </TouchableOpacity>
       </View>
 
       {/* Pause Overlay */}
-      {isPaused && !showCriticalAlert && (
+      {sessionInfo.isPaused && (
         <View style={styles.pauseOverlay}>
           <View style={styles.pauseCard}>
             <Text style={styles.pauseTitle}>⏸️ SESSION PAUSED</Text>
-            <Text style={styles.pauseStats}>Cycle {currentCycle} of {TOTAL_CYCLES}</Text>
+            <Text style={styles.pauseStats}>Cycle {sessionInfo.currentCycle} of {sessionInfo.totalCycles}</Text>
             <Text style={styles.pauseStats}>{formatTotalTime(totalTimeElapsed)} elapsed</Text>
-            <TouchableOpacity style={styles.resumeButton} onPress={handlePause}>
+            <TouchableOpacity style={styles.resumeButton} onPress={resumeSession}>
               <Text style={styles.resumeButtonText}>Resume Training</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.endSessionButton} onPress={handleEndSession}>
@@ -554,53 +513,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  // Critical Alert Styles
-  criticalAlertContainer: {
-    flex: 1,
-    backgroundColor: '#F44336',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  criticalAlert: {
-    backgroundColor: '#FFFFFF',
-    margin: 20,
-    padding: 30,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  criticalIcon: {
-    fontSize: 80,
-    marginBottom: 20,
-  },
-  criticalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#F44336',
-    marginBottom: 10,
-  },
-  criticalMessage: {
-    fontSize: 18,
-    color: '#333333',
-    textAlign: 'center',
-    marginBottom: 5,
-  },
-  criticalSubMessage: {
-    fontSize: 16,
-    color: '#666666',
-    textAlign: 'center',
-    marginBottom: 30,
-  },
-  criticalButton: {
-    backgroundColor: '#F44336',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 8,
-  },
-  criticalButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+
   // Pause Overlay Styles
   pauseOverlay: {
     position: 'absolute',

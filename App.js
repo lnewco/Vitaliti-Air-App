@@ -3,9 +3,14 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { LogBox } from 'react-native';
 import { BluetoothProvider } from './src/context/BluetoothContext';
+
+// Hide error overlays from app UI but keep console logging for debugging
+LogBox.ignoreAllLogs();
 import DashboardScreen from './src/screens/DashboardScreen';
 import SessionHistoryScreen from './src/screens/SessionHistoryScreen';
+import SessionSetupScreen from './src/screens/SessionSetupScreen';
 import IHHTTrainingScreen from './src/screens/IHHTTrainingScreen';
 
 const Tab = createBottomTabNavigator();
@@ -32,7 +37,7 @@ function TabNavigator() {
         name="Dashboard" 
         component={DashboardScreen}
         options={{
-          tabBarLabel: '📊 Monitor',
+          tabBarLabel: '🏠 Home',
           tabBarLabelStyle: {
             fontSize: 14,
             fontWeight: '600',
@@ -64,7 +69,14 @@ function AppNavigator() {
     >
       <Stack.Screen name="Main" component={TabNavigator} />
       <Stack.Screen 
-        name="Training" 
+        name="SessionSetup" 
+        component={SessionSetupScreen}
+        options={{
+          presentation: 'card',
+        }}
+      />
+      <Stack.Screen 
+        name="AirSession" 
         component={IHHTTrainingScreen}
         options={{
           presentation: 'card',
