@@ -75,10 +75,11 @@ const SessionControls = ({ isConnected, onSessionChanged, navigation }) => {
   }, [onSessionChanged]);
 
   const handleStartSession = async () => {
+    }
 
     try {
       navigation?.navigate("training");
-      console.log("Navigating to training session");
+      console.log('Started session:', sessionId);
     } catch (error) {
       console.error('Failed to start session:', error);
       Alert.alert(
