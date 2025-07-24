@@ -76,15 +76,8 @@ const SessionControls = ({ isConnected, onSessionChanged, navigation }) => {
 
   const handleStartSession = async () => {
 
-      console.log("🚀 Starting navigation to training...");
-      console.log("📱 Navigation object:", navigation);
-      console.log("🔍 Navigation.navigate function:", navigation?.navigate);
-      if (!navigation?.navigate) {
-        console.log("❌ Navigation object or navigate function is missing");
-        return;
-      }
     try {
-      navigation.navigate("training"); console.log("✅ Navigation call completed");
+      navigation?.navigate("training");
       console.log("Navigating to training session");
     } catch (error) {
       console.error('Failed to start session:', error);
