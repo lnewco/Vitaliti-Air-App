@@ -75,19 +75,25 @@ const SessionControls = ({ isConnected, onSessionChanged, navigation }) => {
   }, [onSessionChanged]);
 
   const handleStartSession = async () => {
+    console.log("🚀 Starting navigation to training...");
+    console.log("📱 Navigation object:", navigation);
+    console.log("🔍 Navigation.navigate function:", navigation?.navigate);
+    
+    if (!navigation?.navigate) {
+      console.log("❌ Navigation object or navigate function is missing");
+      Alert.alert(
+        'Error',
+        'Navigation not available. Please try again.',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
 
-      console.log("🚀 Starting navigation to training...");
-      console.log("📱 Navigation object:", navigation);
-      console.log("🔍 Navigation.navigate function:", navigation?.navigate);
-      if (!navigation?.navigate) {
-        console.log("❌ Navigation object or navigate function is missing");
-        return;
-      }
     try {
-      navigation.navigate("training"); console.log("✅ Navigation call completed");
-      console.log("Navigating to training session");
+      navigation.navigate("Training");
+      console.log("✅ Navigation to Training screen completed");
     } catch (error) {
-      console.error('Failed to start session:', error);
+      console.error('Failed to navigate to training session:', error);
       Alert.alert(
         'Error',
         'Failed to start training session. Please try again.',
