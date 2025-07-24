@@ -9,6 +9,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const renderContent = () => {
+  console.log("📱 App.js setActiveTab function created:", typeof setActiveTab);
     switch (activeTab) {
       case 'dashboard':
         return <DashboardScreen />;

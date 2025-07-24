@@ -7,6 +7,7 @@ import DeviceScanner from '../components/DeviceScanner';
 import SessionControls from '../components/SessionControls';
 
 const DashboardScreen = ({ navigation }) => {
+  console.log("🔍 DashboardScreen received navigation prop:", navigation);
   const { isConnected, pulseOximeterData, connectedDevice } = useBluetooth();
 
   return (
