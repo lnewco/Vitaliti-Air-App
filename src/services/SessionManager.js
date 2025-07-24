@@ -288,6 +288,10 @@ class SessionManager {
   // Session history
   async getAllSessions() {
     try {
+      // Initialize database if needed
+      if (!DatabaseService.db) {
+        await DatabaseService.init();
+      }
       return await DatabaseService.getAllSessions();
     } catch (error) {
       console.error('❌ Failed to get sessions:', error);
@@ -296,6 +300,10 @@ class SessionManager {
   }
 
   async getSessionWithData(sessionId) {
+      // Initialize database if needed
+      if (!DatabaseService.db) {
+        await DatabaseService.init();
+      }
     try {
       const session = await DatabaseService.getSession(sessionId);
       const readings = await DatabaseService.getSessionReadings(sessionId, true); // Valid only
@@ -360,6 +368,10 @@ class SessionManager {
 
   async getStorageInfo() {
     try {
+      // Initialize database if needed
+      if (!DatabaseService.db) {
+        await DatabaseService.init();
+      }
       return await DatabaseService.getStorageInfo();
     } catch (error) {
       console.error('❌ Failed to get storage info:', error);
