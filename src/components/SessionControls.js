@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import SessionManager from '../services/SessionManager';
 
-const SessionControls = ({ isConnected, onSessionChanged }) => {
+const SessionControls = ({ isConnected, onSessionChanged, navigation }) => {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [sessionDuration, setSessionDuration] = useState('0:00');
   const [readingCount, setReadingCount] = useState(0);
@@ -85,7 +85,7 @@ const SessionControls = ({ isConnected, onSessionChanged }) => {
     }
 
     try {
-      const sessionId = await SessionManager.startSession();
+      navigation?.navigate("training");
       console.log('Started session:', sessionId);
     } catch (error) {
       console.error('Failed to start session:', error);

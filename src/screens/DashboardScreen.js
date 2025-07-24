@@ -6,7 +6,7 @@ import HeartRateDisplay from '../components/HeartRateDisplay';
 import DeviceScanner from '../components/DeviceScanner';
 import SessionControls from '../components/SessionControls';
 
-const DashboardScreen = () => {
+const DashboardScreen = ({ navigation }) => {
   const { isConnected, pulseOximeterData, connectedDevice } = useBluetooth();
 
   return (
@@ -34,7 +34,7 @@ const DashboardScreen = () => {
         )}
 
         {/* Session controls - always visible but disabled when not connected */}
-        <SessionControls 
+        <SessionControls navigation={navigation} 
           isConnected={isConnected}
           onSessionChanged={(event, data) => {
             console.log('Session event:', event, data);
