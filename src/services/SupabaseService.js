@@ -73,6 +73,9 @@ class SupabaseService {
       // Store the mapping between local and Supabase session IDs
       this.sessionMapping.set(sessionData.id, data[0].id);
       
+      // Persist the mapping to AsyncStorage for recovery after app restart
+      await this.persistSessionMapping();
+      
       return data[0];
     } catch (error) {
       console.error('❌ Error creating session, queuing for sync:', error.message);
@@ -84,9 +87,33 @@ class SupabaseService {
   async endSession(sessionId, stats) {
     try {
       // Get the Supabase UUID for this local session ID
-      const supabaseSessionId = this.sessionMapping.get(sessionId);
+      let supabaseSessionId = this.sessionMapping.get(sessionId);
+      
+      // If mapping is lost (app restart), look it up from database
       if (!supabaseSessionId) {
-        console.warn('⚠️ No Supabase session mapping found for ending session:', sessionId);
+        console.log('🔍 Session mapping lost, looking up Supabase session ID...');
+        
+        try {
+          const { data, error } = await supabase
+            .from('sessions')
+            .select('id')
+            .eq('local_session_id', sessionId)
+            .eq('status', 'active')
+            .single();
+            
+          if (data && !error) {
+            supabaseSessionId = data.id;
+            // Restore the mapping
+            this.sessionMapping.set(sessionId, supabaseSessionId);
+            console.log('✅ Found Supabase session:', supabaseSessionId);
+          }
+        } catch (lookupError) {
+          console.error('❌ Failed to lookup session:', lookupError);
+        }
+      }
+      
+      if (!supabaseSessionId) {
+        console.warn('⚠️ No Supabase session found for ending session:', sessionId);
         this.queueForSync('endSession', { sessionId, stats });
         return null;
       }
@@ -443,6 +470,7 @@ class SupabaseService {
       await this.initializeDeviceId();
       await this.setupNetworkMonitoring();
       await this.loadSyncQueue();
+      await this.loadSessionMapping();
       
       if (this.isOnline && this.syncQueue.length > 0) {
         await this.processSyncQueue();
@@ -453,6 +481,29 @@ class SupabaseService {
       console.error('❌ SupabaseService initialization failed:', error);
       // Don't throw - let the app continue with local storage only
       console.log('📱 Continuing with local storage only');
+    }
+  }
+
+  // Session mapping persistence
+  async persistSessionMapping() {
+    try {
+      const mappingObj = Object.fromEntries(this.sessionMapping);
+      await AsyncStorage.setItem('sessionMapping', JSON.stringify(mappingObj));
+    } catch (error) {
+      console.error('❌ Failed to persist session mapping:', error);
+    }
+  }
+
+  async loadSessionMapping() {
+    try {
+      const mappingJson = await AsyncStorage.getItem('sessionMapping');
+      if (mappingJson) {
+        const mappingObj = JSON.parse(mappingJson);
+        this.sessionMapping = new Map(Object.entries(mappingObj));
+        console.log(`📥 Loaded ${this.sessionMapping.size} session mappings`);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load session mapping:', error);
     }
   }
 }
