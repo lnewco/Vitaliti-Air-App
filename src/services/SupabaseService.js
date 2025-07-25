@@ -1,5 +1,6 @@
 import supabase from '../config/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import authService from '../auth/AuthService';
 
 class SupabaseService {
   constructor() {
@@ -41,8 +42,12 @@ class SupabaseService {
   // Session Management
   async createSession(sessionData) {
     try {
+      // Get current authenticated user (fall back to anonymous)
+      const currentUser = authService.getCurrentUser();
+      
       const session = {
         device_id: this.deviceId,
+        user_id: currentUser?.id || null, // Link to authenticated user or anonymous
         start_time: new Date(sessionData.startTime).toISOString(),
         status: 'active',
         total_readings: 0,
@@ -68,6 +73,9 @@ class SupabaseService {
       // Store the mapping between local and Supabase session IDs
       this.sessionMapping.set(sessionData.id, data[0].id);
       
+      // Persist the mapping to AsyncStorage for recovery after app restart
+      await this.persistSessionMapping();
+      
       return data[0];
     } catch (error) {
       console.error('❌ Error creating session, queuing for sync:', error.message);
@@ -79,9 +87,33 @@ class SupabaseService {
   async endSession(sessionId, stats) {
     try {
       // Get the Supabase UUID for this local session ID
-      const supabaseSessionId = this.sessionMapping.get(sessionId);
+      let supabaseSessionId = this.sessionMapping.get(sessionId);
+      
+      // If mapping is lost (app restart), look it up from database
       if (!supabaseSessionId) {
-        console.warn('⚠️ No Supabase session mapping found for ending session:', sessionId);
+        console.log('🔍 Session mapping lost, looking up Supabase session ID...');
+        
+        try {
+          const { data, error } = await supabase
+            .from('sessions')
+            .select('id')
+            .eq('local_session_id', sessionId)
+            .eq('status', 'active')
+            .single();
+            
+          if (data && !error) {
+            supabaseSessionId = data.id;
+            // Restore the mapping
+            this.sessionMapping.set(sessionId, supabaseSessionId);
+            console.log('✅ Found Supabase session:', supabaseSessionId);
+          }
+        } catch (lookupError) {
+          console.error('❌ Failed to lookup session:', lookupError);
+        }
+      }
+      
+      if (!supabaseSessionId) {
+        console.warn('⚠️ No Supabase session found for ending session:', sessionId);
         this.queueForSync('endSession', { sessionId, stats });
         return null;
       }
@@ -131,8 +163,12 @@ class SupabaseService {
         return null;
       }
 
+      // Get current authenticated user (fall back to anonymous)
+      const currentUser = authService.getCurrentUser();
+      
       const supabaseReading = {
         session_id: supabaseSessionId,
+        user_id: currentUser?.id || null, // Link to authenticated user or anonymous
         timestamp: new Date(reading.timestamp).toISOString(),
         spo2: reading.spo2,
         heart_rate: reading.heartRate,
@@ -173,8 +209,12 @@ class SupabaseService {
         return null;
       }
 
+      // Get current authenticated user (fall back to anonymous)
+      const currentUser = authService.getCurrentUser();
+      
       const supabaseReadings = readings.map(reading => ({
         session_id: supabaseSessionId,
+        user_id: currentUser?.id || null, // Link to authenticated user or anonymous
         timestamp: new Date(reading.timestamp).toISOString(),
         spo2: reading.spo2,
         heart_rate: reading.heartRate,
@@ -211,10 +251,20 @@ class SupabaseService {
         return [];
       }
 
-      const { data, error } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('device_id', this.deviceId)
+      // Get current authenticated user
+      const currentUser = authService.getCurrentUser();
+      
+      let query = supabase.from('sessions').select('*');
+      
+      if (currentUser) {
+        // Authenticated: get user's sessions
+        query = query.eq('user_id', currentUser.id);
+      } else {
+        // Anonymous: get sessions for this device
+        query = query.eq('device_id', this.deviceId).is('user_id', null);
+      }
+      
+      const { data, error } = await query
         .order('start_time', { ascending: false })
         .limit(20);
 
@@ -237,6 +287,7 @@ class SupabaseService {
         return [];
       }
 
+      // Fetch readings for the session (user filter handled by session access)
       let query = supabase
         .from('readings')
         .select('*')
@@ -390,12 +441,69 @@ class SupabaseService {
   }
 
   async initialize() {
-    await this.initializeDeviceId();
-    await this.setupNetworkMonitoring();
-    await this.loadSyncQueue();
-    
-    if (this.isOnline && this.syncQueue.length > 0) {
-      await this.processSyncQueue();
+    try {
+      console.log('🔧 Initializing SupabaseService...');
+      
+      // Force clear any existing auth sessions that might cause recovery errors
+      try {
+        // Clear AsyncStorage auth data
+        const allKeys = await AsyncStorage.getAllKeys();
+        const authKeys = allKeys.filter(key => 
+          key.includes('supabase') || 
+          key.includes('sb-') || 
+          key.includes('auth.token') ||
+          key.includes('yhbywcawiothhoqaurgy')
+        );
+        
+        if (authKeys.length > 0) {
+          await AsyncStorage.multiRemove(authKeys);
+          console.log('🧹 Cleared', authKeys.length, 'auth storage keys');
+        }
+        
+        // Force sign out any existing sessions
+        await supabase.auth.signOut({ scope: 'local' });
+        console.log('🧹 Cleared any existing auth sessions');
+      } catch (authError) {
+        console.log('🔒 No auth sessions to clear (expected for anonymous mode)');
+      }
+      
+      await this.initializeDeviceId();
+      await this.setupNetworkMonitoring();
+      await this.loadSyncQueue();
+      await this.loadSessionMapping();
+      
+      if (this.isOnline && this.syncQueue.length > 0) {
+        await this.processSyncQueue();
+      }
+      
+      console.log('✅ SupabaseService initialized successfully');
+    } catch (error) {
+      console.error('❌ SupabaseService initialization failed:', error);
+      // Don't throw - let the app continue with local storage only
+      console.log('📱 Continuing with local storage only');
+    }
+  }
+
+  // Session mapping persistence
+  async persistSessionMapping() {
+    try {
+      const mappingObj = Object.fromEntries(this.sessionMapping);
+      await AsyncStorage.setItem('sessionMapping', JSON.stringify(mappingObj));
+    } catch (error) {
+      console.error('❌ Failed to persist session mapping:', error);
+    }
+  }
+
+  async loadSessionMapping() {
+    try {
+      const mappingJson = await AsyncStorage.getItem('sessionMapping');
+      if (mappingJson) {
+        const mappingObj = JSON.parse(mappingJson);
+        this.sessionMapping = new Map(Object.entries(mappingObj));
+        console.log(`📥 Loaded ${this.sessionMapping.size} session mappings`);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load session mapping:', error);
     }
   }
 }

@@ -58,7 +58,8 @@
     },
     "plugins": [
       "expo-background-task",
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      "expo-secure-store"
     ]
   }
 }

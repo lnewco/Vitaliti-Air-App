@@ -114,7 +114,13 @@ class SessionManager {
       const stats = await DatabaseService.endSession(this.currentSession.id);
 
       // End session in Supabase (will queue if offline)
-      await SupabaseService.endSession(this.currentSession.id, stats);
+      try {
+        await SupabaseService.endSession(this.currentSession.id, stats);
+        console.log('☁️ Session ended in Supabase successfully');
+      } catch (supabaseError) {
+        console.error('❌ Failed to end session in Supabase:', supabaseError);
+        // Continue with local cleanup even if Supabase fails
+      }
 
       // Update session object
       const completedSession = {
@@ -259,6 +265,11 @@ class SessionManager {
   // Recovery methods
   async recoverSession() {
     try {
+      // Initialize database if needed before recovery
+      if (!DatabaseService.db) {
+        await DatabaseService.init();
+      }
+      
       const savedSession = await AsyncStorage.getItem('activeSession');
       if (savedSession) {
         const session = JSON.parse(savedSession);
