@@ -14,12 +14,20 @@
     },
     "ios": {
       "supportsTablet": true,
+      "appleTeamId": "2726NBK599",
+      "deploymentTarget": "16.2",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.sophiafay24.VitalitiAirApp"
+        ]
+      },
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your pulse oximeter device for monitoring SpO2 and heart rate.",
         "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to your pulse oximeter device for monitoring SpO2 and heart rate.",
+        "NSSupportsLiveActivities": true,
         "UIBackgroundModes": [
           "bluetooth-central",
-          "bluetooth-central"
+          "processing"
         ],
         "ITSAppUsesNonExemptEncryption": false
       },
@@ -49,6 +57,8 @@
       }
     },
     "plugins": [
+      "expo-background-task",
+      "@bacons/apple-targets",
       "expo-secure-store"
     ]
   }

@@ -1,25 +1,63 @@
 import React, { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { createStackNavigator } from '@react-navigation/stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaView, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
 import DashboardScreen from './DashboardScreen';
 import SessionHistoryScreen from './SessionHistoryScreen';
+import SessionSetupScreen from './SessionSetupScreen';
+import IHHTTrainingScreen from './IHHTTrainingScreen';
 
-// Main App Content (authenticated users only)
+const Tab = createBottomTabNavigator();
+const Stack = createStackNavigator();
+
+// Tab Navigator for Dashboard and History
+function TabNavigator() {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: '#ffffff',
+          borderTopWidth: 1,
+          borderTopColor: '#e0e0e0',
+          paddingBottom: 10,
+          paddingTop: 5,
+        },
+        tabBarActiveTintColor: '#2196F3',
+        tabBarInactiveTintColor: '#666666',
+      }}
+    >
+      <Tab.Screen 
+        name="Dashboard" 
+        component={DashboardScreen}
+        options={{
+          tabBarLabel: '📊 Monitor',
+          tabBarLabelStyle: {
+            fontSize: 14,
+            fontWeight: '600',
+          },
+        }}
+      />
+      <Tab.Screen 
+        name="History" 
+        component={SessionHistoryScreen}
+        options={{
+          tabBarLabel: '📈 History',
+          tabBarLabelStyle: {
+            fontSize: 14,
+            fontWeight: '600',
+          },
+        }}
+      />
+    </Tab.Navigator>
+  );
+}
+
+// Main App Content with Stack Navigator (authenticated users only)
 const MainAppContent = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
   const { signOut } = useAuth();
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard':
-        return <DashboardScreen />;
-      case 'history':
-        return <SessionHistoryScreen />;
-      default:
-        return <DashboardScreen />;
-    }
-  };
 
   const handleSignOut = async () => {
     try {
@@ -31,43 +69,27 @@ const MainAppContent = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="auto" />
-      
-      {/* Header with Sign Out */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Vitaliti Air</Text>
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Main Content */}
-      <View style={styles.content}>
-        {renderContent()}
-      </View>
-
-      {/* Bottom Tab Navigation */}
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'dashboard' && styles.activeTab]}
-          onPress={() => setActiveTab('dashboard')}
-        >
-          <Text style={[styles.tabText, activeTab === 'dashboard' && styles.activeTabText]}>
-            📊 Monitor
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'history' && styles.activeTab]}
-          onPress={() => setActiveTab('history')}
-        >
-          <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>
-            📈 History
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="MainTabs" component={TabNavigator} />
+      <Stack.Screen 
+        name="SessionSetup" 
+        component={SessionSetupScreen}
+        options={{
+          presentation: 'card',
+        }}
+      />
+      <Stack.Screen 
+        name="AirSession" 
+        component={IHHTTrainingScreen}
+        options={{
+          presentation: 'card',
+        }}
+      />
+    </Stack.Navigator>
   );
 };
 
