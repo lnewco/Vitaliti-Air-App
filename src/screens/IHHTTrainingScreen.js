@@ -7,10 +7,58 @@ import {
   Alert,
   Vibration,
   StatusBar,
+  ScrollView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useBluetooth } from '../context/BluetoothContext';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import SafetyIndicator from '../components/SafetyIndicator';
+
+// Custom Slider Component for Expo Go compatibility
+const CustomSlider = ({ value, onValueChange, minimumValue = 0, maximumValue = 10, step = 1 }) => {
+  const handlePress = (event) => {
+    const { locationX } = event.nativeEvent;
+    const sliderWidth = 280; // Fixed width for calculations
+    const percentage = Math.max(0, Math.min(1, locationX / sliderWidth));
+    const range = maximumValue - minimumValue;
+    const rawValue = minimumValue + (percentage * range);
+    const steppedValue = Math.round(rawValue / step) * step;
+    const clampedValue = Math.max(minimumValue, Math.min(maximumValue, steppedValue));
+    onValueChange(clampedValue);
+  };
+
+  const getThumbPosition = () => {
+    const range = maximumValue - minimumValue;
+    const percentage = (value - minimumValue) / range;
+    return percentage * 280; // Match slider width
+  };
+
+  return (
+    <View style={styles.customSliderContainer}>
+      <TouchableOpacity 
+        style={styles.sliderTrack} 
+        onPress={handlePress}
+        activeOpacity={1}
+      >
+        {/* Track Background */}
+        <View style={styles.sliderTrackBackground} />
+        
+        {/* Active Track */}
+        <View style={[styles.sliderActiveTrack, { width: getThumbPosition() }]} />
+        
+        {/* Thumb */}
+        <View style={[styles.sliderThumb, { left: getThumbPosition() - 12 }]} />
+      </TouchableOpacity>
+      
+      {/* Value Labels */}
+      <View style={styles.sliderLabels}>
+        <Text style={styles.sliderLabelText}>{minimumValue}</Text>
+        <Text style={styles.sliderCurrentValue}>{value}</Text>
+        <Text style={styles.sliderLabelText}>{maximumValue}</Text>
+      </View>
+    </View>
+  );
+};
 
 const PHASE_TYPES = {
   HYPOXIC: 'HYPOXIC',
@@ -32,8 +80,58 @@ const IHHTTrainingScreen = ({ navigation }) => {
   const [sessionInfo, setSessionInfo] = useState(EnhancedSessionManager.getSessionInfo());
   const [totalTimeElapsed, setTotalTimeElapsed] = useState(0);
   
+  // Hypoxia level state
+  const [hypoxiaLevel, setHypoxiaLevel] = useState(5);
+  const [defaultHypoxiaLevel, setDefaultHypoxiaLevel] = useState(5);
+  
   // Safety state
   const [warningActive, setWarningActive] = useState(false);
+
+  // Load saved hypoxia level on mount
+  useEffect(() => {
+    loadHypoxiaLevel();
+  }, []);
+
+  // Save hypoxia level when it changes
+  useEffect(() => {
+    saveHypoxiaLevel();
+  }, [defaultHypoxiaLevel]);
+
+  // Reset hypoxia level to default when starting new hypoxic phase
+  useEffect(() => {
+    if (sessionInfo.currentPhase === 'HYPOXIC' && sessionInfo.phaseTimeRemaining === HYPOXIC_DURATION) {
+      setHypoxiaLevel(defaultHypoxiaLevel);
+    }
+  }, [sessionInfo.currentPhase, sessionInfo.phaseTimeRemaining, defaultHypoxiaLevel]);
+
+  const loadHypoxiaLevel = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('defaultHypoxiaLevel');
+      if (saved !== null) {
+        const level = parseInt(saved, 10);
+        if (level >= 0 && level <= 10) { // Validate range
+          setDefaultHypoxiaLevel(level);
+          setHypoxiaLevel(level);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load hypoxia level:', error);
+    }
+  };
+
+  const saveHypoxiaLevel = async () => {
+    try {
+      await AsyncStorage.setItem('defaultHypoxiaLevel', defaultHypoxiaLevel.toString());
+    } catch (error) {
+      console.error('Failed to save hypoxia level:', error);
+    }
+  };
+
+  const handleHypoxiaLevelChange = (value) => {
+    const roundedValue = Math.round(value);
+    setHypoxiaLevel(roundedValue);
+    setDefaultHypoxiaLevel(roundedValue);
+  };
 
   // Start session when component mounts (device is already connected from setup)
   useEffect(() => {
@@ -47,6 +145,7 @@ const IHHTTrainingScreen = ({ navigation }) => {
         case 'sessionStarted':
         case 'phaseUpdate':
         case 'phaseAdvanced':
+        case 'phaseSkipped':
         case 'sessionPaused':
         case 'sessionResumed':
         case 'sessionSynced':
@@ -160,6 +259,29 @@ const IHHTTrainingScreen = ({ navigation }) => {
     );
   };
 
+  const handleSkipToNext = async () => {
+    const success = await EnhancedSessionManager.skipToNextPhase();
+    if (success) {
+      Vibration.vibrate(100); // Brief feedback
+      console.log(`✅ Successfully skipped to next phase`);
+    } else {
+      console.log(`❌ Could not skip phase - session may be paused or inactive`);
+    }
+  };
+
+  const getSkipButtonText = () => {
+    if (sessionInfo.currentPhase === 'HYPOXIC') {
+      return 'Skip to Recovery →';
+    } else if (sessionInfo.currentPhase === 'HYPEROXIC') {
+      if (sessionInfo.currentCycle >= sessionInfo.totalCycles) {
+        return 'Complete Session →';
+      } else {
+        return 'Skip to Next Cycle →';
+      }
+    }
+    return 'Skip →';
+  };
+
   const getSpO2Status = (spo2) => {
     if (spo2 >= 95) {
       return { color: '#2196F3', icon: '📘', label: 'Normal', message: '' };
@@ -211,73 +333,112 @@ const IHHTTrainingScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Safety Indicator */}
-      <SafetyIndicator 
-        spo2={currentSpo2}
-        isConnected={isConnected}
-        isFingerDetected={pulseOximeterData?.isFingerDetected}
-      />
-
-      {/* Main Timer */}
-      <View style={styles.mainTimer}>
-        <Text style={styles.timerText}>⏱️ {formatTotalTime(totalTimeElapsed)}</Text>
-        <Text style={styles.cycleText}>🔄 Cycle {sessionInfo.currentCycle} of {sessionInfo.totalCycles}</Text>
-      </View>
-
-      {/* Phase Status Card */}
-      <View style={[styles.phaseCard, { backgroundColor: sessionInfo.currentPhase === 'HYPOXIC' ? '#E3F2FD' : '#E8F5E8' }]}>
-        <Text style={styles.phaseIcon}>{sessionInfo.currentPhase === 'HYPOXIC' ? '🫁' : '🌱'}</Text>
-        <Text style={styles.phaseTitle}>
-          {sessionInfo.currentPhase === 'HYPOXIC' ? 'HYPOXIC PHASE' : 'RECOVERY PHASE'}
-        </Text>
-        <Text style={styles.phaseMessage}>
-          {sessionInfo.currentPhase === 'HYPOXIC' ? 'Put on your mask' : 'Remove mask - Breathing fresh air'}
-        </Text>
-        <Text style={styles.phaseTimer}>⏰ {formatTime(sessionInfo.phaseTimeRemaining)} remaining</Text>
-      </View>
-
-      {/* Live Data Display */}
-      <View style={styles.dataContainer}>
-        <View style={[styles.dataCard, warningActive && styles.warningBorder]}>
-          <View style={styles.spo2Container}>
-            <Text style={[styles.spo2Value, { color: spo2Status.color }]}>{currentSpo2}%</Text>
-            <Text style={styles.spo2Icon}>{spo2Status.icon}</Text>
-          </View>
-          <Text style={[styles.spo2Label, { color: spo2Status.color }]}>{spo2Status.label}</Text>
-          {spo2Status.message ? <Text style={styles.spo2Message}>{spo2Status.message}</Text> : null}
-        </View>
-
-        <View style={styles.dataCard}>
-          <Text style={styles.hrValue}>{currentHR} bpm</Text>
-          <Text style={styles.hrLabel}>❤️ Heart Rate</Text>
-        </View>
-      </View>
-
-      {/* Phase Target */}
-      <View style={styles.targetContainer}>
-        <Text style={styles.targetText}>
-          🎯 {sessionInfo.currentPhase === 'HYPOXIC' ? 'Target Range: 82-87% SpO2' : 'Recovering to 95%+ SpO2'}
-        </Text>
-      </View>
-
-      {/* Progress Bar */}
-      <View style={styles.progressContainer}>
-        <Text style={styles.progressLabel}>Session Progress</Text>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${getPhaseProgress() * 100}%` }]} />
-        </View>
-      </View>
-
-      {/* Control Buttons */}
-      <View style={styles.controls}>
-        <TouchableOpacity style={styles.endButton} onPress={handleEndSession}>
-          <Text style={styles.endButtonText}>End Session</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.pauseControlButton, sessionInfo.isPaused ? styles.resumeButton : styles.pauseControlButtonActive]} 
-          onPress={sessionInfo.isPaused ? resumeSession : pauseSession}
+      {/* Scrollable Content */}
+      <View style={styles.scrollContainer}>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.pauseControlButtonText}>{sessionInfo.isPaused ? '▶️ Resume' : '⏸️ Pause'}</Text>
+        {/* Safety Indicator */}
+        <SafetyIndicator 
+          spo2={currentSpo2}
+          isConnected={isConnected}
+          isFingerDetected={pulseOximeterData?.isFingerDetected}
+        />
+
+        {/* Main Timer */}
+        <View style={styles.mainTimer}>
+          <Text style={styles.timerText}>⏱️ {formatTotalTime(totalTimeElapsed)}</Text>
+          <Text style={styles.cycleText}>🔄 Cycle {sessionInfo.currentCycle} of {sessionInfo.totalCycles}</Text>
+        </View>
+
+        {/* Phase Status Card */}
+        <View style={[styles.phaseCard, { backgroundColor: sessionInfo.currentPhase === 'HYPOXIC' ? '#E3F2FD' : '#E8F5E8' }]}>
+          <Text style={styles.phaseIcon}>{sessionInfo.currentPhase === 'HYPOXIC' ? '🫁' : '��'}</Text>
+          <Text style={styles.phaseTitle}>
+            {sessionInfo.currentPhase === 'HYPOXIC' ? 'HYPOXIC PHASE' : 'RECOVERY PHASE'}
+          </Text>
+          <Text style={styles.phaseMessage}>
+            {sessionInfo.currentPhase === 'HYPOXIC' ? 'Put on your mask' : 'Remove mask - Breathing fresh air'}
+          </Text>
+          <Text style={styles.phaseTimer}>⏰ {formatTime(sessionInfo.phaseTimeRemaining)} remaining</Text>
+
+                     {sessionInfo.currentPhase === 'HYPOXIC' && (
+             <View style={styles.hypoxiaSliderContainer}>
+               <Text style={styles.hypoxiaLabel}>Hypoxia Level: {hypoxiaLevel}</Text>
+               <CustomSlider
+                 value={hypoxiaLevel}
+                 onValueChange={handleHypoxiaLevelChange}
+                 minimumValue={0}
+                 maximumValue={10}
+                 step={1}
+               />
+             </View>
+           )}
+        </View>
+
+        {/* Live Data Display */}
+        <View style={styles.dataContainer}>
+          <View style={[styles.dataCard, warningActive && styles.warningBorder]}>
+            <View style={styles.spo2Container}>
+              <Text style={[styles.spo2Value, { color: spo2Status.color }]}>{currentSpo2}%</Text>
+              <Text style={styles.spo2Icon}>{spo2Status.icon}</Text>
+            </View>
+            <Text style={[styles.spo2Label, { color: spo2Status.color }]}>{spo2Status.label}</Text>
+            {spo2Status.message ? <Text style={styles.spo2Message}>{spo2Status.message}</Text> : null}
+          </View>
+
+          <View style={styles.dataCard}>
+            <Text style={styles.hrValue}>{currentHR} bpm</Text>
+            <Text style={styles.hrLabel}>❤️ Heart Rate</Text>
+          </View>
+        </View>
+
+        {/* Phase Target */}
+        <View style={styles.targetContainer}>
+          <Text style={styles.targetText}>
+            🎯 {sessionInfo.currentPhase === 'HYPOXIC' ? 'Target Range: 82-87% SpO2' : 'Recovering to 95%+ SpO2'}
+          </Text>
+        </View>
+
+        {/* Progress Bar */}
+        <View style={styles.progressContainer}>
+          <Text style={styles.progressLabel}>Session Progress</Text>
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: `${getPhaseProgress() * 100}%` }]} />
+          </View>
+        </View>
+
+        {/* Bottom padding to ensure content doesn't get hidden behind fixed controls */}
+        <View style={styles.bottomSpacer} />
+        </ScrollView>
+      </View>
+
+      {/* Fixed Control Buttons */}
+      <View style={styles.fixedControls}>
+        {/* Primary Controls */}
+        <View style={styles.controls}>
+          <TouchableOpacity style={styles.endButton} onPress={handleEndSession}>
+            <Text style={styles.endButtonText}>End Session</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.pauseControlButton, sessionInfo.isPaused ? styles.resumeButton : styles.pauseControlButtonActive]} 
+            onPress={sessionInfo.isPaused ? resumeSession : pauseSession}
+          >
+            <Text style={styles.pauseControlButtonText}>{sessionInfo.isPaused ? '▶️ Resume' : '⏸️ Pause'}</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Skip Button */}
+        <TouchableOpacity 
+          style={[styles.skipButton, sessionInfo.isPaused && styles.skipButtonDisabled]} 
+          onPress={handleSkipToNext}
+          disabled={sessionInfo.isPaused}
+        >
+          <Text style={[styles.skipButtonText, sessionInfo.isPaused && styles.skipButtonTextDisabled]}>
+            {getSkipButtonText()}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -342,7 +503,8 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     backgroundColor: '#FFFFFF',
     marginHorizontal: 20,
-    marginTop: 20,
+    marginTop: 15,
+    marginBottom: 5,
     borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -362,7 +524,8 @@ const styles = StyleSheet.create({
   },
   phaseCard: {
     marginHorizontal: 20,
-    marginTop: 20,
+    marginTop: 15,
+    marginBottom: 5,
     padding: 20,
     borderRadius: 12,
     alignItems: 'center',
@@ -388,10 +551,45 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333333',
   },
+     hypoxiaSliderContainer: {
+     width: '100%',
+     marginTop: 20,
+     paddingHorizontal: 10,
+     backgroundColor: '#F8F9FA',
+     borderRadius: 12,
+     padding: 15,
+   },
+   hypoxiaLabel: {
+     fontSize: 18,
+     fontWeight: 'bold',
+     color: '#2196F3',
+     marginBottom: 15,
+     textAlign: 'center',
+   },
+
+   skipButton: {
+     marginTop: 10,
+     paddingVertical: 12,
+     backgroundColor: '#E5E7EB',
+     borderRadius: 8,
+     alignItems: 'center',
+   },
+   skipButtonDisabled: {
+     backgroundColor: '#E5E7EB',
+   },
+   skipButtonText: {
+     color: '#374151',
+     fontSize: 14,
+     fontWeight: '600',
+   },
+   skipButtonTextDisabled: {
+     color: '#9CA3AF',
+   },
   dataContainer: {
     flexDirection: 'row',
     marginHorizontal: 20,
-    marginTop: 20,
+    marginTop: 15,
+    marginBottom: 5,
     gap: 10,
   },
   dataCard: {
@@ -446,7 +644,8 @@ const styles = StyleSheet.create({
   },
   targetContainer: {
     marginHorizontal: 20,
-    marginTop: 20,
+    marginTop: 15,
+    marginBottom: 5,
     padding: 15,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -459,7 +658,8 @@ const styles = StyleSheet.create({
   },
   progressContainer: {
     marginHorizontal: 20,
-    marginTop: 20,
+    marginTop: 15,
+    marginBottom: 10,
   },
   progressLabel: {
     fontSize: 14,
@@ -480,8 +680,6 @@ const styles = StyleSheet.create({
   },
   controls: {
     flexDirection: 'row',
-    marginHorizontal: 20,
-    marginTop: 30,
     gap: 15,
   },
   endButton: {
@@ -554,6 +752,87 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingTop: 10,
+    paddingBottom: 70, // Reduced padding by half
+  },
+  bottomSpacer: {
+    height: 40, // Additional space for better separation
+  },
+  fixedControls: {
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+     // Custom Slider Styles
+   customSliderContainer: {
+     width: '100%',
+     alignItems: 'center',
+     marginTop: 10,
+   },
+   sliderTrack: {
+     width: 280, // Fixed width for the slider track
+     height: 10,
+     backgroundColor: '#E0E0E0',
+     borderRadius: 5,
+     position: 'relative',
+     marginBottom: 10,
+   },
+   sliderTrackBackground: {
+     position: 'absolute',
+     top: 0,
+     left: 0,
+     right: 0,
+     bottom: 0,
+     backgroundColor: '#E0E0E0',
+     borderRadius: 5,
+   },
+   sliderActiveTrack: {
+     position: 'absolute',
+     top: 0,
+     left: 0,
+     bottom: 0,
+     backgroundColor: '#2196F3', // Example color for active track
+     borderRadius: 5,
+   },
+   sliderThumb: {
+     position: 'absolute',
+     top: -5, // Adjust to center the thumb
+     width: 24,
+     height: 24,
+     backgroundColor: '#2196F3',
+     borderRadius: 12,
+     borderWidth: 2,
+     borderColor: '#FFFFFF',
+   },
+   sliderLabels: {
+     flexDirection: 'row',
+     justifyContent: 'space-between',
+     width: '100%',
+     marginTop: 10,
+   },
+   sliderLabelText: {
+     fontSize: 14,
+     color: '#666666',
+   },
+   sliderCurrentValue: {
+     fontSize: 18,
+     fontWeight: 'bold',
+     color: '#333333',
+   },
 });
 
 export default IHHTTrainingScreen; 

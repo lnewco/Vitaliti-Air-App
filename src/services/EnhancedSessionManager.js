@@ -336,6 +336,33 @@ class EnhancedSessionManager {
     });
   }
 
+  async skipToNextPhase() {
+    if (!this.isActive || this.isPaused) {
+      console.log('❌ Cannot skip: session not active or paused');
+      return false;
+    }
+
+    const previousPhase = this.currentPhase;
+    const previousCycle = this.currentCycle;
+    
+    console.log(`⏭️ Manually skipping ${this.currentPhase} phase (Cycle ${this.currentCycle})`);
+    
+    // Reset timer and advance immediately
+    this.phaseTimeRemaining = 0;
+    await this.advancePhase();
+    
+    // Notify with skip-specific event
+    this.notify('phaseSkipped', {
+      previousPhase,
+      previousCycle,
+      newPhase: this.currentPhase,
+      newCycle: this.currentCycle,
+      skippedAt: Date.now()
+    });
+
+    return true;
+  }
+
   async completeSession() {
     console.log('🏁 IHHT session completed!');
     
