@@ -215,8 +215,10 @@ class BluetoothService {
             // Handle cancellation errors gracefully (happens when disconnecting or removing finger)
             if (error.message && error.message.includes('cancelled')) {
               console.log('📡 BCI data monitoring stopped (connection cancelled)');
+              this.handleDeviceDisconnected();
             } else {
               console.error('Notification error:', error);
+              this.handleDeviceDisconnected();
             }
             return;
           }
@@ -424,6 +426,31 @@ class BluetoothService {
 
   setOnConnectionStatusChanged(callback) {
     this.onConnectionStatusChanged = callback;
+  }
+
+  async handleDeviceDisconnected() {
+    console.log('🔌 Device disconnected - checking for active sessions to cleanup');
+    
+    // Import EnhancedSessionManager here to avoid circular dependencies
+    const { default: EnhancedSessionManager } = await import('./EnhancedSessionManager.js');
+    
+    // Check if there's an active session and end it
+    if (EnhancedSessionManager.isActive) {
+      try {
+        console.log('🛑 Ending active session due to device disconnect');
+        await EnhancedSessionManager.stopSession();
+        console.log('✅ Session ended successfully after device disconnect');
+      } catch (error) {
+        console.error('❌ Failed to end session after device disconnect:', error);
+        // Even if ending fails, try to reset state
+        try {
+          EnhancedSessionManager.resetSessionState();
+          console.log('🔄 Session state reset after disconnect cleanup failure');
+        } catch (resetError) {
+          console.error('❌ Failed to reset session state:', resetError);
+        }
+      }
+    }
   }
 }
 

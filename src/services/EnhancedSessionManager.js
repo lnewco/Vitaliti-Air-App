@@ -44,6 +44,10 @@ class EnhancedSessionManager {
     this.hasActiveLiveActivity = false;
     this.liveActivityId = null;
     
+    // Timeout references
+    this.backgroundTimeout = null;
+    this.sessionTimeout = null;
+    
     // Buffer settings
     this.BATCH_SIZE = 50;
     this.BATCH_INTERVAL = 2000;
@@ -69,6 +73,9 @@ class EnhancedSessionManager {
         const isSupported = await LiveActivityModule.isSupported();
         console.log('📱 Live Activity support:', isSupported);
       }
+
+      // Perform startup recovery cleanup
+      setTimeout(() => this.performStartupRecovery(), 1000);
     } catch (error) {
       console.error('❌ Failed to initialize services:', error);
     }
@@ -81,10 +88,12 @@ class EnhancedSessionManager {
   async handleAppStateChange(nextAppState) {
     if (this.isActive) {
       if (nextAppState === 'background') {
-        console.log('📱 App backgrounded - starting background monitoring');
+        console.log('📱 App backgrounded - starting background monitoring and session timeout');
         await this.startBackgroundMonitoring();
+        this.startBackgroundTimeout();
       } else if (nextAppState === 'active') {
         console.log('📱 App foregrounded - syncing with background state');
+        this.clearBackgroundTimeout();
         await this.syncWithBackgroundState();
       }
     }
@@ -204,6 +213,9 @@ class EnhancedSessionManager {
 
       // Start phase timer
       this.startPhaseTimer();
+
+      // Start session timeout (2 hours max)
+      this.startSessionTimeout();
 
       // Start batch processing
       this.startBatchProcessing();
@@ -419,11 +431,13 @@ class EnhancedSessionManager {
     }
 
     try {
-      // Stop timers
+      // Stop all timers and timeouts
       if (this.phaseTimer) {
         clearInterval(this.phaseTimer);
         this.phaseTimer = null;
       }
+      this.clearBackgroundTimeout();
+      this.clearSessionTimeout();
 
       // Stop background monitoring (if available)
       if (BackgroundSessionManager) {
@@ -581,6 +595,139 @@ class EnhancedSessionManager {
       isActive: this.isActive,
       isPaused: this.isPaused
     };
+  }
+
+  // Data repair utilities
+  async reprocessSessionStats(sessionId) {
+    if (!DatabaseService.db) {
+      await DatabaseService.init();
+    }
+    return await DatabaseService.reprocessSessionStats(sessionId);
+  }
+
+  async reprocessAllNullStats() {
+    if (!DatabaseService.db) {
+      await DatabaseService.init();
+    }
+    return await DatabaseService.reprocessAllNullStats();
+  }
+
+  // Background timeout handling for session cleanup
+  startBackgroundTimeout() {
+    // Clear any existing timeout
+    this.clearBackgroundTimeout();
+    
+    // End session if app stays in background for more than 5 minutes
+    const BACKGROUND_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+    
+    this.backgroundTimeout = setTimeout(async () => {
+      if (this.isActive) {
+        console.log('⏰ App backgrounded too long - ending active session');
+        try {
+          await this.stopSession();
+          console.log('✅ Session ended due to background timeout');
+        } catch (error) {
+          console.error('❌ Failed to end session after background timeout:', error);
+          this.resetSessionState();
+        }
+      }
+    }, BACKGROUND_TIMEOUT);
+    
+    console.log('⏰ Background timeout started (5 minutes)');
+  }
+
+  clearBackgroundTimeout() {
+    if (this.backgroundTimeout) {
+      clearTimeout(this.backgroundTimeout);
+      this.backgroundTimeout = null;
+      console.log('⏰ Background timeout cleared');
+    }
+  }
+
+  // Session timeout handling (auto-end sessions that run too long)
+  startSessionTimeout() {
+    // Clear any existing timeout
+    this.clearSessionTimeout();
+    
+    // End session if it runs longer than 2 hours
+    const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours
+    
+    this.sessionTimeout = setTimeout(async () => {
+      if (this.isActive) {
+        console.log('⏰ Session running too long (2+ hours) - ending automatically');
+        try {
+          await this.stopSession();
+          console.log('✅ Session ended due to timeout');
+        } catch (error) {
+          console.error('❌ Failed to end session after timeout:', error);
+          this.resetSessionState();
+        }
+      }
+    }, SESSION_TIMEOUT);
+    
+    console.log('⏰ Session timeout started (2 hours)');
+  }
+
+  clearSessionTimeout() {
+    if (this.sessionTimeout) {
+      clearTimeout(this.sessionTimeout);
+      this.sessionTimeout = null;
+      console.log('⏰ Session timeout cleared');
+    }
+  }
+
+  // Startup recovery - clean up stuck sessions on app start
+  async performStartupRecovery() {
+    console.log('🔄 Performing startup recovery cleanup...');
+    
+    try {
+      // Check for any locally stored active session
+      const storedSession = await AsyncStorage.getItem('activeSession');
+      
+      if (storedSession) {
+        console.log('🔍 Found stored active session from previous app run');
+        
+        try {
+          const sessionData = JSON.parse(storedSession);
+          const sessionAge = Date.now() - sessionData.startTime;
+          const RECOVERY_THRESHOLD = 10 * 60 * 1000; // 10 minutes
+          
+          if (sessionAge > RECOVERY_THRESHOLD) {
+            console.log(`⚠️ Stored session is ${Math.round(sessionAge / 60000)} minutes old - cleaning up`);
+            
+            // Try to end the session properly in databases
+            try {
+              const stats = await DatabaseService.endSession(sessionData.id);
+              await SupabaseService.endSession(sessionData.id, stats);
+              console.log('✅ Cleaned up stuck session in databases');
+            } catch (dbError) {
+              console.log('⚠️ Could not end session in databases (may have been cleaned already)');
+            }
+            
+            // Clear the stored session
+            await AsyncStorage.removeItem('activeSession');
+            console.log('✅ Cleared stored session data');
+          } else {
+            console.log('📱 Recent session found - may be valid, keeping for now');
+          }
+        } catch (parseError) {
+          console.log('⚠️ Invalid stored session data - clearing');
+          await AsyncStorage.removeItem('activeSession');
+        }
+      }
+      
+      // Also run the session cleanup utility to catch any other stuck sessions
+      const { cleanupStuckSessions } = await import('../utils/SessionCleanup.js');
+      const cleanupResult = await cleanupStuckSessions();
+      
+      if (cleanupResult.success && cleanupResult.totalCleaned > 0) {
+        console.log(`✅ Startup recovery cleaned up ${cleanupResult.totalCleaned} stuck sessions`);
+      }
+      
+      console.log('✅ Startup recovery complete');
+    } catch (error) {
+      console.error('❌ Startup recovery failed:', error);
+    }
   }
 }
 
