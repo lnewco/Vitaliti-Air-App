@@ -37,6 +37,26 @@ const OTPScreen = ({ route, navigation }) => {
   }, [timer]);
 
   const handleOtpChange = (text, index) => {
+    // Check if this is a full 6-digit auto-fill on the first input
+    if (index === 0 && text.length === 6 && /^\d{6}$/.test(text)) {
+      const digits = text.split('');
+      setOtp(digits);
+      
+      // Set each input value via refs
+      digits.forEach((digit, idx) => {
+        if (inputRefs.current[idx]) {
+          inputRefs.current[idx].setNativeProps({ text: digit });
+        }
+      });
+      
+      // Auto-verify
+      setTimeout(() => {
+        handleVerifyOTP(text);
+      }, 100);
+      
+      return;
+    }
+    
     // Only allow numbers
     if (!/^\d*$/.test(text)) return;
 
@@ -73,12 +93,8 @@ const OTPScreen = ({ route, navigation }) => {
 
       setIsLoading(true);
 
-      console.log('🔑 Verifying OTP:', codeToVerify);
-
       // Verify OTP
       await verifyOTP(phoneNumber, codeToVerify);
-
-      console.log('✅ OTP verification successful, user will be redirected automatically');
 
     } catch (error) {
       console.error('❌ OTP verification error:', error.message);
@@ -173,7 +189,9 @@ const OTPScreen = ({ route, navigation }) => {
           {/* OTP Input */}
           <View style={styles.otpSection}>
             <Text style={styles.otpLabel}>Verification Code</Text>
+            
             <View style={styles.otpContainer}>
+              
               {otp.map((digit, index) => (
                 <TextInput
                   key={index}
@@ -187,11 +205,13 @@ const OTPScreen = ({ route, navigation }) => {
                   onChangeText={(text) => handleOtpChange(text, index)}
                   onKeyPress={(e) => handleKeyPress(e, index)}
                   keyboardType="number-pad"
-                  maxLength={1}
+                  maxLength={6}
                   textAlign="center"
                   autoFocus={index === 0}
                   editable={!isLoading}
                   selectTextOnFocus
+                  textContentType={index === 0 ? "oneTimeCode" : "none"}
+                  autoComplete={index === 0 ? "sms-otp" : "off"}
                 />
               ))}
             </View>
