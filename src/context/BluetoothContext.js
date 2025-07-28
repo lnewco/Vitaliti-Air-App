@@ -5,9 +5,12 @@ const BluetoothContext = createContext();
 
 export const BluetoothProvider = ({ children }) => {
   const [isScanning, setIsScanning] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
+  const [scanType, setScanType] = useState('pulse-ox'); // 'pulse-ox' or 'hr-monitor'
+  const [isPulseOxConnected, setIsPulseOxConnected] = useState(false);
+  const [isHRConnected, setIsHRConnected] = useState(false);
   const [discoveredDevices, setDiscoveredDevices] = useState([]);
-  const [connectedDevice, setConnectedDevice] = useState(null);
+  const [connectedPulseOxDevice, setConnectedPulseOxDevice] = useState(null);
+  const [connectedHRDevice, setConnectedHRDevice] = useState(null);
   const [pulseOximeterData, setPulseOximeterData] = useState({
     spo2: null,
     heartRate: null,
@@ -17,16 +20,26 @@ export const BluetoothProvider = ({ children }) => {
     pleth: null,
     timestamp: null
   });
+  const [heartRateData, setHeartRateData] = useState({
+    heartRate: null,
+    sensorContactDetected: false,
+    sensorContactSupported: false,
+    rrIntervals: [],
+    hrv: null,
+    timestamp: null
+  });
+  const [persistentHRV, setPersistentHRV] = useState(null);
+  const [lastHRVUpdate, setLastHRVUpdate] = useState(null);
 
   useEffect(() => {
     // Set up event handlers
     BluetoothService.setOnDeviceFound((device) => {
-      console.log('🎯 Context: Device found callback triggered:', device.name || device.localName);
+      console.log('🎯 Context: Device found callback triggered:', device.name || device.localName, 'Type:', device.deviceType);
       setDiscoveredDevices(prev => {
         // Avoid duplicates
         const exists = prev.find(d => d.id === device.id);
         if (!exists) {
-          console.log('📱 Context: Adding new device to list:', device.name || device.localName);
+          console.log('📱 Context: Adding new device to list:', device.name || device.localName, 'Type:', device.deviceType);
           const newDevices = [...prev, device];
           console.log('📋 Context: Total devices in list:', newDevices.length);
           return newDevices;
@@ -37,31 +50,76 @@ export const BluetoothProvider = ({ children }) => {
       });
     });
 
-    BluetoothService.setOnDataReceived((data) => {
-      console.log('Context received BCI data:', data);
-      
-      // Debug: Check for valid vs invalid data
-      if (data.spo2 !== null || data.heartRate !== null) {
-        console.log('🎉 BluetoothContext: Received VALID data - updating state', {
-          spo2: data.spo2,
-          heartRate: data.heartRate,
-          isFingerDetected: data.isFingerDetected
-        });
-      } else {
-        console.log('📊 BluetoothContext: Received status data (no measurements)', {
-          isFingerDetected: data.isFingerDetected,
-          signalStrength: data.signalStrength
-        });
-      }
-      
+    BluetoothService.setOnPulseOxDataReceived((data) => {
+      console.log('Context received pulse ox data:', data);
       setPulseOximeterData(data);
     });
 
-    BluetoothService.setOnConnectionStatusChanged((connected) => {
-      console.log('Connection status changed:', connected);
-      setIsConnected(connected);
-      if (!connected) {
-        setConnectedDevice(null);
+    BluetoothService.setOnHRDataReceived((data) => {
+      console.log('Context received HR data:', data);
+      
+      // Handle dual-timeframe HRV processing
+      let processedData = { ...data };
+      
+      // Apply light smoothing to Quick HRV for stability
+      if (data.quickHRV && persistentHRV?.quickHRV) {
+        const smoothingFactor = 0.3; // Light smoothing for quick feedback
+        processedData.quickHRV = {
+          ...data.quickHRV,
+          rmssd: Math.round((data.quickHRV.rmssd * smoothingFactor + persistentHRV.quickHRV.rmssd * (1 - smoothingFactor)) * 10) / 10
+        };
+        console.log(`📊 Quick HRV smoothed: ${persistentHRV.quickHRV.rmssd}ms → ${processedData.quickHRV.rmssd}ms`);
+      }
+      
+      // Real HRV gets minimal smoothing since it's already stable
+      if (data.realHRV && persistentHRV?.realHRV) {
+        const smoothingFactor = 0.2; // Minimal smoothing for real HRV
+        processedData.realHRV = {
+          ...data.realHRV,
+          rmssd: Math.round((data.realHRV.rmssd * smoothingFactor + persistentHRV.realHRV.rmssd * (1 - smoothingFactor)) * 10) / 10
+        };
+        console.log(`📊 Real HRV smoothed: ${persistentHRV.realHRV.rmssd}ms → ${processedData.realHRV.rmssd}ms`);
+      }
+      
+      // Update persistent state if we have new HRV data
+      if (data.quickHRV || data.realHRV) {
+        setPersistentHRV({
+          quickHRV: processedData.quickHRV || persistentHRV?.quickHRV,
+          realHRV: processedData.realHRV || persistentHRV?.realHRV
+        });
+        setLastHRVUpdate(Date.now());
+      } else {
+        // No new HRV calculation, maintain last values for continuity
+        if (persistentHRV) {
+          const timeSinceLastUpdate = Date.now() - (lastHRVUpdate || 0);
+          if (timeSinceLastUpdate < 15000) {
+            // Keep existing values if recent
+            processedData.quickHRV = processedData.quickHRV || persistentHRV.quickHRV;
+            processedData.realHRV = processedData.realHRV || persistentHRV.realHRV;
+          } else {
+            // Clear old data
+            setPersistentHRV(null);
+            setLastHRVUpdate(null);
+            console.log(`📊 HRV data expired after ${Math.round(timeSinceLastUpdate/1000)}s`);
+          }
+        }
+      }
+      
+      setHeartRateData(processedData);
+    });
+
+    BluetoothService.setOnConnectionStatusChanged((deviceType, connected) => {
+      console.log(`${deviceType} connection status changed:`, connected);
+      if (deviceType === 'pulse-ox') {
+        setIsPulseOxConnected(connected);
+        if (!connected) {
+          setConnectedPulseOxDevice(null);
+        }
+      } else if (deviceType === 'hr-monitor') {
+        setIsHRConnected(connected);
+        if (!connected) {
+          setConnectedHRDevice(null);
+        }
       }
     });
 
@@ -70,7 +128,7 @@ export const BluetoothProvider = ({ children }) => {
     };
   }, []);
 
-  const startScanning = async () => {
+  const startScanning = async (deviceType = 'pulse-ox') => {
     try {
       // Check permissions and Bluetooth state first
       const hasPermission = await BluetoothService.requestPermissions();
@@ -85,7 +143,8 @@ export const BluetoothProvider = ({ children }) => {
 
       setDiscoveredDevices([]); // Clear previous results
       setIsScanning(true);
-      await BluetoothService.startScanning();
+      setScanType(deviceType);
+      await BluetoothService.startScanning(deviceType);
     } catch (error) {
       console.error('Error starting scan:', error);
       setIsScanning(false);
@@ -104,66 +163,122 @@ export const BluetoothProvider = ({ children }) => {
 
   const connectToDevice = async (device) => {
     try {
-      console.log('Connecting to device:', device.name || device.id);
+      const deviceType = device.deviceType || 'pulse-ox';
+      console.log(`Connecting to ${deviceType} device:`, device.name || device.id);
       const connectedDevice = await BluetoothService.connectToDevice(device);
-      setConnectedDevice(device);
-      setIsConnected(true);
+      
+      if (deviceType === 'pulse-ox') {
+        setConnectedPulseOxDevice(device);
+        setIsPulseOxConnected(true);
+      } else if (deviceType === 'hr-monitor') {
+        setConnectedHRDevice(device);
+        setIsHRConnected(true);
+      }
+      
       return connectedDevice;
     } catch (error) {
       console.error('Error connecting to device:', error);
-      setIsConnected(false);
-      setConnectedDevice(null);
+      const deviceType = device.deviceType || 'pulse-ox';
+      
+      if (deviceType === 'pulse-ox') {
+        setIsPulseOxConnected(false);
+        setConnectedPulseOxDevice(null);
+      } else if (deviceType === 'hr-monitor') {
+        setIsHRConnected(false);
+        setConnectedHRDevice(null);
+      }
+      
       throw error;
     }
   };
 
-  const disconnect = async () => {
+  const disconnect = async (deviceType = 'all') => {
     try {
-      console.log('🔌 BluetoothContext: Initiating disconnect...');
-      await BluetoothService.disconnect();
+      console.log(`🔌 BluetoothContext: Initiating disconnect for ${deviceType}...`);
+      await BluetoothService.disconnect(deviceType);
       
-      // Reset all connection state
-      setIsConnected(false);
-      setConnectedDevice(null);
-      setPulseOximeterData({
-        spo2: null,
-        heartRate: null,
-        signalStrength: null,
-        isFingerDetected: false,
-        isSearchingForPulse: false,
-        pleth: null,
-        timestamp: null
-      });
+      // Reset connection state based on device type
+      if (deviceType === 'all' || deviceType === 'pulse-ox') {
+        setIsPulseOxConnected(false);
+        setConnectedPulseOxDevice(null);
+        setPulseOximeterData({
+          spo2: null,
+          heartRate: null,
+          signalStrength: null,
+          isFingerDetected: false,
+          isSearchingForPulse: false,
+          pleth: null,
+          timestamp: null
+        });
+      }
       
-      console.log('✅ BluetoothContext: Disconnect completed, state reset');
+      if (deviceType === 'all' || deviceType === 'hr-monitor') {
+        setIsHRConnected(false);
+        setConnectedHRDevice(null);
+        setHeartRateData({
+          heartRate: null,
+          sensorContactDetected: false,
+          sensorContactSupported: false,
+          rrIntervals: [],
+          hrv: null,
+          timestamp: null
+        });
+      }
+      
+      console.log(`✅ BluetoothContext: Disconnect completed for ${deviceType}, state reset`);
     } catch (error) {
-      console.error('❌ BluetoothContext: Error disconnecting:', error);
+      console.error(`❌ BluetoothContext: Error disconnecting ${deviceType}:`, error);
       
       // Still reset state even if disconnect failed
-      setIsConnected(false);
-      setConnectedDevice(null);
-      setPulseOximeterData({
-        spo2: null,
-        heartRate: null,
-        signalStrength: null,
-        isFingerDetected: false,
-        isSearchingForPulse: false,
-        pleth: null,
-        timestamp: null
-      });
+      if (deviceType === 'all' || deviceType === 'pulse-ox') {
+        setIsPulseOxConnected(false);
+        setConnectedPulseOxDevice(null);
+        setPulseOximeterData({
+          spo2: null,
+          heartRate: null,
+          signalStrength: null,
+          isFingerDetected: false,
+          isSearchingForPulse: false,
+          pleth: null,
+          timestamp: null
+        });
+      }
+      
+      if (deviceType === 'all' || deviceType === 'hr-monitor') {
+        setIsHRConnected(false);
+        setConnectedHRDevice(null);
+        setHeartRateData({
+          heartRate: null,
+          sensorContactDetected: false,
+          sensorContactSupported: false,
+          rrIntervals: [],
+          hrv: null,
+          timestamp: null
+        });
+      }
     }
   };
 
   const value = {
     isScanning,
-    isConnected,
+    scanType,
+    isPulseOxConnected,
+    isHRConnected,
+    isAnyDeviceConnected: isPulseOxConnected || isHRConnected,
     discoveredDevices,
-    connectedDevice,
+    connectedPulseOxDevice,
+    connectedHRDevice,
     pulseOximeterData,
+    heartRateData,
     startScanning,
     stopScanning,
     connectToDevice,
     disconnect,
+    connectionStatus: {
+      pulseOx: isPulseOxConnected,
+      hrMonitor: isHRConnected,
+      any: isPulseOxConnected || isHRConnected
+    }
   };
 
   return (

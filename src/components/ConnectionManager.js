@@ -3,6 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, Alert } from
 import { useBluetooth } from '../context/BluetoothContext';
 
 const ConnectionManager = () => {
+  // DEBUG: Check if old component is loading instead
+  console.log('⚠️ DEBUG: OLD ConnectionManager component is loading! This should NOT happen!');
+  
   const {
     isScanning,
     isConnected,

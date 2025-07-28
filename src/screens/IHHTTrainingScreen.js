@@ -12,7 +12,6 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useBluetooth } from '../context/BluetoothContext';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
-import DatabaseService from '../services/DatabaseService';
 import SafetyIndicator from '../components/SafetyIndicator';
 
 // Custom Slider Component for Expo Go compatibility
@@ -75,23 +74,18 @@ const TOTAL_CYCLES = 5;
 const TOTAL_DURATION = (HYPOXIC_DURATION + HYPEROXIC_DURATION) * TOTAL_CYCLES; // 35 minutes
 
 const IHHTTrainingScreen = ({ navigation }) => {
-  const { pulseOximeterData, isConnected } = useBluetooth();
+  const { 
+    pulseOximeterData, 
+    heartRateData, 
+    isPulseOxConnected, 
+    isHRConnected,
+    isAnyDeviceConnected 
+  } = useBluetooth();
   
   // Enhanced session state - using the enhanced session manager
   const [sessionInfo, setSessionInfo] = useState(EnhancedSessionManager.getSessionInfo());
   const [totalTimeElapsed, setTotalTimeElapsed] = useState(0);
   const [sessionStarted, setSessionStarted] = useState(false);
-
-  // Helper function to log current session status for debugging
-  const logSessionStatus = (context) => {
-    console.log(`📊 Session Status [${context}]:`, {
-      managerActive: EnhancedSessionManager.isActive,
-      managerSession: EnhancedSessionManager.currentSession?.id,
-      componentActive: sessionInfo.isActive,
-      componentSession: sessionInfo.sessionId,
-      timestamp: new Date().toLocaleString()
-    });
-  };
   
   // Hypoxia level state
   const [hypoxiaLevel, setHypoxiaLevel] = useState(5);
@@ -114,10 +108,6 @@ const IHHTTrainingScreen = ({ navigation }) => {
   useEffect(() => {
     if (sessionInfo.currentPhase === 'HYPOXIC' && sessionInfo.phaseTimeRemaining === HYPOXIC_DURATION) {
       setHypoxiaLevel(defaultHypoxiaLevel);
-      EnhancedSessionManager.setHypoxiaLevel(defaultHypoxiaLevel);
-    } else if (sessionInfo.currentPhase === 'HYPEROXIC') {
-      // During hyperoxic phase, set FiO2 to room air (level 0)
-      EnhancedSessionManager.setHypoxiaLevel(0);
     }
   }, [sessionInfo.currentPhase, sessionInfo.phaseTimeRemaining, defaultHypoxiaLevel]);
 
@@ -129,8 +119,6 @@ const IHHTTrainingScreen = ({ navigation }) => {
         if (level >= 0 && level <= 10) { // Validate range
           setDefaultHypoxiaLevel(level);
           setHypoxiaLevel(level);
-          // Set the initial hypoxia level in the session manager
-          EnhancedSessionManager.setHypoxiaLevel(level);
         }
       }
     } catch (error) {
@@ -150,10 +138,6 @@ const IHHTTrainingScreen = ({ navigation }) => {
     const roundedValue = Math.round(value);
     setHypoxiaLevel(roundedValue);
     setDefaultHypoxiaLevel(roundedValue);
-    
-    // Update the session manager with the new hypoxia level
-    EnhancedSessionManager.setHypoxiaLevel(roundedValue);
-    console.log(`🌬️ Hypoxia level changed to: ${roundedValue}`);
   };
 
   // Set up session event listeners (session will start on first reading)
@@ -172,10 +156,7 @@ const IHHTTrainingScreen = ({ navigation }) => {
       
       switch (event) {
         case 'sessionStarted':
-          console.log('📨 Session started event received');
-          const newSessionInfo = EnhancedSessionManager.getSessionInfo();
-          console.log('📊 Setting session info from event:', newSessionInfo);
-          setSessionInfo(newSessionInfo);
+          setSessionInfo(EnhancedSessionManager.getSessionInfo());
           setSessionStarted(true);
           break;
         case 'phaseUpdate':
@@ -184,7 +165,6 @@ const IHHTTrainingScreen = ({ navigation }) => {
         case 'sessionPaused':
         case 'sessionResumed':
         case 'sessionSynced':
-          console.log(`📨 Session event: ${event}`);
           setSessionInfo(EnhancedSessionManager.getSessionInfo());
           break;
         case 'sessionEnded':
@@ -216,76 +196,30 @@ const IHHTTrainingScreen = ({ navigation }) => {
     return () => clearInterval(timer);
   }, [sessionInfo.isActive, sessionInfo.isPaused]);
 
-  // Periodic session state sync to prevent "Loading..." issues
-  useEffect(() => {
-    const syncInterval = setInterval(() => {
-      const managerInfo = EnhancedSessionManager.getSessionInfo();
-      const managerActive = EnhancedSessionManager.isActive;
-      
-      // Only sync if there's a mismatch and we're not in the middle of ending a session
-      if (managerActive === sessionInfo.isActive && 
-          (!managerActive || managerInfo.sessionId === sessionInfo.sessionId)) {
-        return;
-      }
-      
-      console.log('🔄 Syncing session state (periodic check)', {
-        from: { active: sessionInfo.isActive, id: sessionInfo.sessionId },
-        to: { active: managerActive, id: managerInfo.sessionId }
-      });
-      setSessionInfo(managerInfo);
-    }, 2000); // Check every 2 seconds
-
-    return () => clearInterval(syncInterval);
-  }, [sessionInfo.isActive, sessionInfo.sessionId]);
-
   // Session creation and safety monitoring effect
   useEffect(() => {
-    if (!pulseOximeterData) {
-      console.log('⚠️ IHHTTrainingScreen: No pulseOximeterData available yet');
-      return;
-    }
-
-    console.log('📱 IHHTTrainingScreen: Got pulseOximeterData', {
-      timestamp: new Date().toLocaleTimeString(),
-      spo2: pulseOximeterData.spo2,
-      heartRate: pulseOximeterData.heartRate,
-      isFingerDetected: pulseOximeterData.isFingerDetected
-    });
+    if (!pulseOximeterData) return;
     
     // Only start session when we get VALID measurements (finger detected OR valid spo2/heart rate)
     const hasValidMeasurement = pulseOximeterData.isFingerDetected || 
                                (pulseOximeterData.spo2 !== null && pulseOximeterData.spo2 > 0) ||
                                (pulseOximeterData.heartRate !== null && pulseOximeterData.heartRate > 0);
     
-    console.log('🔍 Session creation check:', {
-      sessionStarted,
-      sessionActive: sessionInfo.isActive,
-      hasValidMeasurement,
-      fingerDetected: pulseOximeterData.isFingerDetected,
-      spo2: pulseOximeterData.spo2,
-      heartRate: pulseOximeterData.heartRate
-    });
-    
     // Start session on first VALID reading (only once)
     if (!sessionStarted && !sessionInfo.isActive && hasValidMeasurement) {
-      console.log('\n' + '🎉'.repeat(20));
-      console.log('🎬 ✅ SESSION STARTED SUCCESSFULLY!');
-      console.log('📊 First valid reading:', {
+      console.log('🎬 Starting session on first VALID reading received', {
         isFingerDetected: pulseOximeterData.isFingerDetected,
         spo2: pulseOximeterData.spo2,
-        heartRate: pulseOximeterData.heartRate,
-        timestamp: new Date().toLocaleTimeString()
+        heartRate: pulseOximeterData.heartRate
       });
-      console.log('🎉'.repeat(20) + '\n');
       startSession();
       setSessionStarted(true);
       return; // Exit early, let the session start before processing readings
     }
     
-    // Log why session is NOT being created
+    // Log status data but don't create session
     if (!sessionStarted && !sessionInfo.isActive && !hasValidMeasurement) {
-      console.log('📊 ❌ No session created - waiting for valid measurement', {
-        reason: 'Need finger detected OR valid SpO2/HR values',
+      console.log('📊 Status data received (no session creation needed)', {
         isFingerDetected: pulseOximeterData.isFingerDetected,
         spo2: pulseOximeterData.spo2,
         heartRate: pulseOximeterData.heartRate
@@ -311,15 +245,8 @@ const IHHTTrainingScreen = ({ navigation }) => {
 
   const startSession = async () => {
     try {
-      console.log('🚀 Starting session...');
       await EnhancedSessionManager.startSession();
-      
-      // Force refresh session info
-      const updatedSessionInfo = EnhancedSessionManager.getSessionInfo();
-      console.log('📊 Updated session info after start:', updatedSessionInfo);
-      setSessionInfo(updatedSessionInfo);
-      
-      console.log('✅ Session started successfully');
+      setSessionInfo(EnhancedSessionManager.getSessionInfo());
     } catch (error) {
       console.error('Failed to start enhanced session:', error);
       Alert.alert('Error', 'Failed to start training session');
@@ -355,90 +282,12 @@ const IHHTTrainingScreen = ({ navigation }) => {
 
   const terminateSession = async () => {
     try {
-      console.log('🛑 User clicked End Session - starting termination...');
       Vibration.cancel();
-      
-      // Check session status from both sources
-      const managerActive = EnhancedSessionManager.isActive;
-      const componentActive = sessionInfo.isActive;
-      
-      console.log('🔍 Session termination check:', {
-        managerActive,
-        componentActive,
-        managerSession: EnhancedSessionManager.currentSession ? EnhancedSessionManager.currentSession.id : 'NONE',
-        componentSession: sessionInfo.sessionId || 'NONE'
-      });
-      
-      // If manager has session but component doesn't, sync the state
-      if (managerActive && !componentActive) {
-        console.log('🔄 Syncing session state before termination...');
-        const currentSessionInfo = EnhancedSessionManager.getSessionInfo();
-        setSessionInfo(currentSessionInfo);
-      }
-      
-      // Check if there's actually a session to end
-      if (!managerActive) {
-        console.log('\n' + '❌'.repeat(20));
-        console.log('📋 SESSION TERMINATION SUMMARY');
-        console.log('❌'.repeat(20));
-        console.log('❌ NO SESSION WAS ACTIVE');
-        console.log('📊 This means:');
-        console.log('   - No session was created during this training');
-        console.log('   - Pulse oximeter may not have detected your finger');
-        console.log('   - Or session creation logic never triggered');
-        console.log('🔍 To fix: Make sure finger is firmly in pulse oximeter');
-        console.log('   and you see "Session Active" status in the UI');
-        console.log('❌'.repeat(20) + '\n');
-        
-        Alert.alert('Session Ended', 'No active session found. This means no data was collected during this training session.', [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
-        return;
-      }
-      
-      // Show loading state to user
-      Alert.alert('Ending Session', '⏳ Saving your session data...\n\nThis may take a few seconds.', []);
-      
-      console.log('🛑 Calling EnhancedSessionManager.stopSession()...');
-      console.log('🔍 Session state before stopping:', {
-        managerActive: EnhancedSessionManager.isActive,
-        managerSession: EnhancedSessionManager.currentSession?.id,
-        componentActive: sessionInfo.isActive,
-        componentSession: sessionInfo.sessionId
-      });
-      
-      const result = await EnhancedSessionManager.stopSession();
-      console.log('✅ Session stopped successfully:', result);
-      
-      // Force update component state after successful stop
-      setSessionInfo(EnhancedSessionManager.getSessionInfo());
-      setSessionStarted(false);
-      
-      // Dismiss loading alert and show success
-      Alert.alert(
-        '✅ Session Completed!', 
-        `Your training session has been saved successfully!\n\nDuration: ${Math.round((Date.now() - (result.startTime || Date.now())) / 1000)} seconds\nData: ${result.stats?.totalReadings || 0} readings collected`,
-        [{ text: 'View History', onPress: () => navigation.navigate('History') }]
-      );
-      
+      await EnhancedSessionManager.stopSession();
+      navigation.goBack();
     } catch (error) {
-      // This should never happen now, but just in case...
-      console.error('❌ Unexpected error in terminateSession wrapper:', error);
-      
-      // Force reset the session state
-      try {
-        await EnhancedSessionManager.resetSessionState();
-        setSessionInfo(EnhancedSessionManager.getSessionInfo());
-        setSessionStarted(false);
-      } catch (resetError) {
-        console.error('❌ Failed to reset session state:', resetError);
-      }
-      
-      Alert.alert(
-        '⚠️ Session Ended',
-        'Your session has been ended. Some data may have been saved.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
+      console.error('Failed to terminate session:', error);
+      navigation.goBack();
     }
   };
 
@@ -453,11 +302,7 @@ const IHHTTrainingScreen = ({ navigation }) => {
         {
           text: 'End Session',
           style: 'destructive',
-          onPress: () => {
-            console.log('🛑 User confirmed End Session in dialog');
-            logSessionStatus('User confirmed End Session');
-            terminateSession();
-          }
+          onPress: terminateSession
         }
       ]
     );
@@ -519,7 +364,13 @@ const IHHTTrainingScreen = ({ navigation }) => {
   };
 
   const currentSpo2 = pulseOximeterData?.spo2 || 0;
-  const currentHR = pulseOximeterData?.heartRate || 0;
+  
+  // Prioritize HR monitor data if available, fallback to pulse oximeter
+  const currentHR = (isHRConnected && heartRateData?.heartRate) 
+    ? heartRateData.heartRate 
+    : (pulseOximeterData?.heartRate || 0);
+  
+  const hrSource = (isHRConnected && heartRateData?.heartRate) ? 'Enhanced' : 'Basic';
   const spo2Status = getSpO2Status(currentSpo2);
 
   return (
@@ -544,12 +395,10 @@ const IHHTTrainingScreen = ({ navigation }) => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-
-
         {/* Safety Indicator */}
         <SafetyIndicator 
           spo2={currentSpo2}
-          isConnected={isConnected}
+          isConnected={isPulseOxConnected}
           isFingerDetected={pulseOximeterData?.isFingerDetected}
         />
 
@@ -597,7 +446,21 @@ const IHHTTrainingScreen = ({ navigation }) => {
 
           <View style={styles.dataCard}>
             <Text style={styles.hrValue}>{currentHR} bpm</Text>
-            <Text style={styles.hrLabel}>❤️ Heart Rate</Text>
+            <Text style={styles.hrLabel}>❤️ Heart Rate ({hrSource})</Text>
+            {isHRConnected && (heartRateData?.quickHRV || heartRateData?.realHRV) && (
+              <View style={styles.hrvContainer}>
+                {heartRateData.realHRV ? (
+                  <Text style={styles.hrvLabel}>🎯 Real HRV: {heartRateData.realHRV.rmssd}ms</Text>
+                ) : heartRateData.quickHRV ? (
+                  <Text style={styles.hrvLabel}>⚡ Quick HRV: {heartRateData.quickHRV.rmssd}ms</Text>
+                ) : null}
+              </View>
+            )}
+            {isHRConnected && heartRateData && (
+              <Text style={styles.contactLabel}>
+                Contact: {heartRateData.sensorContactDetected ? '✅' : '❌'}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -848,6 +711,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#666666',
   },
+  hrvContainer: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  hrvLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  contactLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
   targetContainer: {
     marginHorizontal: 20,
     marginTop: 15,
@@ -1034,12 +912,11 @@ const styles = StyleSheet.create({
      fontSize: 14,
      color: '#666666',
    },
-     sliderCurrentValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333333',
-  },
-
+   sliderCurrentValue: {
+     fontSize: 18,
+     fontWeight: 'bold',
+     color: '#333333',
+   },
 });
 
 export default IHHTTrainingScreen; 
