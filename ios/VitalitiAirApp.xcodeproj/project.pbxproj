@@ -7,124 +7,43 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		12DFC65B4593D461B0EA43CA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5343A959FB9CB1931EB213B5 /* PrivacyInfo.xcprivacy */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		268A34E2F74528E0D5E042D4 /* libPods-VitalitiAirApp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8E81C04B09C6980D1FCE7884 /* libPods-VitalitiAirApp.a */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		A97F4AADBDE84D28DD15CBF3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = FB03A08444547A2A63DA853D /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		CAE6D13F694D46EB9E0472E6 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEE18F69A23554851D571AE9 /* ExpoModulesProvider.swift */; };
-		CCAFB7FFF404ABF1306D759F /* libPods-VitalitiAirApp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F3D77F09A97F4E55A02EA35A /* libPods-VitalitiAirApp.a */; };
+		D93BE98A920C74A103A524AD /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E8FDE756263E1FBD49DFEC1 /* ExpoModulesProvider.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
-		XX12B55A1EDABF083C3B51XX /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = XX470101BAEB8E0BBC8B0DXX /* WidgetKit.framework */; };
-		XX1A6800511A685AB346D2XX /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = XXA12889081EB894481655XX /* AppIntents.framework */; };
-		XX3C562DEF346B45594832XX /* ActivityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = XXCAF23C3FC41F82140FA1XX /* ActivityKit.framework */; };
-		XX6A44985675A04437B8C4XX /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = XX4DFF38D47332D6BF0183XX /* SwiftUI.framework */; };
-		XXAF17A74F08A841C88993XX /* IHHT Live Activity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = XX6CE27E65128B8723795DXX /* IHHT Live Activity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
-/* Begin PBXContainerItemProxy section */
-		XX28C580990FA9820F9D66XX /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = XX1EF8682BBEEA0FE06A7FXX;
-			remoteInfo = "IHHT Live Activity";
-		};
-/* End PBXContainerItemProxy section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		XX72A8CFBF0FBA13A79902XX /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				XXAF17A74F08A841C88993XX /* IHHT Live Activity.appex in Embed Foundation Extensions */,
-			);
-			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXFileReference section */
-		13B07F961A680F5B00A75B9A /* VitalitiAirApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; fileEncoding = 4; includeInIndex = 0; path = VitalitiAirApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = VitalitiAirApp/Images.xcassets; sourceTree = "<group>"; };
-		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = text.plist.xml; name = Info.plist; path = VitalitiAirApp/Info.plist; sourceTree = "<group>"; };
-		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = VitalitiAirApp/SplashScreen.storyboard; sourceTree = "<group>"; };
-		B633365A8A6DCA804A247FB7 /* Pods-VitalitiAirApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VitalitiAirApp.release.xcconfig"; path = "Target Support Files/Pods-VitalitiAirApp/Pods-VitalitiAirApp.release.xcconfig"; sourceTree = "<group>"; };
-		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		BEE18F69A23554851D571AE9 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-VitalitiAirApp/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; fileEncoding = 4; includeInIndex = undefined; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = VitalitiAirApp/AppDelegate.swift; sourceTree = "<group>"; };
-		F11748442D0722820044C1D9 /* VitalitiAirApp-Bridging-Header.h */ = {isa = PBXFileReference; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.c.h; name = "VitalitiAirApp-Bridging-Header.h"; path = "VitalitiAirApp/VitalitiAirApp-Bridging-Header.h"; sourceTree = "<group>"; };
-		F2078CBD5188CC33ACC6033F /* Pods-VitalitiAirApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VitalitiAirApp.debug.xcconfig"; path = "Target Support Files/Pods-VitalitiAirApp/Pods-VitalitiAirApp.debug.xcconfig"; sourceTree = "<group>"; };
-		F3D77F09A97F4E55A02EA35A /* libPods-VitalitiAirApp.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-VitalitiAirApp.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		FB03A08444547A2A63DA853D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = VitalitiAirApp/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		XX470101BAEB8E0BBC8B0DXX /* WidgetKit.framework */ = {isa = PBXFileReference; fileEncoding = 4; includeInIndex = undefined; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
-		XX4DFF38D47332D6BF0183XX /* SwiftUI.framework */ = {isa = PBXFileReference; fileEncoding = 4; includeInIndex = undefined; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
-		XX6CE27E65128B8723795DXX /* IHHT Live Activity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; fileEncoding = 4; includeInIndex = 0; path = "IHHT Live Activity.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
-		XXA12889081EB894481655XX /* AppIntents.framework */ = {isa = PBXFileReference; fileEncoding = 4; includeInIndex = undefined; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = System/Library/Frameworks/AppIntents.framework; sourceTree = SDKROOT; };
-		XXCAF23C3FC41F82140FA1XX /* ActivityKit.framework */ = {isa = PBXFileReference; fileEncoding = 4; includeInIndex = undefined; lastKnownFileType = wrapper.framework; name = ActivityKit.framework; path = System/Library/Frameworks/ActivityKit.framework; sourceTree = SDKROOT; };
+		13B07F961A680F5B00A75B9A /* VitalitiAirApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VitalitiAirApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = VitalitiAirApp/Images.xcassets; sourceTree = "<group>"; };
+		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = VitalitiAirApp/Info.plist; sourceTree = "<group>"; };
+		2E8FDE756263E1FBD49DFEC1 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-VitalitiAirApp/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		5343A959FB9CB1931EB213B5 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = VitalitiAirApp/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		56227F2AED303781F3745F6F /* Pods-VitalitiAirApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VitalitiAirApp.debug.xcconfig"; path = "Target Support Files/Pods-VitalitiAirApp/Pods-VitalitiAirApp.debug.xcconfig"; sourceTree = "<group>"; };
+		8E81C04B09C6980D1FCE7884 /* libPods-VitalitiAirApp.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-VitalitiAirApp.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = VitalitiAirApp/SplashScreen.storyboard; sourceTree = "<group>"; };
+		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
+		CF83E36FD81616C604391075 /* Pods-VitalitiAirApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VitalitiAirApp.release.xcconfig"; path = "Target Support Files/Pods-VitalitiAirApp/Pods-VitalitiAirApp.release.xcconfig"; sourceTree = "<group>"; };
+		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = VitalitiAirApp/AppDelegate.swift; sourceTree = "<group>"; };
+		F11748442D0722820044C1D9 /* VitalitiAirApp-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "VitalitiAirApp-Bridging-Header.h"; path = "VitalitiAirApp/VitalitiAirApp-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		XXFE7A0D43FF28B28FC134XX /* Exceptions for "widget" folder in "IHHT Live Activity" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-				"expo-target.config.js",
-			);
-			target = XX1EF8682BBEEA0FE06A7FXX /* IHHT Live Activity */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		XX55D7EAAE7B2E6325FEC9XX /* widget */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				XXFE7A0D43FF28B28FC134XX /* Exceptions for "widget" folder in "IHHT Live Activity" target */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = widget;
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		13B07F8C1A680F5B00A75B9A /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				CCAFB7FFF404ABF1306D759F /* libPods-VitalitiAirApp.a in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		XX074B8811C1CF8E8A3D74XX /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				XX12B55A1EDABF083C3B51XX /* WidgetKit.framework in Frameworks */,
-				XX6A44985675A04437B8C4XX /* SwiftUI.framework in Frameworks */,
-				XX3C562DEF346B45594832XX /* ActivityKit.framework in Frameworks */,
-				XX1A6800511A685AB346D2XX /* AppIntents.framework in Frameworks */,
+				268A34E2F74528E0D5E042D4 /* libPods-VitalitiAirApp.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		04F1189AF99056576390C09A /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				F2078CBD5188CC33ACC6033F /* Pods-VitalitiAirApp.debug.xcconfig */,
-				B633365A8A6DCA804A247FB7 /* Pods-VitalitiAirApp.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
-			sourceTree = "<group>";
-		};
 		13B07FAE1A68108700A75B9A /* VitalitiAirApp */ = {
 			isa = PBXGroup;
 			children = (
@@ -134,7 +53,7 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				FB03A08444547A2A63DA853D /* PrivacyInfo.xcprivacy */,
+				5343A959FB9CB1931EB213B5 /* PrivacyInfo.xcprivacy */,
 			);
 			name = VitalitiAirApp;
 			sourceTree = "<group>";
@@ -143,21 +62,17 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				XX470101BAEB8E0BBC8B0DXX /* WidgetKit.framework */,
-				XX4DFF38D47332D6BF0183XX /* SwiftUI.framework */,
-				XXCAF23C3FC41F82140FA1XX /* ActivityKit.framework */,
-				XXA12889081EB894481655XX /* AppIntents.framework */,
-				F3D77F09A97F4E55A02EA35A /* libPods-VitalitiAirApp.a */,
+				8E81C04B09C6980D1FCE7884 /* libPods-VitalitiAirApp.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		49C6447241D5160B80C3F7AF /* VitalitiAirApp */ = {
+		65140FBEDD3EC5150E69AFC3 /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				BEE18F69A23554851D571AE9 /* ExpoModulesProvider.swift */,
+				F085E57E8457BF7FD1655464 /* VitalitiAirApp */,
 			);
-			name = VitalitiAirApp;
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -170,13 +85,12 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
-				XX3E41C1850246162C0061XX /* expo:targets */,
 				13B07FAE1A68108700A75B9A /* VitalitiAirApp */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				04F1189AF99056576390C09A /* Pods */,
-				D82C804ACBFA354A77E586F2 /* ExpoModulesProviders */,
+				C70460BB7BC4BC424884296D /* Pods */,
+				65140FBEDD3EC5150E69AFC3 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -187,7 +101,6 @@
 			isa = PBXGroup;
 			children = (
 				13B07F961A680F5B00A75B9A /* VitalitiAirApp.app */,
-				XX6CE27E65128B8723795DXX /* IHHT Live Activity.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -201,21 +114,22 @@
 			path = VitalitiAirApp/Supporting;
 			sourceTree = "<group>";
 		};
-		D82C804ACBFA354A77E586F2 /* ExpoModulesProviders */ = {
+		C70460BB7BC4BC424884296D /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				49C6447241D5160B80C3F7AF /* VitalitiAirApp */,
+				56227F2AED303781F3745F6F /* Pods-VitalitiAirApp.debug.xcconfig */,
+				CF83E36FD81616C604391075 /* Pods-VitalitiAirApp.release.xcconfig */,
 			);
-			name = ExpoModulesProviders;
+			name = Pods;
+			path = Pods;
 			sourceTree = "<group>";
 		};
-		XX3E41C1850246162C0061XX /* expo:targets */ = {
+		F085E57E8457BF7FD1655464 /* VitalitiAirApp */ = {
 			isa = PBXGroup;
 			children = (
-				XX55D7EAAE7B2E6325FEC9XX /* widget */,
+				2E8FDE756263E1FBD49DFEC1 /* ExpoModulesProvider.swift */,
 			);
-			name = "expo:targets";
-			path = ../targets;
+			name = VitalitiAirApp;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -226,44 +140,22 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "VitalitiAirApp" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				ABC793B507094F212099B129 /* [Expo] Configure project */,
+				834E699E8D3DD92FB218A67E /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				XX72A8CFBF0FBA13A79902XX /* Embed Foundation Extensions */,
-				4F51BE5CFA0120FEDA43C8FD /* [CP] Embed Pods Frameworks */,
+				225E97065906A25D68D1A543 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				XXB9715DC9283848CF76B9XX /* PBXTargetDependency */,
 			);
 			name = VitalitiAirApp;
 			productName = VitalitiAirApp;
 			productReference = 13B07F961A680F5B00A75B9A /* VitalitiAirApp.app */;
 			productType = "com.apple.product-type.application";
-		};
-		XX1EF8682BBEEA0FE06A7FXX /* IHHT Live Activity */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = XX461517A623E0E4624F05XX /* Build configuration list for PBXNativeTarget "IHHT Live Activity" */;
-			buildPhases = (
-				XX074B8811C1CF8E8A3D74XX /* Frameworks */,
-				XXE45443DC38DCFE1DB622XX /* Sources */,
-				XXFA5A8CCDD805DF7AEF9CXX /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				XX55D7EAAE7B2E6325FEC9XX /* widget */,
-			);
-			name = "IHHT Live Activity";
-			productName = IHHTLiveActivity;
-			productReference = XX6CE27E65128B8723795DXX /* IHHT Live Activity.appex */;
-			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -275,11 +167,6 @@
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
 						LastSwiftMigration = 1250;
-					};
-					XX1EF8682BBEEA0FE06A7FXX = {
-						CreatedOnToolsVersion = 14.3;
-						DevelopmentTeam = 2726NBK599;
-						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -297,7 +184,6 @@
 			projectRoot = "";
 			targets = (
 				13B07F861A680F5B00A75B9A /* VitalitiAirApp */,
-				XX1EF8682BBEEA0FE06A7FXX /* IHHT Live Activity */,
 			);
 		};
 /* End PBXProject section */
@@ -310,14 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				A97F4AADBDE84D28DD15CBF3 /* PrivacyInfo.xcprivacy in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		XXFA5A8CCDD805DF7AEF9CXX /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
+				12DFC65B4593D461B0EA43CA /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -330,13 +209,9 @@
 			buildActionMask = 2147483647;
 			files = (
 			);
-			inputFileListPaths = (
-			);
 			inputPaths = (
 			);
 			name = "Bundle React Native code and images";
-			outputFileListPaths = (
-			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -365,7 +240,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		4F51BE5CFA0120FEDA43C8FD /* [CP] Embed Pods Frameworks */ = {
+		225E97065906A25D68D1A543 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -429,7 +304,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-VitalitiAirApp/Pods-VitalitiAirApp-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		ABC793B507094F212099B129 /* [Expo] Configure project */ = {
+		834E699E8D3DD92FB218A67E /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -456,31 +331,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				CAE6D13F694D46EB9E0472E6 /* ExpoModulesProvider.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		XXE45443DC38DCFE1DB622XX /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
+				D93BE98A920C74A103A524AD /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		XXB9715DC9283848CF76B9XX /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = XX1EF8682BBEEA0FE06A7FXX /* IHHT Live Activity */;
-			targetProxy = XX28C580990FA9820F9D66XX /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = F2078CBD5188CC33ACC6033F /* Pods-VitalitiAirApp.debug.xcconfig */;
+			baseConfigurationReference = 56227F2AED303781F3745F6F /* Pods-VitalitiAirApp.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -498,7 +358,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -517,7 +377,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = B633365A8A6DCA804A247FB7 /* Pods-VitalitiAirApp.release.xcconfig */;
+			baseConfigurationReference = CF83E36FD81616C604391075 /* Pods-VitalitiAirApp.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -530,7 +390,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -670,88 +530,6 @@
 			};
 			name = Release;
 		};
-		XX006E3181B3E5BADA4391XX /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CODE_SIGN_ENTITLEMENTS = ../targets/widget/generated.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = 2726NBK599;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = ../targets/widget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "IHHT Live Activity";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0.0;
-				MTL_FAST_MATH = YES;
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.sophiafay24.VitalitiAirApp.widget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
-		XX5FD23E6750882608FCF9XX /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CODE_SIGN_ENTITLEMENTS = ../targets/widget/generated.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = 2726NBK599;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = ../targets/widget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "IHHT Live Activity";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0.0;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = com.sophiafay24.VitalitiAirApp.widget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -769,15 +547,6 @@
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
 				83CBBA211A601CBA00E9B192 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		XX461517A623E0E4624F05XX /* Build configuration list for PBXNativeTarget "IHHT Live Activity" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				XX5FD23E6750882608FCF9XX /* Debug */,
-				XX006E3181B3E5BADA4391XX /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -60,6 +60,8 @@
     <string>This app uses Bluetooth to connect to your pulse oximeter device for monitoring SpO2 and heart rate.</string>
     <key>NSBluetoothPeripheralUsageDescription</key>
     <string>This app uses Bluetooth to connect to your pulse oximeter device for monitoring SpO2 and heart rate.</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>NSSupportsLiveActivities</key>
     <true/>
     <key>UIBackgroundModes</key>

@@ -310,6 +310,8 @@ PODS:
     - Yoga
   - ExpoPrint (14.1.4):
     - ExpoModulesCore
+  - ExpoSecureStore (14.2.3):
+    - ExpoModulesCore
   - ExpoSharing (13.1.5):
     - ExpoModulesCore
   - EXTaskManager (13.1.6):
@@ -1678,7 +1680,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - react-native-safe-area-context (5.4.0):
+  - react-native-safe-area-context (5.5.2):
     - React-Core
   - react-native-sqlite-storage (6.0.1):
     - React-Core
@@ -2008,7 +2010,7 @@ PODS:
     - React-Core
   - RNFS (2.20.0):
     - React-Core
-  - RNGestureHandler (2.24.0):
+  - RNGestureHandler (2.27.2):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -2156,7 +2158,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - RNScreens (4.11.1):
+  - RNScreens (4.13.1):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -2207,6 +2209,7 @@ DEPENDENCIES:
   - ExpoMediaLibrary (from `../node_modules/expo-media-library/ios`)
   - ExpoModulesCore (from `../node_modules/expo-modules-core`)
   - ExpoPrint (from `../node_modules/expo-print/ios`)
+  - ExpoSecureStore (from `../node_modules/expo-secure-store/ios`)
   - ExpoSharing (from `../node_modules/expo-sharing/ios`)
   - EXTaskManager (from `../node_modules/expo-task-manager/ios`)
   - "ExtensionStorage (from `../node_modules/@bacons/apple-targets/ios`)"
@@ -2337,6 +2340,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-modules-core"
   ExpoPrint:
     :path: "../node_modules/expo-print/ios"
+  ExpoSecureStore:
+    :path: "../node_modules/expo-secure-store/ios"
   ExpoSharing:
     :path: "../node_modules/expo-sharing/ios"
   EXTaskManager:
@@ -2525,6 +2530,7 @@ SPEC CHECKSUMS:
   ExpoMediaLibrary: 0daf5e811e00daa47690f5da2989e71ff7de56e0
   ExpoModulesCore: f55e7872391bae03ee5547c83152c81750d89508
   ExpoPrint: b278f5d9ac844f4b1f65dd06183970602e09bc8b
+  ExpoSecureStore: b367d9f62c9102d808afbeb1561636d4276e439d
   ExpoSharing: b0377be82430d07398c6a4cd60b5a15696accbd3
   EXTaskManager: 280143f6d8e596f28739d74bf34910300dcbd4ea
   ExtensionStorage: 5796de20bf181317c376d693fedb64c6781a33ba
@@ -2568,7 +2574,7 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 96a2f2a176268581733be182fa6eebab1c0193be
   React-microtasksnativemodule: bda561d2648e1e52bd9e5a87f8889836bdbde2e2
   react-native-ble-plx: b9cfaeaa9acde80373d8a8df390212fc1d66e5d9
-  react-native-safe-area-context: 9d72abf6d8473da73033b597090a80b709c0b2f1
+  react-native-safe-area-context: 0f7bf11598f9a61b7ceac8dc3f59ef98697e99e1
   react-native-sqlite-storage: 0c84826214baaa498796c7e46a5ccc9a82e114ed
   React-NativeModulesApple: 1ecb83880dd11baf2228f8dd89d8419c387e03ad
   React-oscompat: 0592889a9fcf0eacb205532028e4a364e22907dd
@@ -2603,14 +2609,14 @@ SPEC CHECKSUMS:
   ReactCommon: 1ab5451fc5da87c4cc4c3046e19a8054624ca763
   RNCAsyncStorage: b9f5f78da5d16a853fe3dc22e8268d932fc45a83
   RNFS: 89de7d7f4c0f6bafa05343c578f61118c8282ed8
-  RNGestureHandler: ce4a87dba81030b374d7f1993c4376f5c230da2e
+  RNGestureHandler: 43ff77261c9f3cfcfd195aa16860bfdcfe108ef5
   RNReanimated: efe63b33e23e1b5b06e5e087779eceeee742452b
-  RNScreens: 62fdbbc4c984150b34c36f095c6ba2510ca9b6a5
+  RNScreens: b062e220dfd58455779e4e9f2123c81e37d51fe7
   RNSVG: ab84f2de7dd4f2c86d01825b8a65e0ef712fc36b
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   UMAppLoader: 55159b69750129faa7a51c493cb8ea55a7b64eb9
   Yoga: adb397651e1c00672c12e9495babca70777e411e
 
-PODFILE CHECKSUM: 4ee9797e43a008b7285f5d7913891c01a59c2ccd
+PODFILE CHECKSUM: 57f4d7367031d663ee14c473355c4f8471da5ce7
 
 COCOAPODS: 1.16.2
