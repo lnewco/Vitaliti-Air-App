@@ -9,7 +9,8 @@ import {
   RefreshControl,
   Modal,
   ScrollView,
-  Dimensions
+  Dimensions,
+  SafeAreaView
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import SessionManager from '../services/SessionManager';
@@ -287,25 +288,25 @@ const SessionHistoryScreen = () => {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
+      <SafeAreaView style={styles.centerContainer}>
         <Text style={styles.loadingText}>Loading sessions...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (sessions.length === 0) {
     return (
-      <View style={styles.centerContainer}>
+      <SafeAreaView style={styles.centerContainer}>
         <Text style={styles.emptyTitle}>No Training Sessions</Text>
         <Text style={styles.emptySubtitle}>
           Start your first training session from the dashboard
         </Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <FlatList
         data={sessions}
         renderItem={renderSessionItem}
@@ -316,7 +317,7 @@ const SessionHistoryScreen = () => {
         }
       />
       {renderSessionModal()}
-    </View>
+    </SafeAreaView>
   );
 };
 
