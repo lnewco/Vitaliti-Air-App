@@ -173,7 +173,8 @@ class SupabaseService {
         spo2: reading.spo2,
         heart_rate: reading.heartRate,
         signal_strength: reading.signalStrength,
-        is_valid: reading.spo2 !== null && reading.heartRate !== null && reading.isFingerDetected,
+        is_valid: (reading.spo2 !== null && reading.spo2 > 0) || 
+                 (reading.heartRate !== null && reading.heartRate > 0),
         created_at: new Date().toISOString()
       };
 
@@ -219,7 +220,8 @@ class SupabaseService {
         spo2: reading.spo2,
         heart_rate: reading.heartRate,
         signal_strength: reading.signalStrength,
-        is_valid: reading.spo2 !== null && reading.heartRate !== null && reading.isFingerDetected,
+        is_valid: (reading.spo2 !== null && reading.spo2 > 0) || 
+                 (reading.heartRate !== null && reading.heartRate > 0),
         created_at: new Date().toISOString()
       }));
 

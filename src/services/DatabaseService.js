@@ -134,7 +134,9 @@ class DatabaseService {
       VALUES (?, ?, ?, ?, ?, ?)
     `;
     
-    const isValid = reading.spo2 !== null && reading.heartRate !== null && reading.isFingerDetected;
+    // More flexible validation: valid if we have either spo2 or heart rate data
+    const isValid = (reading.spo2 !== null && reading.spo2 > 0) || 
+                   (reading.heartRate !== null && reading.heartRate > 0);
     
     await this.db.executeSql(query, [
       sessionId,
@@ -156,7 +158,9 @@ class DatabaseService {
       `;
       
       for (const reading of readings) {
-        const isValid = reading.spo2 !== null && reading.heartRate !== null && reading.isFingerDetected;
+        // More flexible validation: valid if we have either spo2 or heart rate data
+        const isValid = (reading.spo2 !== null && reading.spo2 > 0) || 
+                       (reading.heartRate !== null && reading.heartRate > 0);
         await tx.executeSql(query, [
           reading.sessionId,
           reading.timestamp,
@@ -190,21 +194,100 @@ class DatabaseService {
     const query = `
       SELECT 
         COUNT(*) as totalReadings,
-        AVG(CASE WHEN is_valid = 1 THEN spo2 END) as avgSpO2,
-        MIN(CASE WHEN is_valid = 1 THEN spo2 END) as minSpO2,
-        MAX(CASE WHEN is_valid = 1 THEN spo2 END) as maxSpO2,
-        AVG(CASE WHEN is_valid = 1 THEN heart_rate END) as avgHeartRate,
-        MIN(CASE WHEN is_valid = 1 THEN heart_rate END) as minHeartRate,
-        MAX(CASE WHEN is_valid = 1 THEN heart_rate END) as maxHeartRate
+        COUNT(CASE WHEN spo2 IS NOT NULL AND spo2 > 0 THEN 1 END) as validSpO2Readings,
+        COUNT(CASE WHEN heart_rate IS NOT NULL AND heart_rate > 0 THEN 1 END) as validHeartRateReadings,
+        AVG(CASE WHEN spo2 IS NOT NULL AND spo2 > 0 THEN spo2 END) as avgSpO2,
+        MIN(CASE WHEN spo2 IS NOT NULL AND spo2 > 0 THEN spo2 END) as minSpO2,
+        MAX(CASE WHEN spo2 IS NOT NULL AND spo2 > 0 THEN spo2 END) as maxSpO2,
+        AVG(CASE WHEN heart_rate IS NOT NULL AND heart_rate > 0 THEN heart_rate END) as avgHeartRate,
+        MIN(CASE WHEN heart_rate IS NOT NULL AND heart_rate > 0 THEN heart_rate END) as minHeartRate,
+        MAX(CASE WHEN heart_rate IS NOT NULL AND heart_rate > 0 THEN heart_rate END) as maxHeartRate
       FROM readings 
       WHERE session_id = ?
     `;
     
     const [result] = await this.db.executeSql(query, [sessionId]);
-    return result.rows.item(0);
+    const stats = result.rows.item(0);
+    
+    // Log for debugging
+    console.log('📊 Session stats calculated:', {
+      sessionId,
+      totalReadings: stats.totalReadings,
+      validSpO2Readings: stats.validSpO2Readings,
+      validHeartRateReadings: stats.validHeartRateReadings,
+      avgSpO2: stats.avgSpO2,
+      avgHeartRate: stats.avgHeartRate
+    });
+    
+    return stats;
   }
 
   // Data Management
+  async reprocessSessionStats(sessionId) {
+    console.log(`🔄 Reprocessing stats for session: ${sessionId}`);
+    
+    // Recalculate statistics with new logic
+    const stats = await this.getSessionStats(sessionId);
+    
+    const query = `
+      UPDATE sessions 
+      SET total_readings = ?, avg_spo2 = ?, min_spo2 = ?, max_spo2 = ?,
+          avg_heart_rate = ?, min_heart_rate = ?, max_heart_rate = ?
+      WHERE id = ?
+    `;
+    
+    await this.db.executeSql(query, [
+      stats.totalReadings,
+      stats.avgSpO2,
+      stats.minSpO2,
+      stats.maxSpO2,
+      stats.avgHeartRate,
+      stats.minHeartRate,
+      stats.maxHeartRate,
+      sessionId
+    ]);
+    
+    console.log(`✅ Reprocessed stats for session ${sessionId}:`, stats);
+    return stats;
+  }
+
+  async reprocessAllNullStats() {
+    console.log('🔄 Reprocessing all sessions with null statistics...');
+    
+    // Find sessions with null stats
+    const query = `
+      SELECT id FROM sessions 
+      WHERE status = 'completed' 
+      AND (avg_spo2 IS NULL OR avg_heart_rate IS NULL)
+      ORDER BY start_time DESC
+    `;
+    
+    const [result] = await this.db.executeSql(query);
+    const sessionsToReprocess = [];
+    
+    for (let i = 0; i < result.rows.length; i++) {
+      sessionsToReprocess.push(result.rows.item(i).id);
+    }
+    
+    console.log(`📋 Found ${sessionsToReprocess.length} sessions to reprocess`);
+    
+    const results = [];
+    for (const sessionId of sessionsToReprocess) {
+      try {
+        const stats = await this.reprocessSessionStats(sessionId);
+        results.push({ sessionId, success: true, stats });
+      } catch (error) {
+        console.error(`❌ Failed to reprocess session ${sessionId}:`, error);
+        results.push({ sessionId, success: false, error: error.message });
+      }
+    }
+    
+    const successful = results.filter(r => r.success).length;
+    console.log(`✅ Reprocessed ${successful}/${sessionsToReprocess.length} sessions successfully`);
+    
+    return results;
+  }
+
   async cleanupOldSessions() {
     // Keep only the 10 most recent sessions
     const deleteQuery = `

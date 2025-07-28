@@ -79,6 +79,7 @@ const IHHTTrainingScreen = ({ navigation }) => {
   // Enhanced session state - using the enhanced session manager
   const [sessionInfo, setSessionInfo] = useState(EnhancedSessionManager.getSessionInfo());
   const [totalTimeElapsed, setTotalTimeElapsed] = useState(0);
+  const [sessionStarted, setSessionStarted] = useState(false);
   
   // Hypoxia level state
   const [hypoxiaLevel, setHypoxiaLevel] = useState(5);
@@ -133,9 +134,15 @@ const IHHTTrainingScreen = ({ navigation }) => {
     setDefaultHypoxiaLevel(roundedValue);
   };
 
-  // Start session when component mounts (device is already connected from setup)
+  // Set up session event listeners (session will start on first reading)
   useEffect(() => {
-    startSession();
+    // Check if there's already an active session (from recovery)
+    const currentSessionInfo = EnhancedSessionManager.getSessionInfo();
+    if (currentSessionInfo.isActive) {
+      console.log('📱 Found existing active session, continuing...');
+      setSessionStarted(true);
+      setSessionInfo(currentSessionInfo);
+    }
     
     // Set up session event listeners
     const removeListener = EnhancedSessionManager.addListener((event, data) => {
@@ -143,6 +150,9 @@ const IHHTTrainingScreen = ({ navigation }) => {
       
       switch (event) {
         case 'sessionStarted':
+          setSessionInfo(EnhancedSessionManager.getSessionInfo());
+          setSessionStarted(true);
+          break;
         case 'phaseUpdate':
         case 'phaseAdvanced':
         case 'phaseSkipped':
@@ -153,6 +163,7 @@ const IHHTTrainingScreen = ({ navigation }) => {
           break;
         case 'sessionEnded':
           handleSessionComplete(data);
+          setSessionStarted(false);
           break;
       }
     });
@@ -161,8 +172,10 @@ const IHHTTrainingScreen = ({ navigation }) => {
       // Cleanup on unmount
       removeListener();
       if (sessionInfo.isActive) {
+        console.log('🧹 Component unmounting, stopping active session');
         EnhancedSessionManager.stopSession().catch(console.error);
       }
+      setSessionStarted(false);
     };
   }, []);
 
@@ -177,9 +190,39 @@ const IHHTTrainingScreen = ({ navigation }) => {
     return () => clearInterval(timer);
   }, [sessionInfo.isActive, sessionInfo.isPaused]);
 
-  // Safety monitoring effect
+  // Session creation and safety monitoring effect
   useEffect(() => {
-    if (!pulseOximeterData || !sessionInfo.isActive) return;
+    if (!pulseOximeterData) return;
+    
+    // Only start session when we get VALID measurements (finger detected OR valid spo2/heart rate)
+    const hasValidMeasurement = pulseOximeterData.isFingerDetected || 
+                               (pulseOximeterData.spo2 !== null && pulseOximeterData.spo2 > 0) ||
+                               (pulseOximeterData.heartRate !== null && pulseOximeterData.heartRate > 0);
+    
+    // Start session on first VALID reading (only once)
+    if (!sessionStarted && !sessionInfo.isActive && hasValidMeasurement) {
+      console.log('🎬 Starting session on first VALID reading received', {
+        isFingerDetected: pulseOximeterData.isFingerDetected,
+        spo2: pulseOximeterData.spo2,
+        heartRate: pulseOximeterData.heartRate
+      });
+      startSession();
+      setSessionStarted(true);
+      return; // Exit early, let the session start before processing readings
+    }
+    
+    // Log status data but don't create session
+    if (!sessionStarted && !sessionInfo.isActive && !hasValidMeasurement) {
+      console.log('📊 Status data received (no session creation needed)', {
+        isFingerDetected: pulseOximeterData.isFingerDetected,
+        spo2: pulseOximeterData.spo2,
+        heartRate: pulseOximeterData.heartRate
+      });
+      return;
+    }
+    
+    // Only process readings if session is active
+    if (!sessionInfo.isActive) return;
 
     const spo2 = pulseOximeterData.spo2;
     
@@ -192,7 +235,7 @@ const IHHTTrainingScreen = ({ navigation }) => {
     
     // Add reading to enhanced session
     EnhancedSessionManager.addReading(pulseOximeterData);
-  }, [pulseOximeterData, sessionInfo.isActive]);
+  }, [pulseOximeterData, sessionInfo.isActive, sessionStarted]);
 
   const startSession = async () => {
     try {
