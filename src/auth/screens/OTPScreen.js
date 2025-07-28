@@ -20,8 +20,6 @@ const OTPScreen = ({ route, navigation }) => {
   const [isResending, setIsResending] = useState(false);
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
-  const [isAutoFilling, setIsAutoFilling] = useState(false);
-  const [hiddenInputValue, setHiddenInputValue] = useState('');
   
   const inputRefs = useRef([]);
   const { verifyOTP, sendOTP } = useAuth();
@@ -39,13 +37,8 @@ const OTPScreen = ({ route, navigation }) => {
   }, [timer]);
 
   const handleOtpChange = (text, index) => {
-    // Add debugging to see what's being received
-    console.log(`🔑 Input ${index} received text:`, text, 'length:', text.length);
-    
     // Check if this is a full 6-digit auto-fill on the first input
     if (index === 0 && text.length === 6 && /^\d{6}$/.test(text)) {
-      console.log('🔑 6-digit auto-fill detected on first input:', text);
-      
       const digits = text.split('');
       setOtp(digits);
       
@@ -66,11 +59,6 @@ const OTPScreen = ({ route, navigation }) => {
     
     // Only allow numbers
     if (!/^\d*$/.test(text)) return;
-
-    // Reset auto-filling flag if user starts typing manually
-    if (isAutoFilling) {
-      setIsAutoFilling(false);
-    }
 
     const newOtp = [...otp];
     newOtp[index] = text;
@@ -94,46 +82,6 @@ const OTPScreen = ({ route, navigation }) => {
     }
   };
 
-  // Handle iOS SMS auto-fill
-  const handleAutoFill = (text) => {
-    console.log('🔑 Auto-fill received text:', text);
-    
-    // Check if we received a 6-digit code
-    if (text.length === 6 && /^\d{6}$/.test(text)) {
-      console.log('🔑 iOS Auto-fill detected:', text);
-      
-      setIsAutoFilling(true);
-      const digits = text.split('');
-      
-      // Set the state
-      setOtp(digits);
-      
-      // Also manually set each input value via refs to ensure they display correctly
-      digits.forEach((digit, index) => {
-        if (inputRefs.current[index]) {
-          inputRefs.current[index].setNativeProps({ text: digit });
-        }
-      });
-      
-      // Clear the hidden input
-      setHiddenInputValue('');
-      
-      // Focus the last input to show completion
-      if (inputRefs.current[5]) {
-        inputRefs.current[5].focus();
-      }
-      
-      // Auto-verify the code immediately
-      setTimeout(() => {
-        handleVerifyOTP(text);
-        setIsAutoFilling(false);
-      }, 150); // Small delay to ensure UI updates first
-    } else {
-      // Update hidden input value for partial input
-      setHiddenInputValue(text);
-    }
-  };
-
   const handleVerifyOTP = async (otpCode = null) => {
     try {
       const codeToVerify = otpCode || otp.join('');
@@ -145,12 +93,8 @@ const OTPScreen = ({ route, navigation }) => {
 
       setIsLoading(true);
 
-      console.log('🔑 Verifying OTP:', codeToVerify);
-
       // Verify OTP
       await verifyOTP(phoneNumber, codeToVerify);
-
-      console.log('✅ OTP verification successful, user will be redirected automatically');
 
     } catch (error) {
       console.error('❌ OTP verification error:', error.message);
@@ -247,21 +191,6 @@ const OTPScreen = ({ route, navigation }) => {
             <Text style={styles.otpLabel}>Verification Code</Text>
             
             <View style={styles.otpContainer}>
-              {/* Hidden input for iOS SMS auto-fill */}
-              <TextInput
-                style={styles.hiddenInput}
-                textContentType="oneTimeCode"
-                autoComplete="sms-otp"
-                onChangeText={handleAutoFill}
-                onFocus={() => console.log('🔑 Hidden input focused')}
-                onBlur={() => console.log('🔑 Hidden input blurred')}
-                onLayout={(event) => console.log('🔑 Hidden input layout:', event.nativeEvent.layout)}
-                value={hiddenInputValue}
-                keyboardType="number-pad"
-                editable={!isLoading}
-                maxLength={6}
-                placeholder=""
-              />
               
               {otp.map((digit, index) => (
                 <TextInput
@@ -278,7 +207,7 @@ const OTPScreen = ({ route, navigation }) => {
                   keyboardType="number-pad"
                   maxLength={6}
                   textAlign="center"
-                  autoFocus={index === 0 && !isAutoFilling}
+                  autoFocus={index === 0}
                   editable={!isLoading}
                   selectTextOnFocus
                   textContentType={index === 0 ? "oneTimeCode" : "none"}
@@ -421,7 +350,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
-    position: 'relative',
   },
   otpInput: {
     flex: 1,
@@ -510,15 +438,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 20,
-  },
-  hiddenInput: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 56,
-    opacity: 0,
-    zIndex: 1,
   },
 });
 
