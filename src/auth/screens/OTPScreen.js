@@ -39,6 +39,31 @@ const OTPScreen = ({ route, navigation }) => {
   }, [timer]);
 
   const handleOtpChange = (text, index) => {
+    // Add debugging to see what's being received
+    console.log(`🔑 Input ${index} received text:`, text, 'length:', text.length);
+    
+    // Check if this is a full 6-digit auto-fill on the first input
+    if (index === 0 && text.length === 6 && /^\d{6}$/.test(text)) {
+      console.log('🔑 6-digit auto-fill detected on first input:', text);
+      
+      const digits = text.split('');
+      setOtp(digits);
+      
+      // Set each input value via refs
+      digits.forEach((digit, idx) => {
+        if (inputRefs.current[idx]) {
+          inputRefs.current[idx].setNativeProps({ text: digit });
+        }
+      });
+      
+      // Auto-verify
+      setTimeout(() => {
+        handleVerifyOTP(text);
+      }, 100);
+      
+      return;
+    }
+    
     // Only allow numbers
     if (!/^\d*$/.test(text)) return;
 
@@ -251,11 +276,13 @@ const OTPScreen = ({ route, navigation }) => {
                   onChangeText={(text) => handleOtpChange(text, index)}
                   onKeyPress={(e) => handleKeyPress(e, index)}
                   keyboardType="number-pad"
-                  maxLength={1}
+                  maxLength={6}
                   textAlign="center"
                   autoFocus={index === 0 && !isAutoFilling}
                   editable={!isLoading}
                   selectTextOnFocus
+                  textContentType={index === 0 ? "oneTimeCode" : "none"}
+                  autoComplete={index === 0 ? "sms-otp" : "off"}
                 />
               ))}
             </View>
