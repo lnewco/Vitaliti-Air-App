@@ -125,6 +125,10 @@ const LoginScreen = ({ navigation }) => {
                 onChangeText={setPhoneNumber}
                 placeholder="Enter phone number (e.g., 8055700864)"
                 keyboardType="phone-pad"
+                textContentType="telephoneNumber"
+                autoComplete="tel"
+                autoCorrect={false}
+                clearButtonMode="while-editing"
                 autoFocus={false}
                 editable={!isLoading}
                 maxLength={15}
