@@ -51,6 +51,8 @@ class SupabaseService {
         start_time: new Date(sessionData.startTime).toISOString(),
         status: 'active',
         total_readings: 0,
+        session_type: 'IHHT',
+        default_hypoxia_level: sessionData.defaultHypoxiaLevel || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         // Store the local session ID as metadata
@@ -175,6 +177,9 @@ class SupabaseService {
         signal_strength: reading.signalStrength,
         is_valid: (reading.spo2 !== null && reading.spo2 > 0) || 
                  (reading.heartRate !== null && reading.heartRate > 0),
+        fio2_level: reading.fio2Level || null,
+        phase_type: reading.phaseType || null,
+        cycle_number: reading.cycleNumber || null,
         created_at: new Date().toISOString()
       };
 
@@ -222,6 +227,9 @@ class SupabaseService {
         signal_strength: reading.signalStrength,
         is_valid: (reading.spo2 !== null && reading.spo2 > 0) || 
                  (reading.heartRate !== null && reading.heartRate > 0),
+        fio2_level: reading.fio2Level || null,
+        phase_type: reading.phaseType || null,
+        cycle_number: reading.cycleNumber || null,
         created_at: new Date().toISOString()
       }));
 
@@ -236,7 +244,7 @@ class SupabaseService {
         return null;
       }
 
-      console.log(`☁️ Batch inserted ${data.length} readings to Supabase`);
+      console.log(`☁️ Batch inserted ${data.length} readings with FiO2 data to Supabase`);
       return data;
     } catch (error) {
       console.error('❌ Error batch inserting readings:', error);

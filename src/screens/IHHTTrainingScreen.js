@@ -102,6 +102,10 @@ const IHHTTrainingScreen = ({ navigation }) => {
   useEffect(() => {
     if (sessionInfo.currentPhase === 'HYPOXIC' && sessionInfo.phaseTimeRemaining === HYPOXIC_DURATION) {
       setHypoxiaLevel(defaultHypoxiaLevel);
+      EnhancedSessionManager.setHypoxiaLevel(defaultHypoxiaLevel);
+    } else if (sessionInfo.currentPhase === 'HYPEROXIC') {
+      // During hyperoxic phase, set FiO2 to room air (level 0)
+      EnhancedSessionManager.setHypoxiaLevel(0);
     }
   }, [sessionInfo.currentPhase, sessionInfo.phaseTimeRemaining, defaultHypoxiaLevel]);
 
@@ -113,6 +117,8 @@ const IHHTTrainingScreen = ({ navigation }) => {
         if (level >= 0 && level <= 10) { // Validate range
           setDefaultHypoxiaLevel(level);
           setHypoxiaLevel(level);
+          // Set the initial hypoxia level in the session manager
+          EnhancedSessionManager.setHypoxiaLevel(level);
         }
       }
     } catch (error) {
@@ -132,6 +138,10 @@ const IHHTTrainingScreen = ({ navigation }) => {
     const roundedValue = Math.round(value);
     setHypoxiaLevel(roundedValue);
     setDefaultHypoxiaLevel(roundedValue);
+    
+    // Update the session manager with the new hypoxia level
+    EnhancedSessionManager.setHypoxiaLevel(roundedValue);
+    console.log(`🌬️ Hypoxia level changed to: ${roundedValue}`);
   };
 
   // Set up session event listeners (session will start on first reading)

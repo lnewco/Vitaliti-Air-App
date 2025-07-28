@@ -48,6 +48,9 @@ class EnhancedSessionManager {
     this.backgroundTimeout = null;
     this.sessionTimeout = null;
     
+    // FiO2 tracking
+    this.currentHypoxiaLevel = 5; // Default hypoxia level (0-10 scale)
+    
     // Buffer settings
     this.BATCH_SIZE = 50;
     this.BATCH_INTERVAL = 2000;
@@ -182,10 +185,11 @@ class EnhancedSessionManager {
       }
 
       // Create session in databases
-      await DatabaseService.createSession(sessionId);
+      await DatabaseService.createSession(sessionId, this.currentHypoxiaLevel);
       await SupabaseService.createSession({
         id: sessionId,
-        startTime: Date.now()
+        startTime: Date.now(),
+        defaultHypoxiaLevel: this.currentHypoxiaLevel
       });
 
       // Set session state
@@ -193,7 +197,12 @@ class EnhancedSessionManager {
         id: sessionId,
         startTime: Date.now(),
         readingCount: 0,
-        lastReading: null
+        lastReading: null,
+        sessionType: 'IHHT',
+        currentPhase: this.currentPhase,
+        currentCycle: this.currentCycle,
+        totalCycles: this.totalCycles,
+        defaultHypoxiaLevel: this.currentHypoxiaLevel
       };
 
       this.isActive = true;
@@ -526,7 +535,10 @@ class EnhancedSessionManager {
       sessionId: this.currentSession.id,
       timestamp: Date.now(),
       phase: this.currentPhase,
-      cycle: this.currentCycle
+      cycle: this.currentCycle,
+      fio2Level: this.currentHypoxiaLevel,
+      phaseType: this.currentPhase,
+      cycleNumber: this.currentCycle
     };
 
     this.readingBuffer.push(timestampedReading);
@@ -674,6 +686,25 @@ class EnhancedSessionManager {
       this.sessionTimeout = null;
       console.log('⏰ Session timeout cleared');
     }
+  }
+
+  // FiO2 level management
+  setHypoxiaLevel(level) {
+    if (level >= 0 && level <= 10) {
+      this.currentHypoxiaLevel = level;
+      console.log(`🌬️ Hypoxia level set to: ${level}`);
+    }
+  }
+
+  getHypoxiaLevel() {
+    return this.currentHypoxiaLevel;
+  }
+
+  getCurrentFiO2() {
+    // Convert hypoxia level (0-10) to approximate FiO2 percentage
+    // Level 0 = ~21% (room air), Level 10 = ~10% (very hypoxic)
+    const fio2Percentage = Math.round(21 - (this.currentHypoxiaLevel * 1.1));
+    return Math.max(fio2Percentage, 10); // Minimum 10% FiO2 for safety
   }
 
   // Startup recovery - clean up stuck sessions on app start

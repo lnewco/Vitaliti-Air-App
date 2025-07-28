@@ -65,18 +65,51 @@ class DatabaseService {
     await this.db.executeSql(createSessionsTable);
     await this.db.executeSql(createReadingsTable);
     await this.db.executeSql(createIndexes);
+    
+    // Add new columns one by one (will silently fail if columns already exist, which is fine)
+    try {
+      // Check if columns exist by trying to add them individually
+      const readingsColumns = ['fio2_level INTEGER', 'phase_type TEXT', 'cycle_number INTEGER'];
+      const sessionsColumns = [
+        'session_type TEXT DEFAULT \'IHHT\'', 
+        'current_phase TEXT', 
+        'current_cycle INTEGER DEFAULT 1', 
+        'total_cycles INTEGER DEFAULT 5',
+        'default_hypoxia_level INTEGER'
+      ];
+      
+      for (const column of readingsColumns) {
+        try {
+          await this.db.executeSql(`ALTER TABLE readings ADD COLUMN ${column}`);
+        } catch (e) {
+          // Column probably already exists - that's fine
+        }
+      }
+      
+      for (const column of sessionsColumns) {
+        try {
+          await this.db.executeSql(`ALTER TABLE sessions ADD COLUMN ${column}`);
+        } catch (e) {
+          // Column probably already exists - that's fine
+        }
+      }
+      
+      console.log('✅ FiO2 tracking columns verified/added to local database');
+    } catch (error) {
+      console.log('📝 FiO2 column setup completed with expected warnings');
+    }
   }
 
   // Session Management
-  async createSession(sessionId) {
+  async createSession(sessionId, hypoxiaLevel = null) {
     const query = `
-      INSERT INTO sessions (id, start_time, status)
-      VALUES (?, ?, 'active')
+      INSERT INTO sessions (id, start_time, status, session_type, default_hypoxia_level)
+      VALUES (?, ?, 'active', 'IHHT', ?)
     `;
     const startTime = Date.now();
     
-    await this.db.executeSql(query, [sessionId, startTime]);
-    console.log(`🎬 Session created: ${sessionId}`);
+    await this.db.executeSql(query, [sessionId, startTime, hypoxiaLevel]);
+    console.log(`🎬 Session created: ${sessionId} (Hypoxia Level: ${hypoxiaLevel})`);
     return sessionId;
   }
 
@@ -130,8 +163,8 @@ class DatabaseService {
   // Reading Management
   async addReading(sessionId, reading) {
     const query = `
-      INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid, fio2_level, phase_type, cycle_number)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     // More flexible validation: valid if we have either spo2 or heart rate data
@@ -144,7 +177,10 @@ class DatabaseService {
       reading.spo2,
       reading.heartRate,
       reading.signalStrength,
-      isValid ? 1 : 0
+      isValid ? 1 : 0,
+      reading.fio2Level || null,
+      reading.phaseType || null,
+      reading.cycleNumber || null
     ]);
   }
 
@@ -153,8 +189,8 @@ class DatabaseService {
     
     await this.db.transaction(async (tx) => {
       const query = `
-        INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid, fio2_level, phase_type, cycle_number)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       for (const reading of readings) {
@@ -167,12 +203,15 @@ class DatabaseService {
           reading.spo2,
           reading.heartRate,
           reading.signalStrength,
-          isValid ? 1 : 0
+          isValid ? 1 : 0,
+          reading.fio2Level || null,
+          reading.phaseType || null,
+          reading.cycleNumber || null
         ]);
       }
     });
     
-    console.log(`📦 Batch inserted ${readings.length} readings`);
+    console.log(`📦 Batch inserted ${readings.length} readings with FiO2 data`);
   }
 
   async getSessionReadings(sessionId, validOnly = false) {
@@ -321,6 +360,69 @@ class DatabaseService {
       sessionCount: sessionResult.rows.item(0).count,
       readingCount: readingResult.rows.item(0).count,
       estimatedSizeMB: Math.round((readingResult.rows.item(0).count * 100) / 1024 / 1024 * 100) / 100
+    };
+  }
+
+  // Hypoxia Level Analytics
+  async getHypoxiaProgression(limit = 30) {
+    const query = `
+      SELECT 
+        id,
+        start_time,
+        end_time,
+        default_hypoxia_level,
+        total_readings,
+        avg_spo2,
+        avg_heart_rate,
+        status
+      FROM sessions 
+      WHERE default_hypoxia_level IS NOT NULL
+      ORDER BY start_time DESC
+      LIMIT ?
+    `;
+    
+    const results = await this.db.executeSql(query, [limit]);
+    const sessions = [];
+    
+    for (let i = 0; i < results.rows.length; i++) {
+      const session = results.rows.item(i);
+      sessions.push({
+        id: session.id,
+        startTime: session.start_time,
+        endTime: session.end_time,
+        hypoxiaLevel: session.default_hypoxia_level,
+        totalReadings: session.total_readings,
+        avgSpO2: session.avg_spo2,
+        avgHeartRate: session.avg_heart_rate,
+        status: session.status,
+        date: new Date(session.start_time).toLocaleDateString()
+      });
+    }
+    
+    return sessions.reverse(); // Return in chronological order
+  }
+
+  async getHypoxiaStats() {
+    const query = `
+      SELECT 
+        COUNT(*) as totalSessions,
+        AVG(default_hypoxia_level) as avgHypoxiaLevel,
+        MIN(default_hypoxia_level) as minHypoxiaLevel,
+        MAX(default_hypoxia_level) as maxHypoxiaLevel,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completedSessions
+      FROM sessions 
+      WHERE default_hypoxia_level IS NOT NULL
+    `;
+    
+    const results = await this.db.executeSql(query);
+    const stats = results.rows.item(0);
+    
+    return {
+      totalSessions: stats.totalSessions || 0,
+      avgHypoxiaLevel: Math.round((stats.avgHypoxiaLevel || 0) * 10) / 10,
+      minHypoxiaLevel: stats.minHypoxiaLevel || 0,
+      maxHypoxiaLevel: stats.maxHypoxiaLevel || 0,
+      completedSessions: stats.completedSessions || 0
     };
   }
 
