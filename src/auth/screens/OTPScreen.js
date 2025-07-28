@@ -62,6 +62,18 @@ const OTPScreen = ({ route, navigation }) => {
     }
   };
 
+  // Handle iOS SMS auto-fill
+  const handleAutoFill = (text) => {
+    // Check if we received a 6-digit code
+    if (text.length === 6 && /^\d{6}$/.test(text)) {
+      const digits = text.split('');
+      setOtp(digits);
+      
+      // Auto-verify the code immediately
+      handleVerifyOTP(text);
+    }
+  };
+
   const handleVerifyOTP = async (otpCode = null) => {
     try {
       const codeToVerify = otpCode || otp.join('');
@@ -173,6 +185,18 @@ const OTPScreen = ({ route, navigation }) => {
           {/* OTP Input */}
           <View style={styles.otpSection}>
             <Text style={styles.otpLabel}>Verification Code</Text>
+            
+            {/* Hidden input for iOS SMS auto-fill */}
+            <TextInput
+              style={styles.hiddenInput}
+              textContentType="oneTimeCode"
+              autoComplete="sms-otp"
+              onChangeText={handleAutoFill}
+              value=""
+              keyboardType="number-pad"
+              editable={!isLoading}
+            />
+            
             <View style={styles.otpContainer}>
               {otp.map((digit, index) => (
                 <TextInput
@@ -418,6 +442,13 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  hiddenInput: {
+    position: 'absolute',
+    left: -9999,
+    opacity: 0,
+    height: 0,
+    width: 0,
   },
 });
 
