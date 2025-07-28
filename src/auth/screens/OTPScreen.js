@@ -20,6 +20,8 @@ const OTPScreen = ({ route, navigation }) => {
   const [isResending, setIsResending] = useState(false);
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
+  const [hiddenInputValue, setHiddenInputValue] = useState('');
   
   const inputRefs = useRef([]);
   const { verifyOTP, sendOTP } = useAuth();
@@ -39,6 +41,11 @@ const OTPScreen = ({ route, navigation }) => {
   const handleOtpChange = (text, index) => {
     // Only allow numbers
     if (!/^\d*$/.test(text)) return;
+
+    // Reset auto-filling flag if user starts typing manually
+    if (isAutoFilling) {
+      setIsAutoFilling(false);
+    }
 
     const newOtp = [...otp];
     newOtp[index] = text;
@@ -64,13 +71,41 @@ const OTPScreen = ({ route, navigation }) => {
 
   // Handle iOS SMS auto-fill
   const handleAutoFill = (text) => {
+    console.log('🔑 Auto-fill received text:', text);
+    
     // Check if we received a 6-digit code
     if (text.length === 6 && /^\d{6}$/.test(text)) {
+      console.log('🔑 iOS Auto-fill detected:', text);
+      
+      setIsAutoFilling(true);
       const digits = text.split('');
+      
+      // Set the state
       setOtp(digits);
       
+      // Also manually set each input value via refs to ensure they display correctly
+      digits.forEach((digit, index) => {
+        if (inputRefs.current[index]) {
+          inputRefs.current[index].setNativeProps({ text: digit });
+        }
+      });
+      
+      // Clear the hidden input
+      setHiddenInputValue('');
+      
+      // Focus the last input to show completion
+      if (inputRefs.current[5]) {
+        inputRefs.current[5].focus();
+      }
+      
       // Auto-verify the code immediately
-      handleVerifyOTP(text);
+      setTimeout(() => {
+        handleVerifyOTP(text);
+        setIsAutoFilling(false);
+      }, 150); // Small delay to ensure UI updates first
+    } else {
+      // Update hidden input value for partial input
+      setHiddenInputValue(text);
     }
   };
 
@@ -192,7 +227,7 @@ const OTPScreen = ({ route, navigation }) => {
               textContentType="oneTimeCode"
               autoComplete="sms-otp"
               onChangeText={handleAutoFill}
-              value=""
+              value={hiddenInputValue}
               keyboardType="number-pad"
               editable={!isLoading}
             />
@@ -213,7 +248,7 @@ const OTPScreen = ({ route, navigation }) => {
                   keyboardType="number-pad"
                   maxLength={1}
                   textAlign="center"
-                  autoFocus={index === 0}
+                  autoFocus={index === 0 && !isAutoFilling}
                   editable={!isLoading}
                   selectTextOnFocus
                 />
