@@ -316,6 +316,107 @@ The app includes iOS Live Activity support for displaying session progress on th
 - `@react-native-async-storage/async-storage`: Preferences
 - `react-native-sqlite-storage`: Session data
 
+## Background Functionality
+
+### iOS Background Modes
+The app is configured with the following background modes for continuous operation:
+- **Bluetooth Central**: Maintains pulse oximeter connection when app is backgrounded
+- **Background Processing**: Continues session timing and safety monitoring
+- **Expected Duration**: iOS allows ~30 seconds of background processing with periodic execution windows
+
+### Background Behavior
+- **Session Continuity**: IHHT sessions continue running when app is backgrounded
+- **Bluetooth Persistence**: Maintains connection to pulse oximeter devices
+- **Safety Monitoring**: Critical SpO2 alerts (< 80%) delivered as notifications
+- **Data Integrity**: Session progress and readings preserved during background operation
+- **Automatic Recovery**: Seamless sync when returning to foreground
+
+### iOS Limitations
+- **Background Execution**: Limited to 30-second windows by iOS
+- **Bluetooth Suspension**: May suspend after ~10 seconds, with rapid reconnection
+- **Battery Impact**: Background BLE operations consume additional power
+- **User Settings**: Requires Background App Refresh enabled for optimal performance
+
+## Build Types & Testing
+
+### Build Profiles
+
+| Build Type | Use Case | Background Testing | Installation |
+|------------|----------|-------------------|--------------|
+| **Development** | Debugging with dev server | Limited | Requires `npx expo start --dev-client` |
+| **Preview** | Realistic background testing | ✅ **Recommended** | Direct install via QR/link |
+| **Production** | App Store/TestFlight | Full capability | App Store distribution |
+
+### Creating Builds
+
+```bash
+# Development build (debugging)
+eas build --profile development --platform ios
+
+# Preview build (background testing) - RECOMMENDED
+eas build --profile preview --platform ios
+
+# Production build (App Store)
+eas build --profile production --platform ios
+```
+
+## Background Testing Instructions
+
+### Setup for Background Testing
+
+1. **Use Preview Build**: Create and install a preview build for realistic testing
+   ```bash
+   eas build --profile preview --platform ios
+   ```
+
+2. **Device Configuration**:
+   - Enable Background App Refresh: Settings → General → Background App Refresh → Vitaliti Air
+   - Ensure Bluetooth is enabled and permissions granted
+   - Connect pulse oximeter before starting session
+
+### Testing Procedure
+
+1. **Start IHHT Session**:
+   - Connect to pulse oximeter
+   - Begin training session
+   - Verify readings are coming through
+
+2. **Background Testing**:
+   - Press home button or swipe up to background the app
+   - Wait 5-10 minutes while doing other activities
+   - Monitor for any critical alerts/notifications
+
+3. **Return to App**:
+   - Re-open Vitaliti Air app
+   - Verify session continued running
+   - Check data integrity and timing accuracy
+   - Confirm Bluetooth reconnection
+
+### Expected Results
+
+✅ **Session continues** for full 35-minute duration when backgrounded  
+✅ **Phase transitions** occur automatically (Hypoxic ↔ Hyperoxic)  
+✅ **Critical alerts** delivered within 5 seconds of SpO2 < 80%  
+✅ **Bluetooth reconnection** within 10 seconds of app foregrounding  
+✅ **Data preservation** with < 5% reading loss during background operation  
+
+### Troubleshooting Background Issues
+
+**Session Pauses When Backgrounded**:
+- Check Background App Refresh is enabled
+- Verify app has Bluetooth permissions
+- Ensure device has sufficient battery
+
+**Bluetooth Disconnects**:
+- Normal behavior - should reconnect automatically
+- Check pulse oximeter battery level
+- Verify BCI Protocol V1.4 compatibility
+
+**Missing Notifications**:
+- Check notification permissions
+- Verify Do Not Disturb settings
+- Critical alerts should bypass DND when enabled
+
 ## Troubleshooting
 
 ### Bluetooth Issues
