@@ -4,5 +4,7 @@ module.exports = config => ({
   name: "IHHT Live Activity",
   icon: 'https://github.com/expo.png',
   frameworks: ['SwiftUI', 'ActivityKit'],
-  entitlements: { /* Add entitlements */ },
+  entitlements: {
+    "com.apple.security.application-groups": ["group.com.sophiafay24.VitalitiAirApp"]
+  },
 });
