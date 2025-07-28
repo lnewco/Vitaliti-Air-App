@@ -33,7 +33,10 @@ function TabNavigator() {
         name="Dashboard" 
         component={DashboardScreen}
         options={{
-          tabBarLabel: '📊 Monitor',
+          tabBarLabel: 'Monitor',
+          tabBarIcon: ({ color, size }) => (
+            <Text style={{ fontSize: 20 }}>📊</Text>
+          ),
           tabBarLabelStyle: {
             fontSize: 14,
             fontWeight: '600',
@@ -44,7 +47,10 @@ function TabNavigator() {
         name="History" 
         component={SessionHistoryScreen}
         options={{
-          tabBarLabel: '📈 History',
+          tabBarLabel: 'History',
+          tabBarIcon: ({ color, size }) => (
+            <Text style={{ fontSize: 20 }}>📈</Text>
+          ),
           tabBarLabelStyle: {
             fontSize: 14,
             fontWeight: '600',
