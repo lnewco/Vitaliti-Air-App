@@ -221,18 +221,23 @@ const OTPScreen = ({ route, navigation }) => {
           <View style={styles.otpSection}>
             <Text style={styles.otpLabel}>Verification Code</Text>
             
-            {/* Hidden input for iOS SMS auto-fill */}
-            <TextInput
-              style={styles.hiddenInput}
-              textContentType="oneTimeCode"
-              autoComplete="sms-otp"
-              onChangeText={handleAutoFill}
-              value={hiddenInputValue}
-              keyboardType="number-pad"
-              editable={!isLoading}
-            />
-            
             <View style={styles.otpContainer}>
+              {/* Hidden input for iOS SMS auto-fill */}
+              <TextInput
+                style={styles.hiddenInput}
+                textContentType="oneTimeCode"
+                autoComplete="sms-otp"
+                onChangeText={handleAutoFill}
+                onFocus={() => console.log('🔑 Hidden input focused')}
+                onBlur={() => console.log('🔑 Hidden input blurred')}
+                onLayout={(event) => console.log('🔑 Hidden input layout:', event.nativeEvent.layout)}
+                value={hiddenInputValue}
+                keyboardType="number-pad"
+                editable={!isLoading}
+                maxLength={6}
+                placeholder=""
+              />
+              
               {otp.map((digit, index) => (
                 <TextInput
                   key={index}
@@ -389,6 +394,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
+    position: 'relative',
   },
   otpInput: {
     flex: 1,
@@ -480,10 +486,12 @@ const styles = StyleSheet.create({
   },
   hiddenInput: {
     position: 'absolute',
-    left: -9999,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 56,
     opacity: 0,
-    height: 0,
-    width: 0,
+    zIndex: 1,
   },
 });
 
