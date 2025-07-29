@@ -116,31 +116,42 @@ class DatabaseService {
   async endSession(sessionId) {
     const endTime = Date.now();
     
-    // Calculate session statistics
-    const stats = await this.getSessionStats(sessionId);
-    
-    const query = `
-      UPDATE sessions 
-      SET end_time = ?, status = 'completed',
-          total_readings = ?, avg_spo2 = ?, min_spo2 = ?, max_spo2 = ?,
-          avg_heart_rate = ?, min_heart_rate = ?, max_heart_rate = ?
-      WHERE id = ?
-    `;
-    
-    await this.db.executeSql(query, [
-      endTime,
-      stats.totalReadings,
-      stats.avgSpO2,
-      stats.minSpO2,
-      stats.maxSpO2,
-      stats.avgHeartRate,
-      stats.minHeartRate,
-      stats.maxHeartRate,
-      sessionId
-    ]);
-    
-    console.log(`🏁 Session ended: ${sessionId}`);
-    return stats;
+    try {
+      console.log(`🏁 Ending session in local database: ${sessionId}`);
+      
+      // Calculate session statistics
+      console.log(`📊 Calculating stats for session: ${sessionId}`);
+      const stats = await this.getSessionStats(sessionId);
+      console.log(`📊 Session stats calculated:`, stats);
+      
+      const query = `
+        UPDATE sessions 
+        SET end_time = ?, status = 'completed',
+            total_readings = ?, avg_spo2 = ?, min_spo2 = ?, max_spo2 = ?,
+            avg_heart_rate = ?, min_heart_rate = ?, max_heart_rate = ?
+        WHERE id = ?
+      `;
+      
+      console.log(`🔄 Executing update query for session: ${sessionId}`);
+      await this.db.executeSql(query, [
+        endTime,
+        stats.totalReadings,
+        stats.avgSpO2,
+        stats.minSpO2,
+        stats.maxSpO2,
+        stats.avgHeartRate,
+        stats.minHeartRate,
+        stats.maxHeartRate,
+        sessionId
+      ]);
+      
+      console.log(`✅ Session ended successfully in local DB: ${sessionId}`);
+      return stats;
+    } catch (error) {
+      console.error(`❌ Failed to end session ${sessionId} in local DB:`, error);
+      console.error(`❌ Error details:`, error.message, error.stack);
+      throw error;
+    }
   }
 
   async getSession(sessionId) {

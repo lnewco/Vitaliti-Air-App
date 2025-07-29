@@ -32,6 +32,9 @@ const SessionHistoryScreen = () => {
     try {
       setLoading(true);
       const allSessions = await SessionManager.getAllSessions();
+      
+
+      
       setSessions(allSessions);
     } catch (error) {
       console.error('Failed to load sessions:', error);
@@ -40,6 +43,10 @@ const SessionHistoryScreen = () => {
       setLoading(false);
     }
   };
+
+
+
+
 
   const loadSessionDetails = async (sessionId) => {
     try {
@@ -109,6 +116,13 @@ const SessionHistoryScreen = () => {
           <Text style={styles.statLabel}>Readings</Text>
           <Text style={styles.statValue}>{item.total_readings || 0}</Text>
         </View>
+        
+        {item.default_hypoxia_level !== null && item.default_hypoxia_level !== undefined && (
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Hypoxia Level</Text>
+            <Text style={styles.statValue}>{item.default_hypoxia_level}</Text>
+          </View>
+        )}
         
         {item.avg_spo2 && (
           <View style={styles.statItem}>
@@ -307,6 +321,8 @@ const SessionHistoryScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+
+      
       <FlatList
         data={sessions}
         renderItem={renderSessionItem}
@@ -326,6 +342,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+
   centerContainer: {
     flex: 1,
     justifyContent: 'center',

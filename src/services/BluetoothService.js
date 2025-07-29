@@ -1,12 +1,13 @@
 import { BleManager } from 'react-native-ble-plx';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { Buffer } from 'buffer';
-import SessionManager from './SessionManager';
+import EnhancedSessionManager from './EnhancedSessionManager';
 
 class BluetoothService {
   constructor() {
     this.manager = new BleManager();
     this.currentDevice = null;
+    this.dataSubscription = null; // Store the monitoring subscription
     this.onDeviceFound = null;
     this.onDataReceived = null;
     this.onConnectionStatusChanged = null;
@@ -210,14 +211,16 @@ class BluetoothService {
       if (dataCharacteristic.isNotifiable) {
         console.log('📡 Enabling BCI data notifications...');
         
-        dataCharacteristic.monitor((error, characteristic) => {
+        this.dataSubscription = dataCharacteristic.monitor((error, characteristic) => {
           if (error) {
             // Handle cancellation errors gracefully (happens when disconnecting or removing finger)
             if (error.message && error.message.includes('cancelled')) {
               console.log('📡 BCI data monitoring stopped (connection cancelled)');
+              this.dataSubscription = null; // Clear the subscription
               this.handleDeviceDisconnected();
             } else {
               console.error('Notification error:', error);
+              this.dataSubscription = null; // Clear the subscription
               this.handleDeviceDisconnected();
             }
             return;
@@ -249,8 +252,20 @@ class BluetoothService {
         }
         
         // Send to session manager if session is active
-        if (SessionManager.isSessionActive()) {
-          SessionManager.addReading(parsedData);
+        if (EnhancedSessionManager.isActive) {
+          console.log('✅ Session active - sending reading to EnhancedSessionManager');
+          console.log('📊 Reading data:', {
+            spo2: parsedData.spo2,
+            heartRate: parsedData.heartRate,
+            isFingerDetected: parsedData.isFingerDetected,
+            signalStrength: parsedData.signalStrength
+          });
+          EnhancedSessionManager.addReading(parsedData);
+        } else {
+          // Only log session check occasionally to reduce noise
+          if (Math.random() < 0.1) { // 10% chance
+            console.log('❌ No active session - reading ignored');
+          }
         }
       }
     } catch (error) {
@@ -260,12 +275,16 @@ class BluetoothService {
 
   parseBCIData(base64Data) {
     try {
-      console.log('🔍 Parsing BCI data:', base64Data);
+      // Only log BCI parsing occasionally to reduce noise during sessions
+      if (Math.random() < 0.05) { // 5% chance
+        console.log('🔍 Parsing BCI data:', base64Data);
+        const buffer = Buffer.from(base64Data, 'base64');
+        console.log('📊 Buffer length:', buffer.length);
+        console.log('📊 Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' '));
+      }
       
       // Decode base64 to buffer
       const buffer = Buffer.from(base64Data, 'base64');
-      console.log('📊 Buffer length:', buffer.length);
-      console.log('📊 Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' '));
       
       // Handle different packet sizes
       let packets = [];
@@ -275,7 +294,9 @@ class BluetoothService {
         packets = [buffer];
       } else if (buffer.length === 20) {
         // Four 5-byte packets concatenated
-        console.log('📦 Processing 20-byte packet as 4x5-byte packets');
+        if (Math.random() < 0.05) {
+          console.log('📦 Processing 20-byte packet as 4x5-byte packets');
+        }
         for (let i = 0; i < 4; i++) {
           const packetStart = i * 5;
           const packet = buffer.slice(packetStart, packetStart + 5);
@@ -294,7 +315,9 @@ class BluetoothService {
       
       // Process the latest (most recent) packet
       const latestPacket = packets[packets.length - 1];
-      console.log('🎯 Processing latest packet:', Array.from(latestPacket).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' '));
+      if (Math.random() < 0.05) {
+        console.log('🎯 Processing latest packet:', Array.from(latestPacket).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' '));
+      }
       
       return this.parseSingle5BytePacket(latestPacket, base64Data);
       
@@ -313,13 +336,8 @@ class BluetoothService {
       const byte4 = buffer[3]; // Pulse rate bits 0-6, sync bit
       const byte5 = buffer[4]; // SpO2 bits 0-6, sync bit
       
-      console.log('📊 BCI Bytes:', {
-        byte1: '0x' + byte1.toString(16).padStart(2, '0').toUpperCase(),
-        byte2: '0x' + byte2.toString(16).padStart(2, '0').toUpperCase(), 
-        byte3: '0x' + byte3.toString(16).padStart(2, '0').toUpperCase(),
-        byte4: '0x' + byte4.toString(16).padStart(2, '0').toUpperCase(),
-        byte5: '0x' + byte5.toString(16).padStart(2, '0').toUpperCase()
-      });
+      // Reduced logging to prevent flood
+      // console.log('📊 BCI Bytes:', { ... });
       
       // Parse according to BCI protocol specification
       
@@ -350,19 +368,8 @@ class BluetoothService {
       const pleth = byte2 & 0x7F;
       const isPlethValid = pleth !== 0;
       
-      console.log('🔬 BCI Parsed Values:', {
-        signalStrength,
-        isSignalValid,
-        isProbePlugged,
-        isFingerDetected,
-        isSearchingForPulse,
-        pulseRateRaw,
-        pulseRate,
-        spo2Raw, 
-        spo2,
-        pleth,
-        isPlethValid
-      });
+      // Reduced logging to prevent flood
+      // console.log('🔬 BCI Parsed Values:', { ... });
       
       // Return data even if values are invalid so we can show status
       const result = {
@@ -379,7 +386,8 @@ class BluetoothService {
       if (spo2 !== null || pulseRate !== null) {
         console.log('✅ Valid BCI data:', result);
       } else {
-        console.log('⚠️ BCI status data (no valid measurements):', result);
+        // Reduced status logging to prevent flood
+        // console.log('⚠️ BCI status data (no valid measurements):', result);
       }
       
       return result;
@@ -394,6 +402,15 @@ class BluetoothService {
     try {
       if (this.currentDevice) {
         console.log('Disconnecting from device...');
+        
+        // Stop data monitoring first
+        if (this.dataSubscription) {
+          console.log('🛑 Stopping data monitoring...');
+          this.dataSubscription.remove();
+          this.dataSubscription = null;
+          console.log('✅ Data monitoring stopped');
+        }
+        
         await this.currentDevice.cancelConnection();
         this.currentDevice = null;
         this.isConnected = false;
@@ -429,7 +446,24 @@ class BluetoothService {
   }
 
   async handleDeviceDisconnected() {
-    console.log('🔌 Device disconnected - checking for active sessions to cleanup');
+    console.log('🔌 Device disconnected - starting cleanup...');
+    
+    // Stop data monitoring immediately
+    if (this.dataSubscription) {
+      console.log('🛑 Stopping data monitoring subscription...');
+      try {
+        this.dataSubscription.remove();
+        this.dataSubscription = null;
+        console.log('✅ Data monitoring subscription stopped');
+      } catch (error) {
+        console.error('❌ Failed to stop data monitoring:', error);
+        this.dataSubscription = null; // Clear it anyway
+      }
+    }
+    
+    // Update connection state
+    this.isConnected = false;
+    this.currentDevice = null;
     
     // Import EnhancedSessionManager here to avoid circular dependencies
     const { default: EnhancedSessionManager } = await import('./EnhancedSessionManager.js');
@@ -450,7 +484,11 @@ class BluetoothService {
           console.error('❌ Failed to reset session state:', resetError);
         }
       }
+    } else {
+      console.log('ℹ️ No active session to cleanup after disconnect');
     }
+    
+    console.log('🔌 Device disconnect cleanup complete');
   }
 }
 

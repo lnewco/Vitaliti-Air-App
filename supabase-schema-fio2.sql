@@ -8,6 +8,7 @@ ALTER TABLE sessions ADD COLUMN IF NOT EXISTS current_cycle INTEGER DEFAULT 1;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS total_cycles INTEGER DEFAULT 5;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS hypoxic_duration INTEGER DEFAULT 300; -- 5 minutes in seconds
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS hyperoxic_duration INTEGER DEFAULT 120; -- 2 minutes in seconds
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS default_hypoxia_level INTEGER; -- User's chosen hypoxia level for the session
 
 -- Add FiO2 level tracking to readings table
 ALTER TABLE readings ADD COLUMN IF NOT EXISTS fio2_level INTEGER; -- 0-10 hypoxia level

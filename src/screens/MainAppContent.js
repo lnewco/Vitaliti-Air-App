@@ -8,7 +8,6 @@ import DashboardScreen from './DashboardScreen';
 import SessionHistoryScreen from './SessionHistoryScreen';
 import SessionSetupScreen from './SessionSetupScreen';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
-import HypoxiaProgressionView from '../components/HypoxiaProgressionView';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -51,20 +50,6 @@ function TabNavigator() {
           tabBarLabel: 'History',
           tabBarIcon: ({ color, size }) => (
             <Text style={{ fontSize: 20 }}>📈</Text>
-          ),
-          tabBarLabelStyle: {
-            fontSize: 14,
-            fontWeight: '600',
-          },
-        }}
-      />
-      <Tab.Screen 
-        name="Progress" 
-        component={HypoxiaProgressionView}
-        options={{
-          tabBarLabel: 'Progress',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: 20 }}>🌬️</Text>
           ),
           tabBarLabelStyle: {
             fontSize: 14,

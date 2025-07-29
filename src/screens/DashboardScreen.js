@@ -1,10 +1,31 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  ScrollView, 
+  SafeAreaView,
+  Alert 
+} from 'react-native';
+import EnhancedSessionManager from '../services/EnhancedSessionManager';
 
 const DashboardScreen = ({ navigation }) => {
-  const handleStartSession = () => {
+  const [sessionInfo, setSessionInfo] = useState(EnhancedSessionManager.getSessionInfo());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSessionInfo(EnhancedSessionManager.getSessionInfo());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const navigateToSessionSetup = () => {
     navigation.navigate('SessionSetup');
   };
+
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -26,7 +47,7 @@ const DashboardScreen = ({ navigation }) => {
 
         <TouchableOpacity 
           style={styles.startButton}
-          onPress={handleStartSession}
+          onPress={navigateToSessionSetup}
         >
           <Text style={styles.startButtonText}>Start Session</Text>
         </TouchableOpacity>
@@ -38,6 +59,8 @@ const DashboardScreen = ({ navigation }) => {
             🔹 Begin your IHHT training
           </Text>
         </View>
+
+
       </View>
     </SafeAreaView>
   );
@@ -112,6 +135,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
+
   infoSection: {
     backgroundColor: '#FFFFFF',
     padding: 20,
@@ -124,6 +148,7 @@ const styles = StyleSheet.create({
     color: '#374151',
     lineHeight: 24,
   },
+
 });
 
 export default DashboardScreen; 
