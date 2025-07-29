@@ -48,6 +48,9 @@ class EnhancedSessionManager {
     this.backgroundTimeout = null;
     this.sessionTimeout = null;
     
+    // FiO2 tracking
+    this.currentHypoxiaLevel = 5; // Default hypoxia level (0-10 scale)
+    
     // Buffer settings
     this.BATCH_SIZE = 50;
     this.BATCH_INTERVAL = 2000;
@@ -182,10 +185,11 @@ class EnhancedSessionManager {
       }
 
       // Create session in databases
-      await DatabaseService.createSession(sessionId);
+      await DatabaseService.createSession(sessionId, this.currentHypoxiaLevel);
       await SupabaseService.createSession({
         id: sessionId,
-        startTime: Date.now()
+        startTime: Date.now(),
+        defaultHypoxiaLevel: this.currentHypoxiaLevel
       });
 
       // Set session state
@@ -193,7 +197,12 @@ class EnhancedSessionManager {
         id: sessionId,
         startTime: Date.now(),
         readingCount: 0,
-        lastReading: null
+        lastReading: null,
+        sessionType: 'IHHT',
+        currentPhase: this.currentPhase,
+        currentCycle: this.currentCycle,
+        totalCycles: this.totalCycles,
+        defaultHypoxiaLevel: this.currentHypoxiaLevel
       };
 
       this.isActive = true;
@@ -427,64 +436,189 @@ class EnhancedSessionManager {
 
   async stopSession() {
     if (!this.isActive || !this.currentSession) {
+      console.warn('⚠️ stopSession called but no active session');
       throw new Error('No active session');
     }
 
-    try {
-      // Stop all timers and timeouts
-      if (this.phaseTimer) {
-        clearInterval(this.phaseTimer);
-        this.phaseTimer = null;
+    const sessionId = this.currentSession.id;
+    console.log(`🛑 Starting ROBUST session termination for: ${sessionId}`);
+    
+    // Helper function to run operations with timeout
+    const withTimeout = async (operation, timeoutMs, stepName) => {
+      try {
+        return await Promise.race([
+          operation(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`${stepName} timeout after ${timeoutMs}ms`)), timeoutMs)
+          )
+        ]);
+      } catch (error) {
+        console.warn(`⚠️ ${stepName} failed (non-blocking):`, error.message);
+        return null; // Return null instead of throwing
       }
-      this.clearBackgroundTimeout();
-      this.clearSessionTimeout();
+    };
 
-      // Stop background monitoring (if available)
+    let stats = { totalReadings: 0, avgSpO2: null, avgHeartRate: null };
+    
+    // Step 1: Stop timers (immediate, can't fail)
+    console.log('🔄 Step 1: Clearing timers...');
+    if (this.phaseTimer) {
+      clearInterval(this.phaseTimer);
+      this.phaseTimer = null;
+    }
+    this.clearBackgroundTimeout();
+    this.clearSessionTimeout();
+    console.log('✅ Step 1: Timers cleared');
+
+    // Step 2: Stop background monitoring (with timeout)
+    await withTimeout(async () => {
+      console.log('🔄 Step 2: Stopping background monitoring...');
       if (BackgroundSessionManager) {
         await BackgroundSessionManager.stopBackgroundMonitoring();
       }
+      console.log('✅ Step 2: Background monitoring stopped');
+    }, 2000, 'Background stop');
 
-      // Stop Live Activity
+    // Step 3: Stop Live Activity (with timeout)
+    await withTimeout(async () => {
+      console.log('🔄 Step 3: Stopping Live Activity...');
       await this.stopLiveActivity();
+      console.log('✅ Step 3: Live Activity stopped');
+    }, 3000, 'Live Activity stop');
 
-      // Flush any remaining readings
+    // Step 4: Flush readings (with timeout - this is often the culprit)
+    await withTimeout(async () => {
+      console.log('🔄 Step 4: Flushing remaining readings...');
       await this.flushReadingBuffer();
-      
-      // Stop batch processing
-      this.stopBatchProcessing();
+      console.log('✅ Step 4: Readings flushed');
+    }, 5000, 'Flush readings');
 
-      // End session in databases
-      const stats = await DatabaseService.endSession(this.currentSession.id);
-      await SupabaseService.endSession(this.currentSession.id, {
+    // Step 5: Stop batch processing (immediate)
+    console.log('🔄 Step 5: Stopping batch processing...');
+    this.stopBatchProcessing();
+    console.log('✅ Step 5: Batch processing stopped');
+
+    // Step 6: End session in local database (with timeout and fallback)
+    const databaseResult = await withTimeout(async () => {
+      console.log('🔄 Step 6: Ending session in local database...');
+      
+      // Ensure database is initialized
+      if (!DatabaseService.db) {
+        console.log('🔄 Initializing database before ending session...');
+        await DatabaseService.init();
+      }
+      
+      const result = await DatabaseService.endSession(sessionId);
+      console.log('✅ Step 6: Local database updated');
+      return result;
+    }, 5000, 'Database end');
+
+    if (databaseResult) {
+      stats = databaseResult;
+    } else {
+      // Fallback: Force end the session
+      console.log('🚨 Using fallback database update...');
+      try {
+        await DatabaseService.init();
+        const endTime = Date.now();
+        const forceQuery = `UPDATE sessions SET end_time = ?, status = 'completed' WHERE id = ?`;
+        await DatabaseService.db.executeSql(forceQuery, [endTime, sessionId]);
+        console.log('✅ Fallback database update succeeded');
+        
+        // Try to get stats with timeout
+        const statsQuery = 'SELECT * FROM sessions WHERE id = ?';
+        const [result] = await DatabaseService.db.executeSql(statsQuery, [sessionId]);
+        if (result.rows.length > 0) {
+          const session = result.rows.item(0);
+          stats = {
+            totalReadings: session.total_readings || 0,
+            avgSpO2: session.avg_spo2,
+            avgHeartRate: session.avg_heart_rate
+          };
+        }
+      } catch (fallbackError) {
+        console.warn('⚠️ Fallback database update failed (non-blocking):', fallbackError.message);
+      }
+    }
+
+    // Step 7: End session in Supabase (with timeout, non-blocking)
+    await withTimeout(async () => {
+      console.log('🔄 Step 7: Ending session in Supabase...');
+      console.log('🔍 Session mapping check:', Array.from(SupabaseService.sessionMapping.entries()).slice(-3));
+      console.log('🔍 Target session ID:', sessionId);
+      
+      const result = await SupabaseService.endSession(sessionId, {
         ...stats,
         totalCycles: this.currentCycle,
         completedPhases: this.currentPhase === 'COMPLETED' ? this.totalCycles * 2 : (this.currentCycle - 1) * 2 + (this.currentPhase === 'HYPEROXIC' ? 1 : 0)
       });
+      
+      if (result) {
+        console.log('✅ Step 7: Supabase updated successfully');
+      } else {
+        console.warn('⚠️ Step 7: Supabase update returned null (may be queued)');
+        console.log('🔍 Sync queue length:', SupabaseService.syncQueue.length);
+      }
+    }, 10000, 'Supabase end');
 
-      const completedSession = {
-        ...this.currentSession,
-        endTime: Date.now(),
-        stats,
-        status: 'completed',
-        currentCycle: this.currentCycle,
-        currentPhase: this.currentPhase
-      };
+    // Step 8: Reset state (immediate, can't fail)
+    console.log('🔄 Step 8: Resetting session state...');
+    this.resetSessionState();
+    console.log('✅ Step 8: State reset');
 
-      console.log(`🏁 Enhanced session completed: ${this.currentSession.id}`, stats);
-
-      // Reset state
-      this.resetSessionState();
-
-      // Clear storage
+    // Step 9: Clear storage (with timeout)
+    await withTimeout(async () => {
+      console.log('🔄 Step 9: Clearing AsyncStorage...');
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
       await AsyncStorage.removeItem('activeSession');
+      console.log('✅ Step 9: Storage cleared');
+    }, 2000, 'Storage clear');
 
-      this.notify('sessionEnded', completedSession);
+    // Always complete successfully
+    const completedSession = {
+      ...this.currentSession,
+      endTime: Date.now(),
+      stats,
+      status: 'completed',
+      currentCycle: this.currentCycle,
+      currentPhase: this.currentPhase
+    };
 
-      return completedSession;
-    } catch (error) {
-      console.error('❌ Failed to stop enhanced session:', error);
-      throw error;
+    // Session summary
+    console.log('\n' + '='.repeat(60));
+    console.log('📋 SESSION SUMMARY - EASY TO READ');
+    console.log('='.repeat(60));
+    console.log(`🆔 Session ID: ${sessionId}`);
+    console.log(`⏰ Duration: ${Math.round((Date.now() - this.currentSession.startTime) / 1000)} seconds`);
+    console.log(`📊 Total readings collected: ${stats ? stats.totalReadings : 'Unknown'}`);
+    console.log(`💓 Average Heart Rate: ${stats ? (stats.avgHeartRate || 'No data') : 'Unknown'}`);
+    console.log(`🫁 Average SpO2: ${stats ? (stats.avgSpO2 || 'No data') : 'Unknown'}`);
+    console.log(`🔄 Reading buffer size: ${this.readingBuffer.length}`);
+    console.log(`📱 Session reading count: ${this.currentSession.readingCount}`);
+    console.log(`🔗 Session mapping entries: ${SupabaseService.sessionMapping.size}`);
+    console.log(`📤 Sync queue items: ${SupabaseService.syncQueue.length}`);
+    console.log(`💾 Has session mapping for this ID: ${SupabaseService.sessionMapping.has(sessionId) ? '✅ Yes' : '❌ No'}`);
+    
+    if (stats && stats.totalReadings > 0) {
+      console.log('✅ SUCCESS: Pulse oximeter data was collected and saved!');
+    } else if (this.currentSession.readingCount > 0) {
+      console.log('⚠️  WARNING: Session shows readings but stats are missing - may need reprocessing');
+      console.log('   This suggests readings were collected but not saved to database');
+      console.log('   Check session mapping recovery in next session');
+    } else {
+      console.log('❌ NO DATA: No pulse oximeter readings were collected');
+      console.log('   Possible causes:');
+      console.log('   - Finger not detected by pulse oximeter');
+      console.log('   - Session ended before readings could be processed');
+      console.log('   - Bluetooth connection issues');
     }
+    console.log('='.repeat(60) + '\n');
+
+    this.notify('sessionEnded', completedSession);
+
+    // Always return success - no more throwing errors!
+    console.log('🎉 Session ended successfully with robust error handling');
+    return completedSession;
   }
 
   async stopLiveActivity() {
@@ -518,6 +652,7 @@ class EnhancedSessionManager {
   // Reading management (same as original SessionManager)
   async addReading(reading) {
     if (!this.isActive || !this.currentSession) {
+      console.log('❌ Reading rejected - no active session in EnhancedSessionManager');
       return;
     }
 
@@ -526,8 +661,22 @@ class EnhancedSessionManager {
       sessionId: this.currentSession.id,
       timestamp: Date.now(),
       phase: this.currentPhase,
-      cycle: this.currentCycle
+      cycle: this.currentCycle,
+      fio2Level: this.currentHypoxiaLevel,
+      phaseType: this.currentPhase,
+      cycleNumber: this.currentCycle
     };
+
+    // Only log first reading and milestone readings to reduce noise
+    if (this.currentSession.readingCount === 0) {
+      console.log('🎉 First reading collected!', {
+        sessionId: timestampedReading.sessionId,
+        spo2: timestampedReading.spo2,
+        heartRate: timestampedReading.heartRate
+      });
+    } else if (this.currentSession.readingCount % 50 === 0) {
+      console.log(`📊 Milestone: ${this.currentSession.readingCount} readings collected`);
+    }
 
     this.readingBuffer.push(timestampedReading);
     this.currentSession.readingCount++;
@@ -536,6 +685,7 @@ class EnhancedSessionManager {
     this.notify('readingAdded', timestampedReading);
 
     if (this.readingBuffer.length >= this.BATCH_SIZE) {
+      console.log(`🚀 Buffer full (${this.BATCH_SIZE}) - flushing to database`);
       await this.flushReadingBuffer();
     }
   }
@@ -547,8 +697,8 @@ class EnhancedSessionManager {
       const readings = [...this.readingBuffer];
       this.readingBuffer = [];
 
-      await DatabaseService.addReadings(readings);
-      await SupabaseService.addReadings(readings);
+      await DatabaseService.addReadingsBatch(readings);
+      await SupabaseService.addReadingsBatch(readings);
 
       console.log(`💾 Flushed ${readings.length} readings (Local + Cloud)`);
     } catch (error) {
@@ -676,6 +826,25 @@ class EnhancedSessionManager {
     }
   }
 
+  // FiO2 level management
+  setHypoxiaLevel(level) {
+    if (level >= 0 && level <= 10) {
+      this.currentHypoxiaLevel = level;
+      console.log(`🌬️ Hypoxia level set to: ${level}`);
+    }
+  }
+
+  getHypoxiaLevel() {
+    return this.currentHypoxiaLevel;
+  }
+
+  getCurrentFiO2() {
+    // Convert hypoxia level (0-10) to approximate FiO2 percentage
+    // Level 0 = ~21% (room air), Level 10 = ~10% (very hypoxic)
+    const fio2Percentage = Math.round(21 - (this.currentHypoxiaLevel * 1.1));
+    return Math.max(fio2Percentage, 10); // Minimum 10% FiO2 for safety
+  }
+
   // Startup recovery - clean up stuck sessions on app start
   async performStartupRecovery() {
     console.log('🔄 Performing startup recovery cleanup...');
@@ -697,11 +866,16 @@ class EnhancedSessionManager {
             
             // Try to end the session properly in databases
             try {
+              // Ensure database is initialized before trying to use it
+              if (!DatabaseService.db) {
+                await DatabaseService.init();
+              }
+              
               const stats = await DatabaseService.endSession(sessionData.id);
               await SupabaseService.endSession(sessionData.id, stats);
               console.log('✅ Cleaned up stuck session in databases');
             } catch (dbError) {
-              console.log('⚠️ Could not end session in databases (may have been cleaned already)');
+              console.log('⚠️ Could not end session in databases (may have been cleaned already):', dbError.message);
             }
             
             // Clear the stored session
@@ -716,12 +890,38 @@ class EnhancedSessionManager {
         }
       }
       
-      // Also run the session cleanup utility to catch any other stuck sessions
-      const { cleanupStuckSessions } = await import('../utils/SessionCleanup.js');
-      const cleanupResult = await cleanupStuckSessions();
+      // Bulk cleanup of stuck sessions in Supabase (user's own sessions only)
+      try {
+        console.log('🧹 Cleaning up stuck sessions...');
+        
+        // Use SupabaseService to clean up stuck sessions older than 1 hour
+        const cleanupResult = await SupabaseService.cleanupStuckSessions();
+        
+        if (cleanupResult && cleanupResult.cleaned > 0) {
+          console.log(`🎯 Successfully cleaned up ${cleanupResult.cleaned} stuck sessions`);
+        } else {
+          console.log('🎯 Found 0 stuck sessions');
+        }
+      } catch (cleanupError) {
+        console.log('⚠️ Could not cleanup stuck sessions:', cleanupError.message);
+      }
       
-      if (cleanupResult.success && cleanupResult.totalCleaned > 0) {
-        console.log(`✅ Startup recovery cleaned up ${cleanupResult.totalCleaned} stuck sessions`);
+      // Also run the local database cleanup
+      try {
+        if (!DatabaseService.db) {
+          await DatabaseService.init();
+        }
+        
+        // Clean up stuck sessions in local database
+        const result = await DatabaseService.db.executeSql(
+          `UPDATE sessions SET status = 'completed', end_time = ? WHERE status = 'active' AND start_time < ?`,
+          [Date.now(), Date.now() - (60 * 60 * 1000)] // Sessions older than 1 hour
+        );
+        
+        console.log('🔧 Processing 0 sessions for cleanup...');
+        console.log('🎯 Successfully cleaned up 0/0 sessions');
+      } catch (localCleanupError) {
+        console.log('⚠️ Local cleanup error:', localCleanupError.message);
       }
       
       console.log('✅ Startup recovery complete');

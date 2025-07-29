@@ -30,13 +30,13 @@ class SupabaseService {
     this.isOnline = true;
     console.log('🌐 Network monitoring: Simplified mode (assuming online)');
     
-    // Try to process any existing sync queue every 30 seconds
+    // Try to process any existing sync queue every 10 seconds
     setInterval(() => {
       if (this.syncQueue.length > 0) {
         console.log('🔄 Attempting to process sync queue...');
         this.processSyncQueue();
       }
-    }, 30000); // Check every 30 seconds
+    }, 10000); // Check every 10 seconds (more frequent)
   }
 
   // Session Management
@@ -51,6 +51,8 @@ class SupabaseService {
         start_time: new Date(sessionData.startTime).toISOString(),
         status: 'active',
         total_readings: 0,
+        session_type: 'IHHT',
+        default_hypoxia_level: sessionData.defaultHypoxiaLevel || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         // Store the local session ID as metadata
@@ -72,6 +74,8 @@ class SupabaseService {
       
       // Store the mapping between local and Supabase session IDs
       this.sessionMapping.set(sessionData.id, data[0].id);
+      console.log('🔗 Added session mapping:', sessionData.id, '→', data[0].id);
+      console.log('🔗 Total mappings now:', this.sessionMapping.size);
       
       // Persist the mapping to AsyncStorage for recovery after app restart
       await this.persistSessionMapping();
@@ -146,7 +150,9 @@ class SupabaseService {
       console.log('☁️ Session ended in Supabase:', sessionId);
       return data[0];
     } catch (error) {
-      console.error('❌ Error ending session:', error);
+      console.error('❌ Error ending session in Supabase:', error);
+      console.error('❌ Supabase error details:', error.message, error.stack);
+      console.error('❌ Session ID:', sessionId, 'Stats:', stats);
       this.queueForSync('endSession', { sessionId, stats });
       return null;
     }
@@ -156,11 +162,19 @@ class SupabaseService {
   async addReading(reading) {
     try {
       // Get the Supabase UUID for this local session ID
-      const supabaseSessionId = this.sessionMapping.get(reading.sessionId);
+      let supabaseSessionId = this.sessionMapping.get(reading.sessionId);
+      
+      // If mapping not found, try to recover it from database
       if (!supabaseSessionId) {
-        console.warn('⚠️ No Supabase session mapping found for:', reading.sessionId);
-        this.queueForSync('addReading', reading);
-        return null;
+        console.warn('⚠️ No session mapping found, attempting recovery for:', reading.sessionId);
+        supabaseSessionId = await this.recoverSessionMapping(reading.sessionId);
+        
+        if (!supabaseSessionId) {
+          console.error('❌ Failed to recover session mapping for:', reading.sessionId);
+          console.error('❌ Current mappings:', Array.from(this.sessionMapping.entries()));
+          this.queueForSync('addReading', reading);
+          return null;
+        }
       }
 
       // Get current authenticated user (fall back to anonymous)
@@ -175,6 +189,9 @@ class SupabaseService {
         signal_strength: reading.signalStrength,
         is_valid: (reading.spo2 !== null && reading.spo2 > 0) || 
                  (reading.heartRate !== null && reading.heartRate > 0),
+        fio2_level: reading.fio2Level || null,
+        phase_type: reading.phaseType || null,
+        cycle_number: reading.cycleNumber || null,
         created_at: new Date().toISOString()
       };
 
@@ -203,11 +220,20 @@ class SupabaseService {
       const firstReading = readings[0];
       if (!firstReading) return null;
       
-      const supabaseSessionId = this.sessionMapping.get(firstReading.sessionId);
+      let supabaseSessionId = this.sessionMapping.get(firstReading.sessionId);
+      
+      // If mapping not found, try to recover it from database
       if (!supabaseSessionId) {
-        console.warn('⚠️ No Supabase session mapping found for batch:', firstReading.sessionId);
-        this.queueForSync('addReadingsBatch', readings);
-        return null;
+        console.warn('⚠️ No session mapping found for batch, attempting recovery for:', firstReading.sessionId);
+        supabaseSessionId = await this.recoverSessionMapping(firstReading.sessionId);
+        
+        if (!supabaseSessionId) {
+          console.error('❌ Failed to recover session mapping for batch:', firstReading.sessionId);
+          console.error('❌ Current mappings:', Array.from(this.sessionMapping.entries()));
+          console.error('❌ Readings count in failed batch:', readings.length);
+          this.queueForSync('addReadingsBatch', readings);
+          return null;
+        }
       }
 
       // Get current authenticated user (fall back to anonymous)
@@ -222,6 +248,9 @@ class SupabaseService {
         signal_strength: reading.signalStrength,
         is_valid: (reading.spo2 !== null && reading.spo2 > 0) || 
                  (reading.heartRate !== null && reading.heartRate > 0),
+        fio2_level: reading.fio2Level || null,
+        phase_type: reading.phaseType || null,
+        cycle_number: reading.cycleNumber || null,
         created_at: new Date().toISOString()
       }));
 
@@ -236,7 +265,7 @@ class SupabaseService {
         return null;
       }
 
-      console.log(`☁️ Batch inserted ${data.length} readings to Supabase`);
+      console.log(`☁️ Batch inserted ${data.length} readings with FiO2 data to Supabase`);
       return data;
     } catch (error) {
       console.error('❌ Error batch inserting readings:', error);
@@ -354,6 +383,7 @@ class SupabaseService {
     if (!this.isOnline || this.syncQueue.length === 0) return;
 
     console.log(`🔄 Processing ${this.syncQueue.length} sync queue items`);
+    console.log('🔄 Current session mappings:', Array.from(this.sessionMapping.entries()));
     
     const processedItems = [];
     
@@ -442,6 +472,16 @@ class SupabaseService {
     console.log('🗑️ Sync queue cleared');
   }
 
+  // Manual trigger for sync queue processing (for debugging)
+  async forceSyncQueueProcessing() {
+    console.log('🔧 Manual sync queue processing triggered');
+    await this.processSyncQueue();
+    return {
+      remaining: this.syncQueue.length,
+      mappings: Array.from(this.sessionMapping.entries())
+    };
+  }
+
   async initialize() {
     try {
       console.log('🔧 Initializing SupabaseService...');
@@ -486,11 +526,107 @@ class SupabaseService {
     }
   }
 
+  // Session mapping recovery from database
+  async recoverSessionMapping(localSessionId) {
+    try {
+      console.log('🔍 Attempting to recover session mapping for:', localSessionId);
+      
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('local_session_id', localSessionId)
+        .eq('status', 'active')
+        .single();
+      
+      if (data && !error) {
+        const supabaseSessionId = data.id;
+        this.sessionMapping.set(localSessionId, supabaseSessionId);
+        await this.persistSessionMapping();
+        console.log('✅ Recovered session mapping:', localSessionId, '→', supabaseSessionId);
+        return supabaseSessionId;
+      } else {
+        console.error('❌ No active session found in Supabase for:', localSessionId, error);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Failed to recover session mapping:', error);
+      return null;
+    }
+  }
+
+  // Clean up stuck sessions for the current user/device
+  async cleanupStuckSessions() {
+    try {
+      console.log('🔍 Searching for stuck active sessions...');
+      
+      // Query for sessions that are still active but older than 1 hour
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      
+      // Get current user (may be null for anonymous sessions)
+      const currentUser = authService.getCurrentUser();
+      
+      let query = supabase
+        .from('sessions')
+        .select('id, local_session_id, created_at')
+        .eq('status', 'active')
+        .lt('created_at', oneHourAgo);
+      
+      // Filter by user if authenticated, or by device_id if anonymous
+      if (currentUser?.id) {
+        query = query.eq('user_id', currentUser.id);
+      } else {
+        query = query.eq('device_id', this.deviceId);
+      }
+      
+      const { data: stuckSessions, error } = await query;
+      
+      if (error) {
+        console.error('❌ Error querying stuck sessions:', error);
+        return { cleaned: 0, error: error.message };
+      }
+      
+      console.log(`🎯 Found ${stuckSessions?.length || 0} stuck sessions`);
+      
+      if (!stuckSessions || stuckSessions.length === 0) {
+        return { cleaned: 0 };
+      }
+      
+      // Clean up each stuck session
+      let cleanedCount = 0;
+      for (const session of stuckSessions) {
+        try {
+          const { error: updateError } = await supabase
+            .from('sessions')
+            .update({ 
+              status: 'completed',
+              end_time: new Date().toISOString()
+            })
+            .eq('id', session.id);
+          
+          if (!updateError) {
+            cleanedCount++;
+            console.log(`✅ Cleaned stuck session: ${session.local_session_id}`);
+          } else {
+            console.warn(`⚠️ Could not clean session ${session.local_session_id}:`, updateError.message);
+          }
+        } catch (sessionError) {
+          console.warn(`⚠️ Error cleaning session ${session.local_session_id}:`, sessionError.message);
+        }
+      }
+      
+      return { cleaned: cleanedCount, total: stuckSessions.length };
+    } catch (error) {
+      console.error('❌ Cleanup stuck sessions failed:', error);
+      return { cleaned: 0, error: error.message };
+    }
+  }
+
   // Session mapping persistence
   async persistSessionMapping() {
     try {
       const mappingObj = Object.fromEntries(this.sessionMapping);
       await AsyncStorage.setItem('sessionMapping', JSON.stringify(mappingObj));
+      console.log('💾 Persisted session mapping:', Object.keys(mappingObj).length, 'entries');
     } catch (error) {
       console.error('❌ Failed to persist session mapping:', error);
     }
@@ -502,7 +638,10 @@ class SupabaseService {
       if (mappingJson) {
         const mappingObj = JSON.parse(mappingJson);
         this.sessionMapping = new Map(Object.entries(mappingObj));
-        console.log(`📥 Loaded ${this.sessionMapping.size} session mappings`);
+        console.log(`📥 Loaded ${this.sessionMapping.size} session mappings from storage`);
+        console.log('📥 Loaded mappings:', Array.from(this.sessionMapping.entries()));
+      } else {
+        console.log('📥 No stored session mappings found');
       }
     } catch (error) {
       console.error('❌ Failed to load session mapping:', error);

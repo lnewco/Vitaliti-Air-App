@@ -39,6 +39,21 @@ export const BluetoothProvider = ({ children }) => {
 
     BluetoothService.setOnDataReceived((data) => {
       console.log('Context received BCI data:', data);
+      
+      // Debug: Check for valid vs invalid data
+      if (data.spo2 !== null || data.heartRate !== null) {
+        console.log('🎉 BluetoothContext: Received VALID data - updating state', {
+          spo2: data.spo2,
+          heartRate: data.heartRate,
+          isFingerDetected: data.isFingerDetected
+        });
+      } else {
+        console.log('📊 BluetoothContext: Received status data (no measurements)', {
+          isFingerDetected: data.isFingerDetected,
+          signalStrength: data.signalStrength
+        });
+      }
+      
       setPulseOximeterData(data);
     });
 
