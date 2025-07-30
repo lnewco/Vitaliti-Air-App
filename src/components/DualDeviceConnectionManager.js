@@ -3,9 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, Alert } from
 import { useBluetooth } from '../context/BluetoothContext';
 
 const DualDeviceConnectionManager = () => {
-  // DEBUG: Verify this component is actually loading
-  console.log('🚨 DEBUG: DualDeviceConnectionManager component is LOADING!');
-  
   const {
     isScanning,
     scanType,
@@ -21,33 +18,33 @@ const DualDeviceConnectionManager = () => {
   } = useBluetooth();
 
   const [showDeviceModal, setShowDeviceModal] = useState(false);
-  const [currentStep, setCurrentStep] = useState('pulse-ox'); // 'pulse-ox' or 'hr-monitor'
+  const [modalScanType, setModalScanType] = useState(null); // Track which scan opened the modal
 
-  // DEBUG: Log when component renders
+  // Debug logging
   useEffect(() => {
-    console.log('🚨 DEBUG: DualDeviceConnectionManager useEffect - Component has rendered!');
-  }, []);
-
-  // Auto-advance to HR monitor step once pulse ox is connected
-  useEffect(() => {
-    if (isPulseOxConnected && currentStep === 'pulse-ox') {
-      console.log('✅ Pulse oximeter connected - ready for HR monitor step');
-    }
-  }, [isPulseOxConnected, currentStep]);
+    console.log('🔍 DualDeviceConnectionManager state:', {
+      isPulseOxConnected,
+      isHRConnected,
+      connectedPulseOxDevice: connectedPulseOxDevice?.name,
+      connectedHRDevice: connectedHRDevice?.name
+    });
+  }, [isPulseOxConnected, isHRConnected, connectedPulseOxDevice, connectedHRDevice]);
 
   // Close modal and stop scanning when device connects
   useEffect(() => {
-    if (showDeviceModal) {
-      const isConnecting = (scanType === 'pulse-ox' && isPulseOxConnected) || 
-                          (scanType === 'hr-monitor' && isHRConnected);
+    if (showDeviceModal && modalScanType) {
+      // ✅ FIX: Use modalScanType (local) instead of scanType (global) to prevent race condition
+      const currentScanConnected = (modalScanType === 'pulse-ox' && isPulseOxConnected) || 
+                                   (modalScanType === 'hr-monitor' && isHRConnected);
       
-      if (isConnecting) {
-        console.log(`🎯 ${scanType} connected - closing modal`);
+      if (currentScanConnected) {
+        console.log(`🎯 ${modalScanType} connected - closing modal`);
         setShowDeviceModal(false);
+        setModalScanType(null);
         stopScanning().catch(console.error);
       }
     }
-  }, [isPulseOxConnected, isHRConnected, showDeviceModal, scanType]);
+  }, [isPulseOxConnected, isHRConnected, showDeviceModal, modalScanType]);
 
   // Cleanup: Stop scanning if component unmounts while scanning
   useEffect(() => {
@@ -57,25 +54,33 @@ const DualDeviceConnectionManager = () => {
         stopScanning().catch(console.error);
       }
     };
-  }, [isScanning]);
+  }, [isScanning, stopScanning]);
 
   const handleFindDevice = async (deviceType) => {
     try {
+      console.log(`🔍 Finding ${deviceType} devices...`);
+      
+      setModalScanType(deviceType); // ✅ Track which scan type opened this modal
       setShowDeviceModal(true);
+      
       await startScanning(deviceType);
+      console.log(`✅ Started scanning for ${deviceType} devices`);
     } catch (error) {
+      console.error(`Error finding ${deviceType} devices:`, error);
+      Alert.alert('Error', `Failed to start scanning for ${deviceType}: ${error.message}`);
       setShowDeviceModal(false);
-      Alert.alert('Error', 'Failed to scan for devices. Please check Bluetooth permissions.');
+      setModalScanType(null);
     }
   };
 
   const handleConnectToDevice = async (device) => {
     try {
+      console.log(`🔗 Connecting to ${device.deviceType} device:`, device.name);
       await connectToDevice(device);
-      setShowDeviceModal(false);
-      await stopScanning();
+      // Modal will close automatically via useEffect when connection succeeds
     } catch (error) {
-      Alert.alert('Connection Failed', `Could not connect to ${device.name || 'device'}. Please try again.`);
+      console.error('Connection error:', error);
+      Alert.alert('Connection Failed', `Failed to connect to ${device.name}: ${error.message}`);
     }
   };
 
@@ -83,27 +88,19 @@ const DualDeviceConnectionManager = () => {
     try {
       console.log(`🔌 Disconnecting ${deviceType}...`);
       await disconnect(deviceType);
-      console.log(`✅ ${deviceType} disconnected`);
     } catch (error) {
-      console.error(`❌ Disconnect failed for ${deviceType}:`, error);
-      Alert.alert('Error', 'Failed to disconnect device.');
+      console.error('Disconnect error:', error);
+      Alert.alert('Disconnect Failed', `Failed to disconnect ${deviceType}: ${error.message}`);
     }
   };
 
-  const handleCloseModal = async () => {
-    await stopScanning();
+  const handleCloseModal = () => {
+    if (isScanning) {
+      stopScanning().catch(console.error);
+    }
     setShowDeviceModal(false);
+    setModalScanType(null); // ✅ Clear the modal scan type
   };
-
-  // Filter devices by type
-  const filteredDevices = discoveredDevices.filter(device => {
-    if (scanType === 'pulse-ox') {
-      return device.deviceType === 'pulse-ox';
-    } else if (scanType === 'hr-monitor') {
-      return device.deviceType === 'hr-monitor';
-    }
-    return false;
-  });
 
   const renderDevice = ({ item }) => (
     <TouchableOpacity
@@ -117,6 +114,9 @@ const DualDeviceConnectionManager = () => {
         <Text style={styles.deviceType}>
           {item.deviceType === 'pulse-ox' ? 'Pulse Oximeter' : 'Heart Rate Monitor'}
         </Text>
+        {item.rssi && (
+          <Text style={styles.deviceRssi}>Signal: {item.rssi} dBm</Text>
+        )}
       </View>
       <TouchableOpacity 
         style={styles.connectButton}
@@ -128,12 +128,7 @@ const DualDeviceConnectionManager = () => {
   );
 
   return (
-    <View style={[styles.container, styles.debugContainer]}>
-      {/* DEBUG: Visual indicator this component is rendering */}
-      <View style={styles.debugBanner}>
-        <Text style={styles.debugText}>🚨 DEBUG: DualDeviceConnectionManager is ACTIVE! 🚨</Text>
-      </View>
-      
+    <View style={styles.container}>
       {/* Pulse Oximeter Section */}
       <View style={styles.deviceSection}>
         <Text style={styles.sectionTitle}>1. Pulse Oximeter (Required)</Text>
@@ -176,7 +171,7 @@ const DualDeviceConnectionManager = () => {
         <Text style={styles.sectionSubtitle}>
           For enhanced heart rate accuracy and HRV analysis
         </Text>
-        <View style={[styles.statusCard, !isPulseOxConnected && styles.disabledCard]}>
+        <View style={styles.statusCard}>
           {isHRConnected ? (
             <>
               <Text style={styles.statusIcon}>❤️</Text>
@@ -195,27 +190,26 @@ const DualDeviceConnectionManager = () => {
             <>
               <Text style={styles.statusIcon}>❤️</Text>
               <Text style={styles.statusTitle}>Not Connected</Text>
+              
+              {/* Always show the button as enabled - remove pulse ox dependency */}
               <TouchableOpacity 
-                style={[styles.findButton, styles.secondaryButton]} 
+                style={styles.findButton} 
                 onPress={() => handleFindDevice('hr-monitor')}
-                disabled={!isPulseOxConnected}
               >
-                <Text style={[styles.findButtonText, styles.secondaryButtonText]}>
+                <Text style={styles.findButtonText}>
                   Find Heart Rate Monitor
                 </Text>
               </TouchableOpacity>
+              
               <Text style={styles.instructions}>
-                {!isPulseOxConnected 
-                  ? 'Connect pulse oximeter first' 
-                  : 'Supports WHOOP, Polar, Garmin, and other BLE monitors'
-                }
+                Supports WHOOP, Polar, Garmin, and other BLE monitors
               </Text>
             </>
           )}
         </View>
       </View>
 
-      {/* Device Selection Modal */}
+      {/* Device Discovery Modal */}
       <Modal
         visible={showDeviceModal}
         animationType="slide"
@@ -225,7 +219,7 @@ const DualDeviceConnectionManager = () => {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>
-              Choose Your {scanType === 'pulse-ox' ? 'Pulse Oximeter' : 'Heart Rate Monitor'}
+              {modalScanType === 'pulse-ox' ? 'Find Pulse Oximeter' : 'Find Heart Rate Monitor'}
             </Text>
             <TouchableOpacity style={styles.closeButton} onPress={handleCloseModal}>
               <Text style={styles.closeButtonText}>✕</Text>
@@ -235,14 +229,14 @@ const DualDeviceConnectionManager = () => {
           {isScanning && (
             <View style={styles.scanningIndicator}>
               <Text style={styles.scanningText}>
-                🔍 Scanning for {scanType === 'pulse-ox' ? 'pulse oximeters' : 'heart rate monitors'}...
+                📡 Scanning for {modalScanType === 'pulse-ox' ? 'pulse oximeters' : 'heart rate monitors'}...
               </Text>
             </View>
           )}
 
-          {filteredDevices.length > 0 ? (
+          {discoveredDevices.length > 0 ? (
             <FlatList
-              data={filteredDevices}
+              data={discoveredDevices}
               renderItem={renderDevice}
               keyExtractor={(item) => item.id}
               style={styles.deviceList}
@@ -251,33 +245,36 @@ const DualDeviceConnectionManager = () => {
           ) : (
             <View style={styles.noDevicesContainer}>
               <Text style={styles.noDevicesText}>
-                {isScanning 
-                  ? `Looking for ${scanType === 'pulse-ox' ? 'pulse oximeters' : 'heart rate monitors'}...` 
-                  : 'No devices found'
+                {isScanning ? 'Searching for devices...' : 'No devices found'}
+              </Text>
+              <Text style={styles.noDevicesSubtext}>
+                {modalScanType === 'pulse-ox' 
+                  ? 'Make sure your pulse oximeter is turned on and in pairing mode.'
+                  : 'Make sure your heart rate monitor is on and in pairing mode. For WHOOP: Enable HR broadcast in your WHOOP app (Device Settings → Live Data).'
                 }
               </Text>
-              {!isScanning && (
-                <Text style={styles.noDevicesSubtext}>
-                  {scanType === 'pulse-ox' 
-                    ? 'Make sure your pulse oximeter is turned on and in pairing mode'
-                    : 'Enable HR broadcast in your WHOOP app (Device Settings) or turn on your heart rate monitor'
-                  }
-                </Text>
-              )}
             </View>
           )}
 
           <View style={styles.modalActions}>
-            <TouchableOpacity 
-              style={styles.scanAgainButton} 
-              onPress={() => handleFindDevice(scanType)}
-              disabled={isScanning}
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => {
+                console.log('🔄 User requested scan refresh');
+                stopScanning().then(() => {
+                  setTimeout(() => {
+                    startScanning(modalScanType);
+                  }, 500);
+                });
+              }}
             >
-              <Text style={styles.scanAgainButtonText}>
-                {isScanning ? 'Scanning...' : 'Scan Again'}
-              </Text>
+              <Text style={styles.secondaryButtonText}>Refresh Scan</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={handleCloseModal}>
+            
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={handleCloseModal}
+            >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
@@ -289,24 +286,7 @@ const DualDeviceConnectionManager = () => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
-  },
-  // DEBUG: Make it visually obvious when this component loads
-  debugContainer: {
-    backgroundColor: '#FFE5E5', // Light red background
-    borderWidth: 3,
-    borderColor: '#FF0000',
-  },
-  debugBanner: {
-    backgroundColor: '#FF0000',
-    padding: 10,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  debugText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
+    padding: 20,
   },
   deviceSection: {
     marginBottom: 24,
@@ -315,37 +295,35 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   sectionSubtitle: {
     fontSize: 14,
     color: '#6B7280',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   statusCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
+    borderRadius: 12,
+    padding: 20,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 4,
-  },
-  disabledCard: {
-    opacity: 0.6,
+    elevation: 2,
   },
   statusIcon: {
-    fontSize: 40,
+    fontSize: 48,
     marginBottom: 12,
   },
   statusTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 6,
-    textAlign: 'center',
+    marginBottom: 8,
   },
   deviceName: {
     fontSize: 14,
@@ -359,51 +337,43 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     marginBottom: 12,
-    minWidth: 180,
-  },
-  secondaryButton: {
-    backgroundColor: '#F3F4F6',
-    borderWidth: 2,
-    borderColor: '#3B82F6',
   },
   findButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-    textAlign: 'center',
+  },
+  secondaryButton: {
+    backgroundColor: '#6B7280',
   },
   secondaryButtonText: {
-    color: '#3B82F6',
+    color: '#FFFFFF',
   },
   disconnectButton: {
     backgroundColor: '#EF4444',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 6,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
   },
   disconnectButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
   },
   instructions: {
     fontSize: 12,
     color: '#9CA3AF',
     textAlign: 'center',
-    lineHeight: 16,
   },
-  
-  // Modal Styles
   modalContainer: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FFFFFF',
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 20,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
@@ -411,31 +381,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
-    flex: 1,
   },
   closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   closeButtonText: {
     fontSize: 18,
     color: '#6B7280',
   },
   scanningIndicator: {
-    backgroundColor: '#FEF3C7',
-    margin: 20,
-    padding: 16,
-    borderRadius: 12,
+    padding: 20,
     alignItems: 'center',
   },
   scanningText: {
-    color: '#92400E',
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 16,
+    color: '#6B7280',
   },
   deviceList: {
     flex: 1,
@@ -444,22 +404,29 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   deviceItem: {
-    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F9FAFB',
     padding: 16,
-    marginBottom: 8,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   deviceInfo: {
     flex: 1,
   },
+  deviceName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
   deviceType: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  deviceRssi: {
     fontSize: 12,
     color: '#9CA3AF',
     marginTop: 2,
@@ -482,47 +449,46 @@ const styles = StyleSheet.create({
     padding: 40,
   },
   noDevicesText: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#6B7280',
+    marginBottom: 12,
     textAlign: 'center',
-    marginBottom: 8,
   },
   noDevicesSubtext: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#9CA3AF',
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 20,
   },
   modalActions: {
     flexDirection: 'row',
     padding: 20,
-    backgroundColor: '#FFFFFF',
+    gap: 12,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
-    gap: 12,
   },
   scanAgainButton: {
     flex: 1,
-    backgroundColor: '#6B7280',
-    paddingVertical: 12,
+    backgroundColor: '#3B82F6',
+    paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
   },
   scanAgainButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
   },
   cancelButton: {
     flex: 1,
     backgroundColor: '#F3F4F6',
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
   },
   cancelButtonText: {
     color: '#6B7280',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
   },
 });
