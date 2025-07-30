@@ -61,7 +61,6 @@ export const BluetoothProvider = ({ children }) => {
 
     BluetoothService.setOnHRDataReceived((data) => {
       console.log('Context received HR data:', data);
-      console.log('🔍 HR Data Debug - heartRate:', data?.heartRate, 'sensorContact:', data?.sensorContactDetected);
       
       // Handle dual-timeframe HRV processing
       let processedData = { ...data };

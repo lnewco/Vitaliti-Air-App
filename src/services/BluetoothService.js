@@ -389,9 +389,23 @@ class BluetoothService {
       const services = await device.services();
       console.log('Available services:', services.map(s => s.uuid));
       
-      const hrService = services.find(service => 
-        service.uuid.toUpperCase() === this.HR_SERVICE_UUID.toUpperCase()
-      );
+      const hrService = services.find(service => {
+        const serviceUUID = service.uuid.toUpperCase();
+        const targetUUID = this.HR_SERVICE_UUID.toUpperCase();
+        
+        console.log(`🔍 UUID Comparison: Service="${serviceUUID}" vs Target="${targetUUID}"`);
+        
+        // Handle both short (180D) and full (0000180D-0000-1000-8000-00805F9B34FB) UUID formats
+        const matches = serviceUUID === targetUUID || 
+                       serviceUUID === `0000${targetUUID}-0000-1000-8000-00805F9B34FB` ||
+                       serviceUUID.includes(targetUUID);
+        
+        if (matches) {
+          console.log(`✅ Found matching HR service: ${serviceUUID}`);
+        }
+        
+        return matches;
+      });
       
       if (!hrService) {
         console.error('❌ HR service not found!');
@@ -704,8 +718,6 @@ class BluetoothService {
         heartRate,
         rrIntervals
       });
-      
-      console.log('🔍 WHOOP Debug - Raw heartRate value:', heartRate, 'Type:', typeof heartRate);
 
       // Store RR intervals in dual timeframe windows
       if (rrIntervals.length > 0) {

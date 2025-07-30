@@ -107,13 +107,7 @@ const SessionSetupScreen = ({ navigation }) => {
     isAnyDeviceConnected 
   } = useBluetooth();
 
-  // Debug HR data on SessionSetupScreen
-  useEffect(() => {
-    if (isHRConnected) {
-      console.log('🔍 SessionSetup HR Debug - heartRateData:', heartRateData);
-      console.log('🔍 SessionSetup HR Debug - heartRate value:', heartRateData?.heartRate);
-    }
-  }, [heartRateData, isHRConnected]);
+
 
   // Auto-regress to step 1 if no devices are connected (instead of just pulse ox)
   useEffect(() => {
@@ -224,11 +218,6 @@ const SessionSetupScreen = ({ navigation }) => {
                 
                 {heartRateData && (
                   <View style={styles.liveData}>
-                    {/* Debug info */}
-                    <View style={styles.dataRow}>
-                      <Text style={styles.dataLabel}>Debug:</Text>
-                      <Text style={styles.dataValue}>HR: {heartRateData.heartRate}, Contact: {String(heartRateData.sensorContactDetected)}</Text>
-                    </View>
                     <View style={styles.dataRow}>
                       <Text style={styles.dataLabel}>Heart Rate:</Text>
                       <Text style={[styles.dataValue, styles.primaryDataValue]}>{heartRateData.heartRate || '--'} bpm</Text>
