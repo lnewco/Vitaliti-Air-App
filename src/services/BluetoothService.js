@@ -188,7 +188,9 @@ class BluetoothService {
     }
 
     if (this.onDeviceFound) {
-      this.onDeviceFound({ ...device, deviceType });
+      // Add deviceType property while preserving device methods
+      device.deviceType = deviceType;
+      this.onDeviceFound(device);
     }
   }
 
