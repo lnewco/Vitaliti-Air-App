@@ -133,17 +133,22 @@ class BluetoothService {
       this.isScanning = true;
       
       // Determine which services to scan for
-      let serviceUUIDs = [];
+      let serviceUUIDs = null; // null means scan all devices
       if (deviceType === 'pulse-ox') {
+        // Pulse oximeters reliably advertise their service UUID
         serviceUUIDs = [this.BCI_SERVICE_UUID];
       } else if (deviceType === 'hr-monitor') {
-        serviceUUIDs = [this.HR_SERVICE_UUID];
+        // HR monitors (like WHOOP) often don't advertise HR service in advertisements
+        // Scan all devices and filter by name patterns instead
+        serviceUUIDs = null;
       } else {
-        // Scan for both types
-        serviceUUIDs = [this.BCI_SERVICE_UUID, this.HR_SERVICE_UUID];
+        // Scan for both types - use no filter to catch HR monitors
+        serviceUUIDs = null;
       }
       
-      // Scan for devices with the appropriate service UUIDs
+      console.log(`🔍 Starting ${deviceType} scan with service filter:`, serviceUUIDs);
+      
+      // Scan for devices
       this.manager.startDeviceScan(serviceUUIDs, null, (error, device) => {
         if (error) {
           console.error('Scan error:', error);
@@ -185,12 +190,22 @@ class BluetoothService {
       console.log('✅ Pulse Oximeter device found:', device.name || device.localName || 'Unknown');
     } else if (deviceType === 'hr-monitor') {
       console.log('✅ Heart Rate Monitor device found:', device.name || device.localName || 'Unknown');
+    } else {
+      console.log('🔍 Unknown device found:', device.name || device.localName || 'Unknown');
     }
 
-    if (this.onDeviceFound) {
+    // Only report devices that match the current scan type (or if scanning for 'all')
+    const shouldReport = this.currentScanType === 'all' || 
+                        this.currentScanType === deviceType ||
+                        (this.currentScanType === 'both' && (deviceType === 'pulse-ox' || deviceType === 'hr-monitor'));
+
+    if (shouldReport && this.onDeviceFound) {
+      console.log(`📋 Reporting ${deviceType} device (scan type: ${this.currentScanType})`);
       // Add deviceType property while preserving device methods
       device.deviceType = deviceType;
       this.onDeviceFound(device);
+    } else if (deviceType !== 'unknown') {
+      console.log(`⏭️ Skipping ${deviceType} device (looking for ${this.currentScanType})`);
     }
   }
 
