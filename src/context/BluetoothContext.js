@@ -34,10 +34,6 @@ export const BluetoothProvider = ({ children }) => {
   const [persistentHRV, setPersistentHRV] = useState(null);
   const [lastHRVUpdate, setLastHRVUpdate] = useState(null);
 
-  // Add persistent HRV state for smooth transitions
-  const [persistentHRV, setPersistentHRV] = useState(null);
-  const [lastHRVUpdate, setLastHRVUpdate] = useState(null);
-
   useEffect(() => {
     // Set up event handlers for dual device support
     BluetoothService.setOnDeviceFound((device) => {
