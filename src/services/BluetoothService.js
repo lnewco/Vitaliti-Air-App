@@ -425,9 +425,15 @@ class BluetoothService {
       })));
       
       // Find the HR measurement characteristic
-      const hrMeasurementCharacteristic = characteristics.find(char =>
-        char.uuid.toUpperCase() === this.HR_MEASUREMENT_CHARACTERISTIC_UUID.toUpperCase()
-      );
+      const hrMeasurementCharacteristic = characteristics.find(char => {
+        const charUUID = char.uuid.toUpperCase();
+        const targetUUID = this.HR_MEASUREMENT_CHARACTERISTIC_UUID.toUpperCase();
+        
+        // Handle both short (2A37) and full (00002A37-0000-1000-8000-00805F9B34FB) UUID formats
+        return charUUID === targetUUID || 
+               charUUID === `0000${targetUUID}-0000-1000-8000-00805F9B34FB` ||
+               charUUID.includes(targetUUID);
+      });
       
       if (!hrMeasurementCharacteristic) {
         console.error('❌ HR measurement characteristic not found!');
