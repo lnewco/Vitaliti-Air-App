@@ -704,6 +704,8 @@ class BluetoothService {
         heartRate,
         rrIntervals
       });
+      
+      console.log('🔍 WHOOP Debug - Raw heartRate value:', heartRate, 'Type:', typeof heartRate);
 
       // Store RR intervals in dual timeframe windows
       if (rrIntervals.length > 0) {
