@@ -2,25 +2,119 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { useBluetooth } from '../context/BluetoothContext';
 import StepIndicator from '../components/StepIndicator';
-import ConnectionManager from '../components/ConnectionManager';
+import DualDeviceConnectionManager from '../components/DualDeviceConnectionManager';
+import HRV_CONFIG from '../config/hrvConfig';
+
+// Dual-Timeframe HRV Display Component for Session Setup
+const DualHRVDisplay = ({ heartRateData }) => {
+  const [sessionStartTime] = useState(Date.now());
+  
+  // Helper to get confidence color
+  const getConfidenceColor = (confidence) => {
+    if (confidence >= 0.8) return '#4ECDC4'; // Teal
+    if (confidence >= 0.6) return '#FFE66D'; // Yellow
+    if (confidence >= 0.4) return '#FF6B6B'; // Red
+    return '#9CA3AF'; // Gray
+  };
+
+  const sessionDuration = Math.round((Date.now() - sessionStartTime) / 1000);
+  const quickHRV = heartRateData?.quickHRV;
+  const realHRV = heartRateData?.realHRV;
+
+  return (
+    <View style={styles.dualHrvContainer}>
+      <Text style={styles.hrvTitle}>Heart Rate Variability</Text>
+      
+      {/* Quick HRV */}
+      <View style={styles.hrvMetricCard}>
+        <View style={styles.hrvHeader}>
+          <Text style={styles.hrvTypeLabel}>
+            {HRV_CONFIG.UI.STAGE_ICONS.QUICK} Quick HRV
+          </Text>
+          {quickHRV && (
+            <View style={[
+              styles.confidenceBadge, 
+              { backgroundColor: getConfidenceColor(quickHRV.confidence) }
+            ]}>
+              <Text style={styles.confidenceText}>
+                {Math.round(quickHRV.confidence * 100)}%
+              </Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.hrvMainValue}>
+          {quickHRV ? `${quickHRV.rmssd}ms` : '--'}
+        </Text>
+        <Text style={styles.hrvSubtext}>
+          {quickHRV 
+            ? `${quickHRV.stage.description} • ${quickHRV.intervalCount} intervals`
+            : 'Calculating from incoming data...'
+          }
+        </Text>
+      </View>
+      
+      {/* Real HRV */}
+      <View style={styles.hrvMetricCard}>
+        <View style={styles.hrvHeader}>
+          <Text style={styles.hrvTypeLabel}>
+            {HRV_CONFIG.UI.STAGE_ICONS.REAL} Real HRV
+          </Text>
+          {realHRV && (
+            <View style={[
+              styles.confidenceBadge, 
+              { backgroundColor: getConfidenceColor(realHRV.confidence) }
+            ]}>
+              <Text style={styles.confidenceText}>
+                {Math.round(realHRV.confidence * 100)}%
+              </Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.hrvMainValue}>
+          {realHRV ? `${realHRV.rmssd}ms` : '--'}
+        </Text>
+        <Text style={styles.hrvSubtext}>
+          {realHRV 
+            ? `${realHRV.stage.description} • ${realHRV.intervalCount} intervals`
+            : sessionDuration < 60 
+              ? `Available after 1 minute (${60 - sessionDuration}s remaining)`
+              : 'Building accuracy...'
+          }
+        </Text>
+      </View>
+      
+      {/* Session Info */}
+      <Text style={styles.sessionInfo}>
+        Session Duration: {sessionDuration}s
+      </Text>
+      
+      {/* Explanatory text */}
+      <Text style={styles.hrvNote}>
+        💡 Quick HRV provides immediate feedback, Real HRV builds to research-grade accuracy
+      </Text>
+    </View>
+  );
+};
 
 const SessionSetupScreen = ({ navigation }) => {
   const [currentStep, setCurrentStep] = useState(1);
-  const { isConnected, pulseOximeterData } = useBluetooth();
+  const { 
+    isPulseOxConnected, 
+    isHRConnected, 
+    pulseOximeterData, 
+    heartRateData,
+    persistentHRV,  // ✅ Add persistentHRV from context
+    isAnyDeviceConnected 
+  } = useBluetooth();
 
-  // Auto-advance to step 2 when device connects
-  useEffect(() => {
-    if (isConnected && currentStep === 1) {
-      setCurrentStep(2);
-    }
-  }, [isConnected, currentStep]);
 
-  // Auto-regress to step 1 if device disconnects
+
+  // Auto-regress to step 1 if no devices are connected (instead of just pulse ox)
   useEffect(() => {
-    if (!isConnected && currentStep === 2) {
+    if (!isAnyDeviceConnected && currentStep === 2) {
       setCurrentStep(1);
     }
-  }, [isConnected, currentStep]);
+  }, [isAnyDeviceConnected, currentStep]);
 
   const handleBack = () => {
     if (currentStep === 1) {
@@ -31,10 +125,10 @@ const SessionSetupScreen = ({ navigation }) => {
   };
 
   const handleStartSession = () => {
-    if (!isConnected) {
+    if (!isAnyDeviceConnected) {
       Alert.alert(
-        'Device Not Connected',
-        'Please connect your pulse oximeter before starting the session.',
+        'Device Required',
+        'Please connect either a heart rate monitor or pulse oximeter before starting the session.',
         [{ text: 'OK' }]
       );
       return;
@@ -52,14 +146,14 @@ const SessionSetupScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.stepHeader}>
-          <Text style={styles.stepTitle}>Connect Your Pulse Oximeter</Text>
+          <Text style={styles.stepTitle}>Connect Your Devices</Text>
           <Text style={styles.stepDescription}>
-            Find and connect your pulse oximeter to begin monitoring your oxygen levels.
+            Connect your devices for IHHT training. You can use either a pulse oximeter (for SpO2 monitoring) or heart rate monitor (for enhanced HRV analysis), or both for complete monitoring.
           </Text>
         </View>
 
         <View style={styles.stepContent}>
-          <ConnectionManager />
+          <DualDeviceConnectionManager />
         </View>
       </ScrollView>
 
@@ -68,74 +162,172 @@ const SessionSetupScreen = ({ navigation }) => {
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.continueButton, !isConnected && styles.continueButtonDisabled]}
-          onPress={() => isConnected && setCurrentStep(2)}
-          disabled={!isConnected}
+          style={[styles.continueButton, !isAnyDeviceConnected && styles.continueButtonDisabled]}
+          onPress={() => isAnyDeviceConnected && setCurrentStep(2)}
+          disabled={!isAnyDeviceConnected}
         >
-          <Text style={[styles.continueButtonText, !isConnected && styles.continueButtonTextDisabled]}>
-            Continue →
+          <Text style={[styles.continueButtonText, !isAnyDeviceConnected && styles.continueButtonTextDisabled]}>
+            {isAnyDeviceConnected ? 'Continue →' : 'Connect a Device First'}
           </Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 
-  const renderStep2 = () => (
-    <View style={styles.stepContainer}>
-      <ScrollView 
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.stepHeader}>
-          <Text style={styles.stepTitle}>Ready to Begin</Text>
-          <Text style={styles.stepDescription}>
-            Your device is connected and reading data. You're ready to start your IHHT training session.
-          </Text>
-        </View>
+  const renderStep2 = () => {
+    // Dynamic title and description based on connected devices
+    let title = "Ready to Begin";
+    let description = "Your devices are connected and reading data. You're ready to start your IHHT training session.";
+    
+    if (isHRConnected && isPulseOxConnected) {
+      title = heartRateData?.hrv ? "Dual Device Setup Complete" : "Dual Device Setup - HRV Loading";
+      description = heartRateData?.hrv 
+        ? "Both heart rate monitor and pulse oximeter are connected. You have complete monitoring with enhanced HRV analysis and SpO2 tracking."
+        : "Both devices are connected! Pulse oximeter is providing SpO2 data while your heart rate monitor is collecting data for HRV analysis.";
+    } else if (isHRConnected && !isPulseOxConnected) {
+      title = heartRateData?.hrv ? "WHOOP Connected - Enhanced HRV Ready" : "WHOOP Connected - HRV Loading";
+      description = heartRateData?.hrv 
+        ? "Your heart rate monitor is connected and providing detailed HRV analysis. You're ready for HRV-focused IHHT training."
+        : "Your heart rate monitor is connected and collecting data for HRV analysis. HRV metrics will appear shortly.";
+    } else if (!isHRConnected && isPulseOxConnected) {
+      title = "Pulse Oximeter Connected";
+      description = "Your pulse oximeter is connected for SpO2 monitoring. You're ready for oxygen-focused IHHT training.";
+    }
 
-        <View style={styles.stepContent}>
-          <View style={styles.readyCard}>
-            <Text style={styles.readyIcon}>✅</Text>
-            <Text style={styles.readyTitle}>Device Connected</Text>
-            <Text style={styles.readySubtitle}>Pulse oximeter is ready</Text>
-            
-            {pulseOximeterData && (
-              <View style={styles.liveData}>
-                <View style={styles.dataRow}>
-                  <Text style={styles.dataLabel}>SpO2:</Text>
-                  <Text style={styles.dataValue}>{pulseOximeterData.spo2}%</Text>
-                </View>
-                <View style={styles.dataRow}>
-                  <Text style={styles.dataLabel}>Heart Rate:</Text>
-                  <Text style={styles.dataValue}>{pulseOximeterData.heartRate} bpm</Text>
-                </View>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.sessionInfo}>
-            <Text style={styles.sessionInfoTitle}>🎯 IHHT Training Session</Text>
-            <Text style={styles.sessionInfoText}>
-              • 5 cycles of hypoxic-hyperoxic training{'\n'}
-              • Approximately 35 minutes duration{'\n'}
-              • Real-time safety monitoring{'\n'}
-              • Guided breathing phases
+    return (
+      <View style={styles.stepContainer}>
+        <ScrollView 
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.stepHeader}>
+            <Text style={styles.stepTitle}>{title}</Text>
+            <Text style={styles.stepDescription}>
+              {description}
             </Text>
           </View>
-        </View>
-      </ScrollView>
 
-      <View style={styles.stepActions}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.startSessionButton} onPress={handleStartSession}>
-          <Text style={styles.startSessionButtonText}>Start Air Session</Text>
-        </TouchableOpacity>
+          <View style={styles.stepContent}>
+            {/* Heart Rate Monitor Section - Show FIRST when connected */}
+            {isHRConnected && (
+              <View style={[styles.readyCard, styles.primaryCard]}>
+                <Text style={styles.readyIcon}>❤️</Text>
+                <Text style={styles.readyTitle}>Heart Rate Monitor Connected</Text>
+                <Text style={styles.readySubtitle}>Enhanced HR accuracy and HRV analysis active</Text>
+                
+                {heartRateData && (
+                  <View style={styles.liveData}>
+                    <View style={styles.dataRow}>
+                      <Text style={styles.dataLabel}>Heart Rate:</Text>
+                      <Text style={[styles.dataValue, styles.primaryDataValue]}>{heartRateData.heartRate || '--'} bpm</Text>
+                    </View>
+                    
+                    {/* Dual-Timeframe HRV Display */}
+                    <View style={styles.hrvSection}>
+                      <DualHRVDisplay 
+                        heartRateData={heartRateData} 
+                      />
+                    </View>
+                    
+                    <View style={styles.dataRow}>
+                      <Text style={styles.dataLabel}>Sensor Contact:</Text>
+                      <Text style={styles.dataValue}>
+                        {heartRateData.sensorContactDetected ? '✅ Good' : '⚠️ Check placement'}
+                      </Text>
+                    </View>
+                    
+                    {!heartRateData.sensorContactDetected && (
+                      <View style={styles.sensorTipCard}>
+                        <Text style={styles.sensorTipTitle}>💡 WHOOP Placement Tips</Text>
+                        <Text style={styles.sensorTipText}>
+                          • Ensure WHOOP is snug but not too tight{'\n'}
+                          • Position on wrist bone, not muscle{'\n'}
+                          • Clean sensor and skin if needed{'\n'}
+                          • Try different wrist position{'\n'}
+                          • Note: Some WHOOPs don't report contact but still work fine
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Pulse Oximeter Section - Show SECOND when both connected, or first if only pulse ox */}
+            {isPulseOxConnected && (
+              <View style={[styles.readyCard, isHRConnected ? styles.secondaryCard : styles.primaryCard]}>
+                <Text style={styles.readyIcon}>📱</Text>
+                <Text style={styles.readyTitle}>Pulse Oximeter Connected</Text>
+                <Text style={styles.readySubtitle}>SpO2 and heart rate monitoring active</Text>
+                
+                {pulseOximeterData && (
+                  <View style={styles.liveData}>
+                    <View style={styles.dataRow}>
+                      <Text style={styles.dataLabel}>SpO2:</Text>
+                      <Text style={[styles.dataValue, !isHRConnected && styles.primaryDataValue]}>{pulseOximeterData.spo2 || '--'}%</Text>
+                    </View>
+                    <View style={styles.dataRow}>
+                      <Text style={styles.dataLabel}>Heart Rate:</Text>
+                      <Text style={styles.dataValue}>{pulseOximeterData.heartRate || '--'} bpm</Text>
+                    </View>
+                    <View style={styles.dataRow}>
+                      <Text style={styles.dataLabel}>Signal:</Text>
+                      <Text style={styles.dataValue}>
+                        {pulseOximeterData.signalStrength ? `${pulseOximeterData.signalStrength}/15` : '--'}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Show connection encouragement if only one device connected */}
+            {(isHRConnected && !isPulseOxConnected) && (
+              <View style={styles.optionalDeviceCard}>
+                <Text style={styles.optionalIcon}>📱</Text>
+                <Text style={styles.optionalTitle}>Pulse Oximeter (Optional)</Text>
+                <Text style={styles.optionalDescription}>
+                  Add a pulse oximeter for SpO2 monitoring and enhanced safety during training. 
+                  Click "Back" to connect additional devices.
+                </Text>
+              </View>
+            )}
+
+            {(!isHRConnected && isPulseOxConnected) && (
+              <View style={styles.optionalDeviceCard}>
+                <Text style={styles.optionalIcon}>❤️</Text>
+                <Text style={styles.optionalTitle}>Heart Rate Monitor (Optional)</Text>
+                <Text style={styles.optionalDescription}>
+                  Add a WHOOP or other heart rate monitor for detailed HRV analysis and enhanced training insights. 
+                  Click "Back" to connect additional devices.
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.sessionInfo}>
+              <Text style={styles.sessionInfoTitle}>🎯 IHHT Training Session</Text>
+              <Text style={styles.sessionInfoText}>
+                • 5 cycles of hypoxic-hyperoxic training{'\n'}
+                • Approximately 35 minutes duration{'\n'}
+                • Real-time {isHRConnected ? (heartRateData?.hrv ? 'HRV and ' : 'HRV (loading) and ') : ''}safety monitoring{'\n'}
+                • Guided breathing phases
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.stepActions}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.startSessionButton} onPress={handleStartSession}>
+            <Text style={styles.startSessionButtonText}>Start Air Session</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -158,10 +350,10 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flex: 1,
   },
-     scrollContent: {
-     paddingHorizontal: 20,
-     paddingBottom: 40, // Extra padding to prevent content hiding behind actions
-   },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40, // Extra padding to prevent content hiding behind actions
+  },
   stepHeader: {
     paddingVertical: 24,
     alignItems: 'center',
@@ -232,12 +424,16 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+  },
+  hrCard: {
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
   },
   readyIcon: {
     fontSize: 64,
@@ -273,6 +469,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F2937',
   },
+  optionalNote: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginTop: 16,
+  },
   sessionInfo: {
     backgroundColor: '#F0F9FF',
     borderRadius: 12,
@@ -304,6 +507,231 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  primaryCard: {
+    backgroundColor: '#F0F9FF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+  },
+  secondaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderLeftWidth: 2,
+    borderLeftColor: '#E5E7EB',
+  },
+  hrvSection: {
+    backgroundColor: '#F0F9FF',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  hrvTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  // Dual-Timeframe HRV Styles
+  dualHrvContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  hrvTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  hrvMetricCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4ECDC4',
+  },
+  hrvHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  hrvTypeLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  confidenceBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 44,
+    alignItems: 'center',
+  },
+  confidenceText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  hrvMainValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#059669',
+    marginBottom: 4,
+  },
+  hrvSubtext: {
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 16,
+  },
+  sessionInfo: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  hrvNote: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#F0F9FF',
+    padding: 8,
+    borderRadius: 6,
+    borderLeftWidth: 3,
+    borderLeftColor: '#4ECDC4',
+  },
+  primaryDataValue: {
+    color: '#3B82F6',
+    fontWeight: 'bold',
+  },
+  optionalDeviceCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+  },
+  optionalIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+    opacity: 0.6,
+  },
+  optionalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  optionalDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 280,
+  },
+     sensorTipCard: {
+     backgroundColor: '#FEF3C7',
+     borderRadius: 12,
+     padding: 16,
+     marginTop: 12,
+     borderLeftWidth: 4,
+     borderLeftColor: '#F59E0B',
+   },
+     sensorTipTitle: {
+     fontSize: 16,
+     fontWeight: 'bold',
+     color: '#92400E',
+     marginBottom: 8,
+   },
+     sensorTipText: {
+     fontSize: 14,
+     color: '#92400E',
+     lineHeight: 20,
+   },
+  hrvLoadingContainer: {
+    alignItems: 'center',
+    marginTop: 20,
+  },
+     hrvLoadingMessage: {
+     fontSize: 16,
+     fontWeight: 'bold',
+     color: '#1F2937',
+     marginBottom: 15,
+     textAlign: 'center',
+     lineHeight: 22,
+   },
+     progressBarContainer: {
+     width: '100%',
+     marginBottom: 8,
+   },
+     progressBarBackground: {
+     height: 10,
+     backgroundColor: '#E5E7EB',
+     borderRadius: 5,
+     overflow: 'hidden',
+     marginBottom: 8,
+   },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 5,
+  },
+     progressText: {
+     fontSize: 14,
+     fontWeight: 'bold',
+     color: '#3B82F6',
+     textAlign: 'center',
+     marginBottom: 12,
+   },
+  intervalStatus: {
+    backgroundColor: '#E0F2FE',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+  },
+  intervalStatusText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  intervalReadyText: {
+    fontSize: 14,
+    color: '#10B981',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  timeConnectedText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 10,
+  },
+  hrvTipContainer: {
+    backgroundColor: '#F0F9FF',
+    borderRadius: 12,
+    padding: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+  },
+  hrvTipText: {
+    fontSize: 14,
+    color: '#374151',
+    textAlign: 'center',
+  },
+  stableHrvContainer: {
+    paddingVertical: 12,
+  },
+
 });
 
 export default SessionSetupScreen; 

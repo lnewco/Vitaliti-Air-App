@@ -3,22 +3,22 @@ import { Platform, AppState } from 'react-native';
 import DatabaseService from './DatabaseService';
 import SupabaseService from './SupabaseService';
 
-// Import Background Session Manager conditionally
+// Import Background Session Manager conditionally - available in development builds
 let BackgroundSessionManager = null;
 try {
   BackgroundSessionManager = require('./BackgroundSessionManager').BackgroundSessionManager;
+  console.log('✅ Background session management enabled');
 } catch (error) {
-  console.log('Background Session Manager not available in Expo Go');
+  console.log('⚠️ Background session management not available:', error.message);
 }
 
-// Import the Live Activity module for iOS
+// Import the Live Activity module for iOS - available in development builds
 let LiveActivityModule = null;
-if (Platform.OS === 'ios') {
-  try {
-    LiveActivityModule = require('../../modules/live-activity').default;
-  } catch (error) {
-    console.warn('Live Activity module not available:', error);
-  }
+try {
+  LiveActivityModule = require('../../modules/live-activity/src/LiveActivityModule').default;
+  console.log('✅ Live Activities enabled');
+} catch (error) {
+  console.log('⚠️ Live Activities not available:', error.message);
 }
 
 class EnhancedSessionManager {
@@ -247,42 +247,67 @@ class EnhancedSessionManager {
     }
   }
 
+  async checkLiveActivitySupport() {
+    if (!LiveActivityModule) {
+      console.log('📱 Live Activities not available in Expo Go');
+      return false;
+    }
+    
+    try {
+      const isSupported = await LiveActivityModule.isSupported();
+      return isSupported;
+    } catch (error) {
+      console.error('❌ Error checking Live Activity support:', error);
+      return false;
+    }
+  }
+
   async startLiveActivity() {
-    if (!LiveActivityModule || Platform.OS !== 'ios') {
-      console.log('🚫 Live Activity not supported on this platform');
-      return;
+    if (!LiveActivityModule || !this.currentSession) {
+      return false;
     }
 
     try {
+      console.log('📱 Starting Live Activity for session:', this.currentSession.id);
+      
       const result = await LiveActivityModule.startActivity({
         sessionId: this.currentSession.id,
-        sessionType: 'IHHT',
-        startTime: this.startTime,
-        totalCycles: this.totalCycles
+        sessionType: this.currentSession.sessionType,
+        currentPhase: this.currentPhase,
+        currentCycle: this.currentCycle,
+        phaseTimeRemaining: this.phaseTimeRemaining,
+        startTime: this.startTime
       });
 
       if (result.success) {
         this.hasActiveLiveActivity = true;
-        this.liveActivityId = result.activityId;
-        console.log('🌟 Live Activity started:', result.activityId);
+        console.log('✅ Live Activity started successfully');
+        return true;
+      } else {
+        console.error('❌ Failed to start Live Activity:', result.error);
+        return false;
       }
     } catch (error) {
-      console.error('❌ Failed to start Live Activity:', error);
+      console.error('❌ Error starting Live Activity:', error);
+      return false;
     }
   }
 
   async updateLiveActivity() {
-    if (!this.hasActiveLiveActivity || !LiveActivityModule) return;
+    if (!this.hasActiveLiveActivity || !LiveActivityModule || !this.currentSession) {
+      return;
+    }
 
     try {
       await LiveActivityModule.updateActivity({
+        sessionId: this.currentSession.id,
         currentPhase: this.currentPhase,
         currentCycle: this.currentCycle,
         phaseTimeRemaining: this.phaseTimeRemaining,
-        pausedAt: this.isPaused ? Date.now() : undefined
+        isPaused: this.isPaused
       });
     } catch (error) {
-      console.error('❌ Failed to update Live Activity:', error);
+      console.error('❌ Error updating Live Activity:', error);
     }
   }
 
@@ -622,7 +647,9 @@ class EnhancedSessionManager {
   }
 
   async stopLiveActivity() {
-    if (!this.hasActiveLiveActivity || !LiveActivityModule) return;
+    if (!this.hasActiveLiveActivity || !LiveActivityModule) {
+      return;
+    }
 
     try {
       await LiveActivityModule.stopActivity();
