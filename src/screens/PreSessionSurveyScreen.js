@@ -49,6 +49,9 @@ const PreSessionSurveyScreen = ({
     try {
       console.log('💾 Saving pre-session survey data:', { sessionId, ...surveyData });
 
+      // Initialize database first
+      await DatabaseService.init();
+
       // Save to local database first
       const localResult = await DatabaseService.savePreSessionSurvey(
         sessionId,
