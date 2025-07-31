@@ -647,6 +647,224 @@ class SupabaseService {
       console.error('❌ Failed to load session mapping:', error);
     }
   }
+
+  // ========================================
+  // SURVEY DATA SYNC
+  // ========================================
+
+  /**
+   * Sync pre-session survey data to Supabase
+   */
+  async syncPreSessionSurvey(localSessionId, clarityPre, energyPre) {
+    try {
+      console.log(`🔄 Syncing pre-session survey for: ${localSessionId}`);
+      
+      // Get the Supabase session UUID
+      const supabaseId = this.sessionMapping.get(localSessionId);
+      if (!supabaseId) {
+        console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
+        this.addToSyncQueue('pre_session_survey', { localSessionId, clarityPre, energyPre });
+        return { success: true, queued: true };
+      }
+
+      // Get current authenticated user
+      const currentUser = authService.getCurrentUser();
+      
+      // Create survey data
+      const surveyData = {
+        session_id: supabaseId,
+        clarity_pre: clarityPre,
+        energy_pre: energyPre,
+        user_id: currentUser?.id || null
+      };
+
+      const { data, error } = await supabase
+        .from('session_surveys')
+        .upsert(surveyData, { 
+          onConflict: 'session_id',
+          ignoreDuplicates: false 
+        });
+
+      if (error) {
+        console.error('❌ Failed to sync pre-session survey:', error);
+        this.addToSyncQueue('pre_session_survey', { localSessionId, clarityPre, energyPre });
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Pre-session survey synced to Supabase');
+      return { success: true, data };
+    } catch (error) {
+      console.error('❌ Error syncing pre-session survey:', error);
+      this.addToSyncQueue('pre_session_survey', { localSessionId, clarityPre, energyPre });
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Sync post-session survey data to Supabase
+   */
+  async syncPostSessionSurvey(localSessionId, clarityPost, energyPost, stressPost, notesPost = null) {
+    try {
+      console.log(`🔄 Syncing post-session survey for: ${localSessionId}`);
+      
+      // Get the Supabase session UUID
+      const supabaseId = this.sessionMapping.get(localSessionId);
+      if (!supabaseId) {
+        console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
+        this.addToSyncQueue('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
+        return { success: true, queued: true };
+      }
+
+      // Get current authenticated user
+      const currentUser = authService.getCurrentUser();
+      
+      // Create survey data
+      const surveyData = {
+        session_id: supabaseId,
+        clarity_post: clarityPost,
+        energy_post: energyPost,
+        stress_post: stressPost,
+        notes_post: notesPost,
+        user_id: currentUser?.id || null
+      };
+
+      const { data, error } = await supabase
+        .from('session_surveys')
+        .upsert(surveyData, { 
+          onConflict: 'session_id',
+          ignoreDuplicates: false 
+        });
+
+      if (error) {
+        console.error('❌ Failed to sync post-session survey:', error);
+        this.addToSyncQueue('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Post-session survey synced to Supabase');
+      return { success: true, data };
+    } catch (error) {
+      console.error('❌ Error syncing post-session survey:', error);
+      this.addToSyncQueue('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Sync intra-session response to Supabase
+   */
+  async syncIntraSessionResponse(localSessionId, phaseNumber, clarity, energy, stress, timestamp) {
+    try {
+      console.log(`🔄 Syncing intra-session response for: ${localSessionId}, phase: ${phaseNumber}`);
+      
+      // Get the Supabase session UUID
+      const supabaseId = this.sessionMapping.get(localSessionId);
+      if (!supabaseId) {
+        console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
+        this.addToSyncQueue('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
+        return { success: true, queued: true };
+      }
+
+      // Get current authenticated user
+      const currentUser = authService.getCurrentUser();
+      
+      // Create response data
+      const responseData = {
+        session_id: supabaseId,
+        phase_number: phaseNumber,
+        clarity,
+        energy,
+        stress,
+        timestamp: new Date(timestamp).toISOString(),
+        user_id: currentUser?.id || null
+      };
+
+      const { data, error } = await supabase
+        .from('intra_session_responses')
+        .upsert(responseData, { 
+          onConflict: 'session_id,phase_number',
+          ignoreDuplicates: false 
+        });
+
+      if (error) {
+        console.error('❌ Failed to sync intra-session response:', error);
+        this.addToSyncQueue('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Intra-session response synced to Supabase');
+      return { success: true, data };
+    } catch (error) {
+      console.error('❌ Error syncing intra-session response:', error);
+      this.addToSyncQueue('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get survey data for a session from Supabase
+   */
+  async getSessionSurveyData(sessionId) {
+    try {
+      console.log(`📊 Fetching survey data from Supabase for session: ${sessionId}`);
+      
+      // Get main survey data
+      const { data: surveyData, error: surveyError } = await supabase
+        .from('session_surveys')
+        .select('*')
+        .eq('session_id', sessionId)
+        .single();
+
+      // Get intra-session responses
+      const { data: responsesData, error: responsesError } = await supabase
+        .from('intra_session_responses')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('phase_number', { ascending: true });
+
+      if (surveyError && surveyError.code !== 'PGRST116') { // PGRST116 = no rows found
+        console.error('❌ Failed to fetch survey data:', surveyError);
+        return { success: false, error: surveyError.message };
+      }
+
+      if (responsesError) {
+        console.error('❌ Failed to fetch intra-session responses:', responsesError);
+        return { success: false, error: responsesError.message };
+      }
+
+      const result = {
+        sessionId,
+        preSession: null,
+        postSession: null,
+        intraSessionResponses: responsesData || []
+      };
+
+      // Process survey data
+      if (surveyData) {
+        if (surveyData.clarity_pre !== null && surveyData.energy_pre !== null) {
+          result.preSession = {
+            clarity: surveyData.clarity_pre,
+            energy: surveyData.energy_pre
+          };
+        }
+
+        if (surveyData.clarity_post !== null && surveyData.energy_post !== null && surveyData.stress_post !== null) {
+          result.postSession = {
+            clarity: surveyData.clarity_post,
+            energy: surveyData.energy_post,
+            stress: surveyData.stress_post,
+            notes: surveyData.notes_post || undefined
+          };
+        }
+      }
+
+      console.log(`✅ Survey data fetched from Supabase for ${sessionId}`);
+      return { success: true, data: result };
+    } catch (error) {
+      console.error('❌ Error fetching survey data from Supabase:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 export default new SupabaseService(); 
