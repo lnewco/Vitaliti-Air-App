@@ -397,9 +397,9 @@ class SupabaseService {
   async processSyncQueue() {
     if (!this.isOnline || this.syncQueue.length === 0) return;
 
-    // Throttle sync processing to prevent infinite loops (minimum 5 seconds between runs)
+    // Throttle sync processing to prevent infinite loops (minimum 1 second between runs)
     const now = Date.now();
-    if (this.lastSyncTime && (now - this.lastSyncTime) < 5000) {
+    if (this.lastSyncTime && (now - this.lastSyncTime) < 1000) {
       console.log('⏱️ Sync queue throttled - too soon since last run');
       return;
     }
@@ -407,6 +407,11 @@ class SupabaseService {
 
     console.log(`🔄 Processing ${this.syncQueue.length} sync queue items`);
     console.log('🔄 Current session mappings:', Array.from(this.sessionMapping.entries()));
+    
+    // Debug: Log details of queued items
+    this.syncQueue.forEach((item, index) => {
+      console.log(`📋 Queue item ${index + 1}: ${item.operation} for session ${item.data.localSessionId || item.data.sessionId || 'unknown'}`);
+    });
     
     const processedItems = [];
     
