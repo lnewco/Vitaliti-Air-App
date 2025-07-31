@@ -88,6 +88,49 @@ class SupabaseService {
         session.device_id = this.deviceId;
       }
 
+      // CRITICAL: Set PostgreSQL session variable for RLS policy
+      console.log('🔧 Setting PostgreSQL session variable app.device_id =', this.deviceId);
+      
+      try {
+        // Use raw SQL to set the session variable
+        const { error: setConfigError } = await supabase
+          .from('sessions')
+          .select('set_config')
+          .eq('set_config', `SELECT set_config('app.device_id', '${this.deviceId}', true)`);
+        
+        if (setConfigError) {
+          console.warn('⚠️ Method 1 failed, trying method 2...');
+          
+          // Alternative: Use rpc call
+          const { error: rpcError } = await supabase.rpc('exec', {
+            sql: `SELECT set_config('app.device_id', '${this.deviceId}', true);`
+          });
+          
+          if (rpcError) {
+            console.warn('⚠️ Method 2 failed, trying method 3...');
+            
+            // Alternative: Direct PostgreSQL function call
+            const { error: directError } = await supabase.rpc('set_config', {
+              setting_name: 'app.device_id',
+              new_value: this.deviceId,
+              is_local: true
+            });
+            
+            if (directError) {
+              console.warn('⚠️ All session variable methods failed, proceeding with insert...');
+            } else {
+              console.log('✅ PostgreSQL session variable set via method 3');
+            }
+          } else {
+            console.log('✅ PostgreSQL session variable set via method 2');
+          }
+        } else {
+          console.log('✅ PostgreSQL session variable set via method 1');
+        }
+      } catch (configErr) {
+        console.warn('⚠️ Session variable setup failed:', configErr);
+      }
+
       const { data, error } = await supabase
         .from('sessions')
         .insert([session])
