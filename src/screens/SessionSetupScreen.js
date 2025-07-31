@@ -101,7 +101,6 @@ const SessionSetupScreen = ({ navigation }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [sessionId, setSessionId] = useState(null);
   const [showPreSessionSurvey, setShowPreSessionSurvey] = useState(false);
-  const [surveyCompleted, setSurveyCompleted] = useState(false);
   const { 
     isPulseOxConnected, 
     isHRConnected, 
@@ -130,9 +129,6 @@ const SessionSetupScreen = ({ navigation }) => {
       navigation.goBack();
     } else if (currentStep === 2) {
       setCurrentStep(1);
-    } else if (currentStep === 3) {
-      setCurrentStep(2);
-      setSurveyCompleted(false); // Reset survey state when going back
     }
   };
 
@@ -155,8 +151,21 @@ const SessionSetupScreen = ({ navigation }) => {
   const handleSurveyComplete = () => {
     console.log('✅ Pre-session survey completed for session:', sessionId);
     setShowPreSessionSurvey(false);
-    setSurveyCompleted(true);
-    setCurrentStep(3); // Move to step 3 to show session ready
+    
+    // Show confirmation popup and launch session
+    Alert.alert(
+      '🎯 Starting Your IHHT Session',
+      `Great! Your pre-session survey is complete.\n\n• 5 cycles of hypoxic-hyperoxic training\n• Approximately 35 minutes duration\n• Real-time safety monitoring\n\nGet comfortable and prepare to begin!`,
+      [
+        {
+          text: 'Start Training',
+          onPress: () => {
+            console.log('🚀 Launching IHHT session after survey completion');
+            navigation.navigate('AirSession');
+          }
+        }
+      ]
+    );
   };
 
   const handleSurveyCancel = () => {
@@ -165,19 +174,7 @@ const SessionSetupScreen = ({ navigation }) => {
     setSessionId(null);
   };
 
-  const handleActualSessionStart = () => {
-    if (!surveyCompleted) {
-      Alert.alert(
-        'Survey Required',
-        'Please complete the pre-session survey before starting your training.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
 
-    // Navigate to IHHT training session
-    navigation.navigate('AirSession');
-  };
 
   const renderStep1 = () => (
     <View style={styles.stepContainer}>
@@ -370,67 +367,14 @@ const SessionSetupScreen = ({ navigation }) => {
     );
   };
 
-  const renderStep3 = () => (
-    <View style={styles.stepContainer}>
-      <ScrollView 
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.stepHeader}>
-          <Text style={styles.stepTitle}>Ready to Begin Training</Text>
-          <Text style={styles.stepDescription}>
-            Great! You've completed the pre-session survey. Your training session is ready to start.
-          </Text>
-        </View>
 
-        <View style={styles.stepContent}>
-          <View style={styles.readyCard}>
-            <Text style={styles.readyIcon}>✅</Text>
-            <Text style={styles.readyTitle}>Pre-Session Survey Complete</Text>
-            <Text style={styles.readySubtitle}>
-              Your baseline feelings have been recorded to track your progress over time.
-            </Text>
-          </View>
-
-          <View style={styles.sessionInfo}>
-            <Text style={styles.sessionInfoTitle}>🎯 IHHT Training Session</Text>
-            <Text style={styles.sessionInfoText}>
-              • 5 cycles of hypoxic-hyperoxic training{'\n'}
-              • Approximately 35 minutes duration{'\n'}
-              • Real-time {isHRConnected ? (heartRateData?.hrv ? 'HRV and ' : 'HRV (loading) and ') : ''}safety monitoring{'\n'}
-              • Guided breathing phases{'\n'}
-              • Post-session survey to track your response
-            </Text>
-          </View>
-
-          <View style={styles.sessionReadyCard}>
-            <Text style={styles.sessionReadyTitle}>🚀 Everything is Ready</Text>
-            <Text style={styles.sessionReadyText}>
-              Devices connected, survey completed. Click below to begin your training session.
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-
-      <View style={styles.stepActions}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.startSessionButton} onPress={handleActualSessionStart}>
-          <Text style={styles.startSessionButtonText}>Start Air Session</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
 
   return (
     <SafeAreaView style={styles.container}>
-      <StepIndicator currentStep={currentStep} totalSteps={3} />
+      <StepIndicator currentStep={currentStep} totalSteps={2} />
       
       {currentStep === 1 && renderStep1()}
       {currentStep === 2 && renderStep2()}
-      {currentStep === 3 && renderStep3()}
       
       {/* Pre-Session Survey Modal */}
       {sessionId && (
@@ -836,27 +780,6 @@ const styles = StyleSheet.create({
   },
   stableHrvContainer: {
     paddingVertical: 12,
-  },
-  sessionReadyCard: {
-    backgroundColor: '#E8F5E8',
-    borderRadius: 12,
-    padding: 20,
-    marginVertical: 16,
-    borderWidth: 1,
-    borderColor: '#4ECDC4',
-  },
-  sessionReadyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2D5016',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  sessionReadyText: {
-    fontSize: 15,
-    color: '#2D5016',
-    textAlign: 'center',
-    lineHeight: 22,
   },
 
 });
