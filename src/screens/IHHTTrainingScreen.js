@@ -283,11 +283,37 @@ const IHHTTrainingScreen = ({ navigation }) => {
   const terminateSession = async () => {
     try {
       Vibration.cancel();
-      await EnhancedSessionManager.stopSession();
-      navigation.goBack();
+      const result = await EnhancedSessionManager.stopSession();
+      
+      // Navigate to History to show session results
+      const sessionIdForNavigation = result?.id || result?.sessionId || sessionInfo?.sessionId || sessionInfo?.currentSession?.id;
+      console.log('🚀 Navigating to History after manual session end');
+      
+      if (sessionIdForNavigation) {
+        navigation.navigate('MainTabs', {
+          screen: 'History',
+          params: {
+            highlightSession: sessionIdForNavigation,
+            justCompleted: true
+          }
+        });
+      } else {
+        navigation.navigate('MainTabs', { screen: 'History' });
+      }
+      
+      // Show confirmation after navigation
+      setTimeout(() => {
+        Alert.alert(
+          '✅ Session Ended',
+          `Your training session has been saved successfully!\n\nYour data has been recorded and you can view the results in your session history.`,
+          [{ text: 'OK' }]
+        );
+      }, 500);
+      
     } catch (error) {
       console.error('Failed to terminate session:', error);
-      navigation.goBack();
+      // Still navigate to history even if there's an error
+      navigation.navigate('MainTabs', { screen: 'History' });
     }
   };
 
