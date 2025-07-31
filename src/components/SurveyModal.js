@@ -11,21 +11,7 @@ import {
   Platform,
 } from 'react-native';
 
-interface SurveyModalProps {
-  visible: boolean;
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-  onSubmit: () => void;
-  onCancel?: () => void;
-  submitButtonText?: string;
-  cancelButtonText?: string;
-  submitDisabled?: boolean;
-  isRequired?: boolean;
-  validationErrors?: string[];
-}
-
-const SurveyModal: React.FC<SurveyModalProps> = ({
+const SurveyModal = ({
   visible,
   title,
   subtitle,

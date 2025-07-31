@@ -1,17 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { SurveyScale } from '../types/surveyTypes';
 
-interface SurveyScaleInputProps {
-  label: string;
-  value: SurveyScale | null;
-  onValueChange: (value: SurveyScale) => void;
-  scaleLabels: { [key: number]: string };
-  isRequired?: boolean;
-  disabled?: boolean;
-}
-
-const SurveyScaleInput: React.FC<SurveyScaleInputProps> = ({
+const SurveyScaleInput = ({
   label,
   value,
   onValueChange,
@@ -19,7 +9,7 @@ const SurveyScaleInput: React.FC<SurveyScaleInputProps> = ({
   isRequired = false,
   disabled = false,
 }) => {
-  const scales: SurveyScale[] = [1, 2, 3, 4, 5];
+  const scales = [1, 2, 3, 4, 5];
 
   return (
     <View style={styles.container}>

@@ -1,23 +1,15 @@
-import { 
-  SurveyScale, 
-  PreSessionSurvey, 
-  PostSessionSurvey, 
-  IntraSessionResponse,
-  SurveyValidationResult 
-} from '../types/surveyTypes';
-
 /**
  * Validates if a value is a valid survey scale (1-5)
  */
-export const isValidSurveyScale = (value: any): value is SurveyScale => {
+export const isValidSurveyScale = (value) => {
   return Number.isInteger(value) && value >= 1 && value <= 5;
 };
 
 /**
  * Validates pre-session survey data
  */
-export const validatePreSessionSurvey = (data: Partial<PreSessionSurvey>): SurveyValidationResult => {
-  const errors: string[] = [];
+export const validatePreSessionSurvey = (data) => {
+  const errors = [];
 
   if (!data.clarity || !isValidSurveyScale(data.clarity)) {
     errors.push('Mental clarity is required and must be a value from 1 to 5');
@@ -36,8 +28,8 @@ export const validatePreSessionSurvey = (data: Partial<PreSessionSurvey>): Surve
 /**
  * Validates post-session survey data
  */
-export const validatePostSessionSurvey = (data: Partial<PostSessionSurvey>): SurveyValidationResult => {
-  const errors: string[] = [];
+export const validatePostSessionSurvey = (data) => {
+  const errors = [];
 
   if (!data.clarity || !isValidSurveyScale(data.clarity)) {
     errors.push('Mental clarity is required and must be a value from 1 to 5');
@@ -65,8 +57,8 @@ export const validatePostSessionSurvey = (data: Partial<PostSessionSurvey>): Sur
 /**
  * Validates intra-session response data
  */
-export const validateIntraSessionResponse = (data: Partial<IntraSessionResponse>): SurveyValidationResult => {
-  const errors: string[] = [];
+export const validateIntraSessionResponse = (data) => {
+  const errors = [];
 
   if (!data.clarity || !isValidSurveyScale(data.clarity)) {
     errors.push('Mental clarity is required and must be a value from 1 to 5');
@@ -97,7 +89,7 @@ export const validateIntraSessionResponse = (data: Partial<IntraSessionResponse>
 /**
  * Sanitizes survey notes by trimming whitespace and limiting length
  */
-export const sanitizeSurveyNotes = (notes: string | null | undefined): string | null => {
+export const sanitizeSurveyNotes = (notes) => {
   if (!notes || typeof notes !== 'string') {
     return null;
   }
@@ -114,17 +106,17 @@ export const sanitizeSurveyNotes = (notes: string | null | undefined): string | 
 /**
  * Checks if all required fields are filled for a survey
  */
-export const isPreSessionSurveyComplete = (data: Partial<PreSessionSurvey>): boolean => {
+export const isPreSessionSurveyComplete = (data) => {
   return isValidSurveyScale(data.clarity) && isValidSurveyScale(data.energy);
 };
 
-export const isPostSessionSurveyComplete = (data: Partial<PostSessionSurvey>): boolean => {
+export const isPostSessionSurveyComplete = (data) => {
   return isValidSurveyScale(data.clarity) && 
          isValidSurveyScale(data.energy) && 
          isValidSurveyScale(data.stress);
 };
 
-export const isIntraSessionResponseComplete = (data: Partial<IntraSessionResponse>): boolean => {
+export const isIntraSessionResponseComplete = (data) => {
   return isValidSurveyScale(data.clarity) && 
          isValidSurveyScale(data.energy) && 
          isValidSurveyScale(data.stress) &&
@@ -134,19 +126,19 @@ export const isIntraSessionResponseComplete = (data: Partial<IntraSessionRespons
 /**
  * Creates default survey values with neutral defaults
  */
-export const createDefaultPreSessionSurvey = (): Partial<PreSessionSurvey> => ({
+export const createDefaultPreSessionSurvey = () => ({
   clarity: null,
   energy: null,
 });
 
-export const createDefaultPostSessionSurvey = (): Partial<PostSessionSurvey> => ({
+export const createDefaultPostSessionSurvey = () => ({
   clarity: null,
   energy: null,
   stress: null,
   notes: null,
 });
 
-export const createDefaultIntraSessionResponse = (phaseNumber: number): Partial<IntraSessionResponse> => ({
+export const createDefaultIntraSessionResponse = (phaseNumber) => ({
   clarity: null,
   energy: null,
   stress: null,
@@ -162,4 +154,4 @@ export const SURVEY_ERROR_MESSAGES = {
   INVALID_SCALE: 'Please select a value from 1 to 5',
   NOTES_TOO_LONG: 'Notes should be 500 characters or less',
   GENERAL_VALIDATION: 'Please check your responses and try again',
-} as const; 
+}; 

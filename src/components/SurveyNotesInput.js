@@ -1,17 +1,7 @@
 import React from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
 
-interface SurveyNotesInputProps {
-  label: string;
-  value: string;
-  onValueChange: (value: string) => void;
-  placeholder?: string;
-  maxLength?: number;
-  isRequired?: boolean;
-  disabled?: boolean;
-}
-
-const SurveyNotesInput: React.FC<SurveyNotesInputProps> = ({
+const SurveyNotesInput = ({
   label,
   value,
   onValueChange,
