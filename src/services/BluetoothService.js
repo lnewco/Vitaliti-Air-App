@@ -570,13 +570,14 @@ class BluetoothService {
       const byte4 = buffer[3]; // Pulse rate bits 0-6, sync bit
       const byte5 = buffer[4]; // SpO2 bits 0-6, sync bit
       
-      console.log('📊 BCI Bytes:', {
-        byte1: '0x' + byte1.toString(16).padStart(2, '0').toUpperCase(),
-        byte2: '0x' + byte2.toString(16).padStart(2, '0').toUpperCase(), 
-        byte3: '0x' + byte3.toString(16).padStart(2, '0').toUpperCase(),
-        byte4: '0x' + byte4.toString(16).padStart(2, '0').toUpperCase(),
-        byte5: '0x' + byte5.toString(16).padStart(2, '0').toUpperCase()
-      });
+      // Temporarily disabled to see session creation debugging
+      // console.log('📊 BCI Bytes:', {
+      //   byte1: '0x' + byte1.toString(16).padStart(2, '0').toUpperCase(),
+      //   byte2: '0x' + byte2.toString(16).padStart(2, '0').toUpperCase(), 
+      //   byte3: '0x' + byte3.toString(16).padStart(2, '0').toUpperCase(),
+      //   byte4: '0x' + byte4.toString(16).padStart(2, '0').toUpperCase(),
+      //   byte5: '0x' + byte5.toString(16).padStart(2, '0').toUpperCase()
+      // });
       
       // Parse according to BCI protocol specification
       
@@ -607,19 +608,20 @@ class BluetoothService {
       const pleth = byte2 & 0x7F;
       const isPlethValid = pleth !== 0;
       
-      console.log('🔬 BCI Parsed Values:', {
-        signalStrength,
-        isSignalValid,
-        isProbePlugged,
-        isFingerDetected,
-        isSearchingForPulse,
-        pulseRateRaw,
-        pulseRate,
-        spo2Raw, 
-        spo2,
-        pleth,
-        isPlethValid
-      });
+      // Temporarily disabled to see session creation debugging  
+      // console.log('🔬 BCI Parsed Values:', {
+      //   signalStrength,
+      //   isSignalValid,
+      //   isProbePlugged,
+      //   isFingerDetected,
+      //   isSearchingForPulse,
+      //   pulseRateRaw,
+      //   pulseRate,
+      //   spo2Raw, 
+      //   spo2,
+      //   pleth,
+      //   isPlethValid
+      // });
       
       // Return data even if values are invalid so we can show status
       const result = {
