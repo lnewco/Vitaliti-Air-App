@@ -102,7 +102,7 @@ const PreSessionSurveyScreen = ({
     <SurveyModal
       visible={visible}
       title="Pre-Session Check-in"
-      subtitle="How are you feeling before starting your IHHT session? This helps us track your progress over time."
+      subtitle="Please rate how you're feeling right now. This takes just a moment and helps us understand how IHHT training affects you over time."
       onSubmit={handleSubmit}
       onCancel={onCancel}
       submitButtonText="Start Session"
@@ -112,9 +112,6 @@ const PreSessionSurveyScreen = ({
       validationErrors={validationErrors}
     >
       <View style={styles.surveyContent}>
-        <Text style={styles.introText}>
-          Please rate how you're feeling right now. This takes just a moment and helps us understand how IHHT training affects you over time.
-        </Text>
 
         <SurveyScaleInput
           label="Mental Clarity"
