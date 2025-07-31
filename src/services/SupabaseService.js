@@ -52,6 +52,15 @@ class SupabaseService {
     try {
       // Get current authenticated user (fall back to anonymous)
       const currentUser = authService.getCurrentUser();
+      console.log('🔍 AuthService getCurrentUser():', currentUser);
+      
+      // Check actual Supabase auth state
+      const { data: authUser, error: authError } = await supabase.auth.getUser();
+      console.log('🔍 Supabase auth.getUser():', authUser, authError);
+      
+      // Check auth session
+      const { data: authSession, error: sessionError } = await supabase.auth.getSession();
+      console.log('🔍 Supabase auth.getSession():', authSession, sessionError);
       
       const session = {
         device_id: this.deviceId,
@@ -70,6 +79,14 @@ class SupabaseService {
       console.log('💾 Creating session with device_id:', this.deviceId, 'user_id:', currentUser?.id || 'null');
       console.log('🔐 Auth uid:', currentUser?.id);
       console.log('📱 Device ID for RLS:', this.deviceId);
+      
+      // Ensure device ID is set
+      if (!this.deviceId) {
+        console.error('🚨 CRITICAL: deviceId is null! Initializing now...');
+        await this.initializeDeviceId();
+        console.log('🔧 Initialized deviceId:', this.deviceId);
+        session.device_id = this.deviceId;
+      }
 
       const { data, error } = await supabase
         .from('sessions')
