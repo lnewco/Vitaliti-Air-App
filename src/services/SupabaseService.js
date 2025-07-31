@@ -67,6 +67,10 @@ class SupabaseService {
         local_session_id: sessionData.id
       };
 
+      console.log('💾 Creating session with device_id:', this.deviceId, 'user_id:', currentUser?.id || 'null');
+      console.log('🔐 Auth uid:', currentUser?.id);
+      console.log('📱 Device ID for RLS:', this.deviceId);
+
       const { data, error } = await supabase
         .from('sessions')
         .insert([session])
