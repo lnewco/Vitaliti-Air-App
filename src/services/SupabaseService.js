@@ -404,6 +404,18 @@ class SupabaseService {
           case 'addReadingsBatch':
             success = await this.addReadingsBatch(item.data) !== null;
             break;
+          case 'pre_session_survey':
+            const preResult = await this.syncPreSessionSurvey(item.data.localSessionId, item.data.clarityPre, item.data.energyPre);
+            success = preResult.success && !preResult.queued;
+            break;
+          case 'post_session_survey':
+            const postResult = await this.syncPostSessionSurvey(item.data.localSessionId, item.data.clarityPost, item.data.energyPost, item.data.stressPost, item.data.notesPost);
+            success = postResult.success && !postResult.queued;
+            break;
+          case 'intra_session_response':
+            const intraResult = await this.syncIntraSessionResponse(item.data.localSessionId, item.data.phaseNumber, item.data.clarity, item.data.energy, item.data.stress, item.data.timestamp);
+            success = intraResult.success && !intraResult.queued;
+            break;
         }
 
         if (success) {
@@ -663,7 +675,7 @@ class SupabaseService {
       const supabaseId = this.sessionMapping.get(localSessionId);
       if (!supabaseId) {
         console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
-        this.addToSyncQueue('pre_session_survey', { localSessionId, clarityPre, energyPre });
+        this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
         return { success: true, queued: true };
       }
 
@@ -687,7 +699,7 @@ class SupabaseService {
 
       if (error) {
         console.error('❌ Failed to sync pre-session survey:', error);
-        this.addToSyncQueue('pre_session_survey', { localSessionId, clarityPre, energyPre });
+        this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
         return { success: false, error: error.message };
       }
 
@@ -695,7 +707,7 @@ class SupabaseService {
       return { success: true, data };
     } catch (error) {
       console.error('❌ Error syncing pre-session survey:', error);
-      this.addToSyncQueue('pre_session_survey', { localSessionId, clarityPre, energyPre });
+      this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
       return { success: false, error: error.message };
     }
   }
@@ -711,7 +723,7 @@ class SupabaseService {
       const supabaseId = this.sessionMapping.get(localSessionId);
       if (!supabaseId) {
         console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
-        this.addToSyncQueue('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
+        this.queueForSync('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
         return { success: true, queued: true };
       }
 
@@ -737,7 +749,7 @@ class SupabaseService {
 
       if (error) {
         console.error('❌ Failed to sync post-session survey:', error);
-        this.addToSyncQueue('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
+        this.queueForSync('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
         return { success: false, error: error.message };
       }
 
@@ -745,7 +757,7 @@ class SupabaseService {
       return { success: true, data };
     } catch (error) {
       console.error('❌ Error syncing post-session survey:', error);
-      this.addToSyncQueue('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
+      this.queueForSync('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
       return { success: false, error: error.message };
     }
   }
@@ -761,7 +773,7 @@ class SupabaseService {
       const supabaseId = this.sessionMapping.get(localSessionId);
       if (!supabaseId) {
         console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
-        this.addToSyncQueue('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
+        this.queueForSync('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
         return { success: true, queued: true };
       }
 
@@ -788,7 +800,7 @@ class SupabaseService {
 
       if (error) {
         console.error('❌ Failed to sync intra-session response:', error);
-        this.addToSyncQueue('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
+        this.queueForSync('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
         return { success: false, error: error.message };
       }
 
@@ -796,7 +808,7 @@ class SupabaseService {
       return { success: true, data };
     } catch (error) {
       console.error('❌ Error syncing intra-session response:', error);
-      this.addToSyncQueue('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
+      this.queueForSync('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
       return { success: false, error: error.message };
     }
   }
