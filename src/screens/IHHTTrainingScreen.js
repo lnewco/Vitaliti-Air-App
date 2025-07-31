@@ -73,7 +73,7 @@ const HYPEROXIC_DURATION = 2 * 60; // 2 minutes in seconds
 const TOTAL_CYCLES = 5;
 const TOTAL_DURATION = (HYPOXIC_DURATION + HYPEROXIC_DURATION) * TOTAL_CYCLES; // 35 minutes
 
-const IHHTTrainingScreen = ({ navigation }) => {
+const IHHTTrainingScreen = ({ navigation, route }) => {
   const { 
     pulseOximeterData, 
     heartRateData, 
@@ -81,6 +81,9 @@ const IHHTTrainingScreen = ({ navigation }) => {
     isHRConnected,
     isAnyDeviceConnected 
   } = useBluetooth();
+  
+  // Get sessionId from navigation params (from survey completion)
+  const existingSessionId = route?.params?.sessionId;
   
   // Enhanced session state - using the enhanced session manager
   const [sessionInfo, setSessionInfo] = useState(EnhancedSessionManager.getSessionInfo());
@@ -245,7 +248,8 @@ const IHHTTrainingScreen = ({ navigation }) => {
 
   const startSession = async () => {
     try {
-      await EnhancedSessionManager.startSession();
+      console.log('🔄 Starting IHHT session', existingSessionId ? `with existing sessionId: ${existingSessionId}` : 'with new sessionId');
+      await EnhancedSessionManager.startSession(existingSessionId);
       setSessionInfo(EnhancedSessionManager.getSessionInfo());
     } catch (error) {
       console.error('Failed to start enhanced session:', error);

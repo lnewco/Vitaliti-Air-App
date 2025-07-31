@@ -171,26 +171,32 @@ class EnhancedSessionManager {
   }
 
   // Enhanced session lifecycle with Live Activity support
-  async startSession() {
+  async startSession(existingSessionId = null) {
     if (this.isActive) {
       throw new Error('Session already active');
     }
 
     try {
-      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Use existing session ID if provided (from survey), otherwise generate new one
+      const sessionId = existingSessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log(`🚀 Starting session with ID: ${sessionId} ${existingSessionId ? '(existing)' : '(new)'}`);
       
       // Initialize database if needed
       if (!DatabaseService.db) {
         await DatabaseService.init();
       }
 
-      // Create session in databases
-      await DatabaseService.createSession(sessionId, this.currentHypoxiaLevel);
-      await SupabaseService.createSession({
-        id: sessionId,
-        startTime: Date.now(),
-        defaultHypoxiaLevel: this.currentHypoxiaLevel
-      });
+      // Create session in databases (skip if already exists)
+      if (!existingSessionId) {
+        await DatabaseService.createSession(sessionId, this.currentHypoxiaLevel);
+        await SupabaseService.createSession({
+          id: sessionId,
+          startTime: Date.now(),
+          defaultHypoxiaLevel: this.currentHypoxiaLevel
+        });
+      } else {
+        console.log('📋 Using existing session - skipping database creation');
+      }
 
       // Set session state
       this.currentSession = {

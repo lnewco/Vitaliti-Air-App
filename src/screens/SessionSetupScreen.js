@@ -176,8 +176,8 @@ const SessionSetupScreen = ({ navigation }) => {
         {
           text: 'Start Training',
           onPress: () => {
-            console.log('🚀 Launching IHHT session after survey completion');
-            navigation.navigate('AirSession');
+            console.log('🚀 Launching IHHT session after survey completion with sessionId:', sessionId);
+            navigation.navigate('AirSession', { sessionId: sessionId });
           }
         }
       ]
