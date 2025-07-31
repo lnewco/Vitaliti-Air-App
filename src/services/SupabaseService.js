@@ -8,6 +8,7 @@ class SupabaseService {
     this.syncQueue = [];
     this.deviceId = null;
     this.sessionMapping = new Map(); // local_session_id -> supabase_uuid
+    this.lastSyncTime = null; // For throttling sync queue processing
   }
 
   async initializeDeviceId() {
@@ -345,11 +346,25 @@ class SupabaseService {
 
   // Sync Queue Management
   queueForSync(operation, data) {
+    // Check for duplicate survey items to prevent infinite queuing
+    if (operation.includes('survey') || operation.includes('response')) {
+      const isDuplicate = this.syncQueue.some(item => 
+        item.operation === operation && 
+        item.data.localSessionId === data.localSessionId
+      );
+      
+      if (isDuplicate) {
+        console.log(`⚠️ Skipping duplicate queue item: ${operation} for session ${data.localSessionId}`);
+        return;
+      }
+    }
+
     const syncItem = {
       id: Date.now() + Math.random(),
       operation,
       data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      retryCount: 0
     };
     
     this.syncQueue.push(syncItem);
@@ -382,6 +397,14 @@ class SupabaseService {
   async processSyncQueue() {
     if (!this.isOnline || this.syncQueue.length === 0) return;
 
+    // Throttle sync processing to prevent infinite loops (minimum 5 seconds between runs)
+    const now = Date.now();
+    if (this.lastSyncTime && (now - this.lastSyncTime) < 5000) {
+      console.log('⏱️ Sync queue throttled - too soon since last run');
+      return;
+    }
+    this.lastSyncTime = now;
+
     console.log(`🔄 Processing ${this.syncQueue.length} sync queue items`);
     console.log('🔄 Current session mappings:', Array.from(this.sessionMapping.entries()));
     
@@ -405,16 +428,37 @@ class SupabaseService {
             success = await this.addReadingsBatch(item.data) !== null;
             break;
           case 'pre_session_survey':
-            const preResult = await this.syncPreSessionSurvey(item.data.localSessionId, item.data.clarityPre, item.data.energyPre);
-            success = preResult.success && !preResult.queued;
+            // Check if session mapping exists before trying to sync
+            const supabaseId1 = this.sessionMapping.get(item.data.localSessionId);
+            if (supabaseId1) {
+              const preResult = await this.syncPreSessionSurvey(item.data.localSessionId, item.data.clarityPre, item.data.energyPre);
+              success = preResult.success && !preResult.queued;
+            } else {
+              // Keep in queue but don't retry yet (session mapping doesn't exist)
+              success = false;
+            }
             break;
           case 'post_session_survey':
-            const postResult = await this.syncPostSessionSurvey(item.data.localSessionId, item.data.clarityPost, item.data.energyPost, item.data.stressPost, item.data.notesPost);
-            success = postResult.success && !postResult.queued;
+            // Check if session mapping exists before trying to sync
+            const supabaseId2 = this.sessionMapping.get(item.data.localSessionId);
+            if (supabaseId2) {
+              const postResult = await this.syncPostSessionSurvey(item.data.localSessionId, item.data.clarityPost, item.data.energyPost, item.data.stressPost, item.data.notesPost);
+              success = postResult.success && !postResult.queued;
+            } else {
+              // Keep in queue but don't retry yet (session mapping doesn't exist)
+              success = false;
+            }
             break;
           case 'intra_session_response':
-            const intraResult = await this.syncIntraSessionResponse(item.data.localSessionId, item.data.phaseNumber, item.data.clarity, item.data.energy, item.data.stress, item.data.timestamp);
-            success = intraResult.success && !intraResult.queued;
+            // Check if session mapping exists before trying to sync
+            const supabaseId3 = this.sessionMapping.get(item.data.localSessionId);
+            if (supabaseId3) {
+              const intraResult = await this.syncIntraSessionResponse(item.data.localSessionId, item.data.phaseNumber, item.data.clarity, item.data.energy, item.data.stress, item.data.timestamp);
+              success = intraResult.success && !intraResult.queued;
+            } else {
+              // Keep in queue but don't retry yet (session mapping doesn't exist)
+              success = false;
+            }
             break;
         }
 
