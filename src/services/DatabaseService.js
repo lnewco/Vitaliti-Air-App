@@ -486,29 +486,12 @@ class DatabaseService {
    */
   async savePreSessionSurvey(sessionId, clarityPre, energyPre) {
     try {
-      // Check database state
-      if (!this.db) {
-        throw new Error('Database not initialized - db is null');
-      }
-
       // Validate input
       if (!this.isValidSurveyScale(clarityPre) || !this.isValidSurveyScale(energyPre)) {
         throw new Error('Survey values must be integers between 1 and 5');
       }
 
       console.log(`📝 Saving pre-session survey for: ${sessionId}`);
-      console.log(`📝 Database state: ${this.db ? 'initialized' : 'NOT initialized'}`);
-      
-      // Check if the table exists
-      try {
-        const [result] = await this.db.executeSql(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name='session_surveys'"
-        );
-        console.log(`📝 Table check: session_surveys exists = ${result.rows.length > 0}`);
-      } catch (tableCheckError) {
-        console.error('❌ Error checking table existence:', tableCheckError);
-        throw new Error(`Table check failed: ${tableCheckError.message}`);
-      }
       
       // Use INSERT OR IGNORE followed by UPDATE to preserve existing data
       const insertQuery = `

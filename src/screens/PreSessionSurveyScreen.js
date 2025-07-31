@@ -86,11 +86,9 @@ const PreSessionSurveyScreen = ({
 
     } catch (error) {
       console.error('❌ Error saving pre-session survey:', error);
-      console.error('❌ Error details:', error.message);
-      console.error('❌ Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
       Alert.alert(
         'Save Error',
-        `Failed to save your survey responses. Please try again.\n\nError: ${error.message}`,
+        'Failed to save your survey responses. Please try again.',
         [{ text: 'OK' }]
       );
     } finally {
