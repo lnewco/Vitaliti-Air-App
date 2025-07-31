@@ -4,6 +4,7 @@ import { useBluetooth } from '../context/BluetoothContext';
 import StepIndicator from '../components/StepIndicator';
 import DualDeviceConnectionManager from '../components/DualDeviceConnectionManager';
 import PreSessionSurveyScreen from './PreSessionSurveyScreen';
+import SupabaseService from '../services/SupabaseService';
 import HRV_CONFIG from '../config/hrvConfig';
 
 // Dual-Timeframe HRV Display Component for Session Setup
@@ -148,9 +149,24 @@ const SessionSetupScreen = ({ navigation }) => {
     setShowPreSessionSurvey(true);
   };
 
-  const handleSurveyComplete = () => {
+  const handleSurveyComplete = async () => {
     console.log('✅ Pre-session survey completed for session:', sessionId);
     setShowPreSessionSurvey(false);
+    
+    // Create Supabase session immediately to enable survey sync
+    try {
+      console.log('🔄 Creating Supabase session for survey sync...');
+      const deviceId = await SupabaseService.getDeviceId();
+      await SupabaseService.createSession({
+        localSessionId: sessionId,
+        deviceId: deviceId,
+        sessionType: 'IHHT'
+      });
+      console.log('✅ Supabase session created, survey should sync now');
+    } catch (error) {
+      console.warn('⚠️ Failed to create Supabase session for survey sync:', error);
+      // Continue anyway - survey will remain queued
+    }
     
     // Show confirmation popup and launch session
     Alert.alert(
