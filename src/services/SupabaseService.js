@@ -25,6 +25,13 @@ class SupabaseService {
     }
   }
 
+  async getDeviceId() {
+    if (!this.deviceId) {
+      await this.initializeDeviceId();
+    }
+    return this.deviceId;
+  }
+
   async setupNetworkMonitoring() {
     // Simplified: assume we're always online
     // If Supabase calls fail, they'll be queued automatically

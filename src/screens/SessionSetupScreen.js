@@ -156,7 +156,14 @@ const SessionSetupScreen = ({ navigation }) => {
     // Create Supabase session immediately to enable survey sync
     try {
       console.log('🔄 Creating Supabase session for survey sync...');
+      
+      // Ensure SupabaseService is initialized (fixes deviceId being null)
+      await SupabaseService.initialize();
+      console.log('🔧 SupabaseService initialized for session creation');
+      
       const deviceId = await SupabaseService.getDeviceId();
+      console.log('📱 Using device ID for session:', deviceId);
+      
       await SupabaseService.createSession({
         localSessionId: sessionId,
         deviceId: deviceId,
