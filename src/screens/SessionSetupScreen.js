@@ -165,7 +165,8 @@ const SessionSetupScreen = ({ navigation }) => {
       console.log('📱 Using device ID for session:', deviceId);
       
       await SupabaseService.createSession({
-        localSessionId: sessionId,
+        id: sessionId,
+        startTime: Date.now(),
         deviceId: deviceId,
         sessionType: 'IHHT'
       });
