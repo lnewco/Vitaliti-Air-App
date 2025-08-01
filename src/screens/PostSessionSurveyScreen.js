@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Alert, SafeAreaView, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import SurveyScaleInput from '../components/SurveyScaleInput';
 import SurveyNotesInput from '../components/SurveyNotesInput';
 import DatabaseService from '../services/DatabaseService';
@@ -115,91 +115,103 @@ const PostSessionSurveyScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.keyboardAvoidingView}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <Text style={styles.title}>Post-Session Check-in</Text>
-            <Text style={styles.subtitle}>
-              How are you feeling after your IHHT training? This feedback helps us understand how the training affects you over time.
-            </Text>
-            <Text style={styles.requiredNote}>* Required fields</Text>
+      <KeyboardAvoidingView 
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.innerContainer}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerContent}>
+                <Text style={styles.title}>Post-Session Check-in</Text>
+                <Text style={styles.subtitle}>
+                  How are you feeling after your IHHT training? This feedback helps us understand how the training affects you over time.
+                </Text>
+                <Text style={styles.requiredNote}>* Required fields</Text>
+              </View>
+            </View>
+
+            {/* Validation Errors */}
+            {validationErrors.length > 0 && (
+              <View style={styles.errorContainer}>
+                {validationErrors.map((error, index) => (
+                  <Text key={index} style={styles.errorText}>
+                    • {error}
+                  </Text>
+                ))}
+              </View>
+            )}
+
+            {/* Content */}
+            <ScrollView 
+              style={styles.content}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.surveyContent}>
+                {/* Mental Clarity Scale */}
+                <SurveyScaleInput
+                  label="Mental Clarity"
+                  value={surveyData.clarity}
+                  onValueChange={handleClarityChange}
+                  scaleLabels={CLARITY_LABELS}
+                  isRequired={true}
+                  disabled={isSubmitting}
+                />
+
+                {/* Energy Level Scale */}
+                <SurveyScaleInput
+                  label="Energy Level"
+                  value={surveyData.energy}
+                  onValueChange={handleEnergyChange}
+                  scaleLabels={ENERGY_LABELS}
+                  isRequired={true}
+                  disabled={isSubmitting}
+                />
+
+                {/* Physiological Stress Scale */}
+                <SurveyScaleInput
+                  label="Physiological Stress"
+                  value={surveyData.stress}
+                  onValueChange={handleStressChange}
+                  scaleLabels={STRESS_LABELS}
+                  isRequired={true}
+                  disabled={isSubmitting}
+                />
+
+                {/* Notes Section (Optional) */}
+                <SurveyNotesInput
+                  label="Would you like to add anything else?"
+                  value={surveyData.notes || ''}
+                  onValueChange={handleNotesChange}
+                  placeholder="Add any notes about your session experience (optional)"
+                  maxLength={500}
+                  disabled={isSubmitting}
+                />
+                
+                {/* Extra padding to ensure text input is visible when keyboard is open */}
+                <View style={styles.keyboardPadding} />
+              </View>
+            </ScrollView>
+
+            {/* Footer */}
+            <View style={styles.footer}>
+              <TouchableOpacity
+                style={[styles.button, styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
+                onPress={handleSubmit}
+                disabled={!canSubmit}
+              >
+                <Text style={[styles.buttonText, styles.submitButtonText, !canSubmit && styles.submitButtonTextDisabled]}>
+                  {isSubmitting ? 'Saving...' : 'Complete Session'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-
-        {/* Validation Errors */}
-        {validationErrors.length > 0 && (
-          <View style={styles.errorContainer}>
-            {validationErrors.map((error, index) => (
-              <Text key={index} style={styles.errorText}>
-                • {error}
-              </Text>
-            ))}
-          </View>
-        )}
-
-        {/* Content */}
-        <ScrollView 
-          style={styles.content}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.surveyContent}>
-            {/* Mental Clarity Scale */}
-            <SurveyScaleInput
-              label="Mental Clarity"
-              value={surveyData.clarity}
-              onValueChange={handleClarityChange}
-              scaleLabels={CLARITY_LABELS}
-              isRequired={true}
-              disabled={isSubmitting}
-            />
-
-            {/* Energy Level Scale */}
-            <SurveyScaleInput
-              label="Energy Level"
-              value={surveyData.energy}
-              onValueChange={handleEnergyChange}
-              scaleLabels={ENERGY_LABELS}
-              isRequired={true}
-              disabled={isSubmitting}
-            />
-
-            {/* Physiological Stress Scale */}
-            <SurveyScaleInput
-              label="Physiological Stress"
-              value={surveyData.stress}
-              onValueChange={handleStressChange}
-              scaleLabels={STRESS_LABELS}
-              isRequired={true}
-              disabled={isSubmitting}
-            />
-
-            {/* Notes Section (Optional) */}
-            <SurveyNotesInput
-              label="Would you like to add anything else?"
-              value={surveyData.notes || ''}
-              onValueChange={handleNotesChange}
-              placeholder="Add any notes about your session experience (optional)"
-              maxLength={500}
-              disabled={isSubmitting}
-            />
-          </View>
-        </ScrollView>
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[styles.button, styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={!canSubmit}
-          >
-            <Text style={[styles.buttonText, styles.submitButtonText, !canSubmit && styles.submitButtonTextDisabled]}>
-              {isSubmitting ? 'Saving...' : 'Complete Session'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -210,6 +222,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   keyboardAvoidingView: {
+    flex: 1,
+  },
+  innerContainer: {
     flex: 1,
   },
   header: {
@@ -264,6 +279,9 @@ const styles = StyleSheet.create({
   },
   surveyContent: {
     gap: 24,
+  },
+  keyboardPadding: {
+    height: 100, // Extra space to ensure text input is visible above keyboard
   },
   footer: {
     flexDirection: 'row',

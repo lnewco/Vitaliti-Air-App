@@ -7,7 +7,17 @@ const StepIndicator = ({ currentStep, totalSteps, steps }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.progressBar}>
+      {/* Progress line background */}
+      <View style={styles.progressLineContainer}>
+        <View style={styles.progressLineBackground} />
+        <View style={[
+          styles.progressLineFilled, 
+          { width: `${((currentStep - 1) / (totalSteps - 1)) * 100}%` }
+        ]} />
+      </View>
+
+      {/* Steps */}
+      <View style={styles.stepsContainer}>
         {Array.from({ length: totalSteps }, (_, index) => {
           const stepNumber = index + 1;
           const isCompleted = stepNumber < currentStep;
@@ -15,7 +25,7 @@ const StepIndicator = ({ currentStep, totalSteps, steps }) => {
           const isUpcoming = stepNumber > currentStep;
 
           return (
-            <View key={stepNumber} style={styles.stepContainer}>
+            <View key={stepNumber} style={styles.stepWrapper}>
               {/* Step Circle */}
               <View style={[
                 styles.stepCircle,
@@ -44,14 +54,6 @@ const StepIndicator = ({ currentStep, totalSteps, steps }) => {
               ]}>
                 {stepLabels[index]}
               </Text>
-
-              {/* Connector Line */}
-              {index < totalSteps - 1 && (
-                <View style={[
-                  styles.connector,
-                  isCompleted && styles.connectorCompleted,
-                ]} />
-              )}
             </View>
           );
         })}
@@ -63,29 +65,55 @@ const StepIndicator = ({ currentStep, totalSteps, steps }) => {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
-    paddingVertical: 24,
+    paddingTop: 24,
+    paddingBottom: 60, // Even more padding to fully contain all step label text
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
-  progressBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepContainer: {
-    alignItems: 'center',
-    flex: 1,
+  progressLineContainer: {
     position: 'relative',
+    height: 2,
+    marginTop: 18, // Center with circles (36px circle height / 2)
+    marginHorizontal: 50, // Increased margin to shorten line and center between circles
+  },
+  progressLineBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#D1D5DB',
+  },
+  progressLineFilled: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    height: 2,
+    backgroundColor: '#10B981',
+  },
+  stepsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    position: 'absolute',
+    top: 24,
+    left: 20,
+    right: 20,
+  },
+  stepWrapper: {
+    alignItems: 'center',
+    width: 80, // Fixed width for consistent spacing
   },
   stepCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
     borderWidth: 2,
+    backgroundColor: '#FFFFFF',
   },
   stepCompleted: {
     backgroundColor: '#10B981',
@@ -100,7 +128,7 @@ const styles = StyleSheet.create({
     borderColor: '#D1D5DB',
   },
   stepNumber: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   stepNumberCurrent: {
@@ -111,14 +139,15 @@ const styles = StyleSheet.create({
   },
   checkmark: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   stepLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     textAlign: 'center',
-    maxWidth: 100,
+    maxWidth: 76,
+    lineHeight: 16,
   },
   stepLabelCurrent: {
     color: '#3B82F6',
@@ -126,18 +155,6 @@ const styles = StyleSheet.create({
   },
   stepLabelUpcoming: {
     color: '#9CA3AF',
-  },
-  connector: {
-    position: 'absolute',
-    top: 19, // Center of circle (40px height / 2 - 1px for line)
-    left: '50%',
-    width: '100%',
-    height: 2,
-    backgroundColor: '#D1D5DB',
-    zIndex: -1,
-  },
-  connectorCompleted: {
-    backgroundColor: '#10B981',
   },
 });
 
