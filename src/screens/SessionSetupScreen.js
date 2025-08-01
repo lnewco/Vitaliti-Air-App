@@ -1,115 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { useBluetoothConnection, useBluetoothData } from '../context/BluetoothContext';
+import { useBluetoothConnection } from '../context/BluetoothContext';
 import StepIndicator from '../components/StepIndicator';
+import OptimizedConnectionManager from '../components/OptimizedConnectionManager';
 
-// Optimized: Separate component for high-frequency data display (memoized)
-const BluetoothDataDisplay = React.memo(() => {
-  const { pulseOximeterData, heartRateData, persistentHRV } = useBluetoothData();
-  const { isPulseOxConnected, isHRConnected } = useBluetoothConnection();
 
-  const DualHRVDisplay = ({ heartRateData }) => {
-    if (!heartRateData) return null;
-    
-    // Use persistentHRV for more stable values, fallback to heartRateData
-    const quickHRV = persistentHRV?.quickHRV || heartRateData?.quickHRV;
-    const realHRV = persistentHRV?.realHRV || heartRateData?.realHRV;
-    
-    if (!quickHRV && !realHRV) return null;
-    
-    return (
-      <View style={styles.hrvDisplayContainer}>
-        {quickHRV && (
-          <View style={styles.hrvItem}>
-            <Text style={styles.hrvLabel}>Quick HRV ({quickHRV.windowSize}s)</Text>
-            <Text style={styles.hrvValue}>{quickHRV.rmssd}ms</Text>
-            <Text style={styles.hrvQuality}>{quickHRV.dataQuality} quality</Text>
-          </View>
-        )}
-        {realHRV && (
-          <View style={styles.hrvItem}>
-            <Text style={styles.hrvLabel}>Real HRV ({realHRV.windowSize}s)</Text>
-            <Text style={styles.hrvValue}>{realHRV.rmssd}ms</Text>
-            <Text style={styles.hrvQuality}>{realHRV.dataQuality} quality</Text>
-          </View>
-        )}
-      </View>
-    );
-  };
-
-  if (!isPulseOxConnected && !isHRConnected) {
-    return null;
-  }
-
-  // Display different titles based on connection and data state
-  let title, description;
-  if (isPulseOxConnected && isHRConnected) {
-    title = heartRateData?.hrv ? "Dual Device Setup Complete" : "Dual Device Setup - HRV Loading";
-    description = heartRateData?.hrv
-      ? "Both pulse oximeter and heart rate monitor connected with HRV analysis ready"
-      : "Both devices connected. HRV analysis starting...";
-  } else if (isHRConnected) {
-    title = heartRateData?.hrv ? "WHOOP Connected - Enhanced HRV Ready" : "WHOOP Connected - HRV Loading";
-    description = heartRateData?.hrv
-      ? "Your heart rate monitor is providing real-time HRV analysis"
-      : "Heart rate monitor connected. Collecting initial HRV data...";
-  } else {
-    title = "Pulse Oximeter Connected";
-    description = "Your pulse oximeter is providing real-time SpO₂ and heart rate monitoring";
-  }
-
-  return (
-    <View style={styles.connectionCard}>
-      <View style={styles.connectionHeader}>
-        <Text style={styles.connectionTitle}>{title}</Text>
-        <Text style={styles.connectionDescription}>{description}</Text>
-      </View>
-      
-      <View style={styles.deviceDataContainer}>
-        {heartRateData && (
-          <View style={[styles.dataCard, styles.hrCard]}>
-            <Text style={styles.dataLabel}>Heart Rate Monitor</Text>
-            <View style={styles.dataRow}>
-              <Text style={[styles.dataValue, styles.primaryDataValue]}>{heartRateData.heartRate || '--'} bpm</Text>
-            </View>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataSubLabel}>Sensor Contact:</Text>
-              <Text style={[styles.dataSubValue, heartRateData.sensorContactDetected ? styles.goodStatus : styles.warningStatus]}>
-                {heartRateData.sensorContactDetected ? '✅ Good' : '⚠️ Check placement'}
-              </Text>
-            </View>
-            {!heartRateData.sensorContactDetected && (
-              <Text style={styles.sensorWarning}>
-                Ensure the heart rate monitor is properly positioned and has good skin contact
-              </Text>
-            )}
-            
-            <DualHRVDisplay heartRateData={heartRateData} />
-          </View>
-        )}
-        
-        {pulseOximeterData && (
-          <View style={[styles.dataCard, styles.pulseOxCard]}>
-            <Text style={styles.dataLabel}>Pulse Oximeter</Text>
-            <View style={styles.dataRow}>
-              <Text style={[styles.dataValue, !isHRConnected && styles.primaryDataValue]}>{pulseOximeterData.spo2 || '--'}%</Text>
-              <Text style={styles.dataUnit}>SpO₂</Text>
-            </View>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataValue}>{pulseOximeterData.heartRate || '--'} bpm</Text>
-            </View>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataSubLabel}>Signal:</Text>
-              <Text style={styles.dataSubValue}>
-                {pulseOximeterData.signalStrength ? `${pulseOximeterData.signalStrength}/15` : '--'}
-              </Text>
-            </View>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-});
 
 const SessionSetupScreen = ({ navigation }) => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -189,7 +84,7 @@ const SessionSetupScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.stepContent}>
-          <BluetoothDataDisplay />
+          <OptimizedConnectionManager />
         </View>
       </ScrollView>
 
@@ -1033,115 +928,7 @@ const styles = StyleSheet.create({
      fontSize: 10,
      color: '#6B7280',
      textAlign: 'center',
-   },
-  // New styles for BluetoothDataDisplay
-  connectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  connectionHeader: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  connectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  connectionDescription: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 20,
-    maxWidth: 320,
-  },
-  deviceDataContainer: {
-    flexDirection: 'column',
-    gap: 16,
-  },
-  dataCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4ECDC4',
-  },
-  dataLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  dataRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  dataSubLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginRight: 8,
-  },
-  dataSubValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  goodStatus: {
-    color: '#10B981',
-  },
-  warningStatus: {
-    color: '#F59E0B',
-  },
-  sensorWarning: {
-    fontSize: 12,
-    color: '#F59E0B',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  dataUnit: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginLeft: 4,
-  },
-  pulseOxCard: {
-    borderLeftColor: '#FFE66D',
-  },
-  hrvDisplayContainer: {
-    flexDirection: 'column',
-    gap: 8,
-    marginTop: 16,
-  },
-  hrvItem: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4ECDC4',
-  },
-  hrvLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#374151',
-    marginBottom: 4,
-  },
-  hrvValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#059669',
-    marginBottom: 4,
-  },
-  hrvQuality: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
+       },
 
 });
 
