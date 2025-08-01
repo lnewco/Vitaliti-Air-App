@@ -570,7 +570,6 @@ class BluetoothService {
       const byte4 = buffer[3]; // Pulse rate bits 0-6, sync bit
       const byte5 = buffer[4]; // SpO2 bits 0-6, sync bit
       
-      // Temporarily disabled to see session creation debugging
       // console.log('📊 BCI Bytes:', {
       //   byte1: '0x' + byte1.toString(16).padStart(2, '0').toUpperCase(),
       //   byte2: '0x' + byte2.toString(16).padStart(2, '0').toUpperCase(), 
@@ -608,7 +607,6 @@ class BluetoothService {
       const pleth = byte2 & 0x7F;
       const isPlethValid = pleth !== 0;
       
-      // Temporarily disabled to see session creation debugging  
       // console.log('🔬 BCI Parsed Values:', {
       //   signalStrength,
       //   isSignalValid,
@@ -617,7 +615,7 @@ class BluetoothService {
       //   isSearchingForPulse,
       //   pulseRateRaw,
       //   pulseRate,
-      //   spo2Raw, 
+      //   spo2Raw,
       //   spo2,
       //   pleth,
       //   isPlethValid
@@ -635,11 +633,11 @@ class BluetoothService {
         rawData: originalBase64Data
       };
       
-      if (spo2 !== null || pulseRate !== null) {
-        console.log('✅ Valid BCI data:', result);
-      } else {
-        console.log('⚠️ BCI status data (no valid measurements):', result);
-      }
+      // if (spo2 !== null || pulseRate !== null) {
+      //   console.log('✅ Valid BCI data:', result);
+      // } else {
+      //   console.log('⚠️ BCI status data (no valid measurements):', result);
+      // }
       
       return result;
       

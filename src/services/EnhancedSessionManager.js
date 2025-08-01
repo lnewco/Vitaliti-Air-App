@@ -620,19 +620,19 @@ class EnhancedSessionManager {
     console.log('📋 SESSION SUMMARY - EASY TO READ');
     console.log('='.repeat(60));
     console.log(`🆔 Session ID: ${sessionId}`);
-    console.log(`⏰ Duration: ${Math.round((Date.now() - this.currentSession.startTime) / 1000)} seconds`);
+    console.log(`⏰ Duration: ${Math.round((Date.now() - (completedSession.startTime || Date.now())) / 1000)} seconds`);
     console.log(`📊 Total readings collected: ${stats ? stats.totalReadings : 'Unknown'}`);
     console.log(`💓 Average Heart Rate: ${stats ? (stats.avgHeartRate || 'No data') : 'Unknown'}`);
     console.log(`🫁 Average SpO2: ${stats ? (stats.avgSpO2 || 'No data') : 'Unknown'}`);
     console.log(`🔄 Reading buffer size: ${this.readingBuffer.length}`);
-    console.log(`📱 Session reading count: ${this.currentSession.readingCount}`);
+    console.log(`📱 Session reading count: ${completedSession.readingCount || 0}`);
     console.log(`🔗 Session mapping entries: ${SupabaseService.sessionMapping.size}`);
     console.log(`📤 Sync queue items: ${SupabaseService.syncQueue.length}`);
     console.log(`💾 Has session mapping for this ID: ${SupabaseService.sessionMapping.has(sessionId) ? '✅ Yes' : '❌ No'}`);
     
     if (stats && stats.totalReadings > 0) {
       console.log('✅ SUCCESS: Pulse oximeter data was collected and saved!');
-    } else if (this.currentSession.readingCount > 0) {
+    } else if (completedSession.readingCount > 0) {
       console.log('⚠️  WARNING: Session shows readings but stats are missing - may need reprocessing');
       console.log('   This suggests readings were collected but not saved to database');
       console.log('   Check session mapping recovery in next session');

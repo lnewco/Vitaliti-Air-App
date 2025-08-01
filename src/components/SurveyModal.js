@@ -23,6 +23,7 @@ const SurveyModal = ({
   submitDisabled = false,
   isRequired = false,
   validationErrors = [],
+  stepIndicator = null,
 }) => {
   return (
     <Modal
@@ -32,6 +33,9 @@ const SurveyModal = ({
       statusBarTranslucent={false}
     >
       <SafeAreaView style={styles.container}>
+        {/* Step Indicator */}
+        {stepIndicator && stepIndicator}
+        
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

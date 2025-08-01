@@ -52,12 +52,6 @@ const SurveyScaleInput = ({
           {scaleLabels[5]}
         </Text>
       </View>
-      
-      {value && (
-        <Text style={styles.selectedValue}>
-          Selected: {value} - {scaleLabels[value]}
-        </Text>
-      )}
     </View>
   );
 };
@@ -133,13 +127,6 @@ const styles = StyleSheet.create({
   },
   rightLabel: {
     textAlign: 'right',
-  },
-  selectedValue: {
-    fontSize: 14,
-    color: '#007bff',
-    textAlign: 'center',
-    fontWeight: '500',
-    marginTop: 4,
   },
 });
 

@@ -149,34 +149,10 @@ const SessionSetupScreen = ({ navigation }) => {
     setShowPreSessionSurvey(true);
   };
 
-  const handleSurveyComplete = async () => {
+  const handleSurveyComplete = () => {
     console.log('✅ Pre-session survey completed for session:', sessionId);
-    setShowPreSessionSurvey(false);
     
-    // Create Supabase session immediately to enable survey sync
-    try {
-      console.log('🔄 Creating Supabase session for survey sync...');
-      
-      // Ensure SupabaseService is initialized (fixes deviceId being null)
-      await SupabaseService.initialize();
-      console.log('🔧 SupabaseService initialized for session creation');
-      
-      const deviceId = await SupabaseService.getDeviceId();
-      console.log('📱 Using device ID for session:', deviceId);
-      
-      await SupabaseService.createSession({
-        id: sessionId,
-        startTime: Date.now(),
-        deviceId: deviceId,
-        sessionType: 'IHHT'
-      });
-      console.log('✅ Supabase session created, survey should sync now');
-    } catch (error) {
-      console.warn('⚠️ Failed to create Supabase session for survey sync:', error);
-      // Continue anyway - survey will remain queued
-    }
-    
-    // Show confirmation popup and launch session
+    // Show confirmation popup immediately - no waiting for async operations
     Alert.alert(
       '🎯 Starting Your IHHT Session',
       `Great! Your pre-session survey is complete.\n\n• 5 cycles of hypoxic-hyperoxic training\n• Approximately 35 minutes duration\n• Real-time safety monitoring\n\nGet comfortable and prepare to begin!`,
@@ -184,18 +160,50 @@ const SessionSetupScreen = ({ navigation }) => {
         {
           text: 'Start Training',
           onPress: () => {
-            console.log('🚀 Launching IHHT session after survey completion with sessionId:', sessionId);
+            console.log('🚀 Starting IHHT session directly after survey completion with sessionId:', sessionId);
+            // Hide survey and navigate directly to training
+            setShowPreSessionSurvey(false);
             navigation.navigate('AirSession', { sessionId: sessionId });
           }
         }
       ]
     );
+
+    // Create Supabase session in background (non-blocking)
+    (async () => {
+      try {
+        console.log('🔄 Creating Supabase session for survey sync in background...');
+        
+        // Ensure SupabaseService is initialized (fixes deviceId being null)
+        await SupabaseService.initialize();
+        console.log('🔧 SupabaseService initialized for session creation');
+        
+        const deviceId = await SupabaseService.getDeviceId();
+        console.log('📱 Using device ID for session:', deviceId);
+        
+        await SupabaseService.createSession({
+          id: sessionId,
+          startTime: Date.now(),
+          deviceId: deviceId,
+          sessionType: 'IHHT'
+        });
+        console.log('✅ Supabase session created in background, survey should sync now');
+      } catch (error) {
+        console.warn('⚠️ Failed to create Supabase session for survey sync:', error);
+        // Continue anyway - survey will remain queued
+      }
+    })();
   };
 
   const handleSurveyCancel = () => {
     console.log('❌ Pre-session survey cancelled');
     setShowPreSessionSurvey(false);
     setSessionId(null);
+  };
+
+  const handleDirectStartTraining = () => {
+    console.log('🚀 Starting training directly from Ready to Begin step with sessionId:', sessionId);
+    navigation.navigate('AirSession', { sessionId: sessionId });
   };
 
 
@@ -225,7 +233,7 @@ const SessionSetupScreen = ({ navigation }) => {
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.continueButton, !isAnyDeviceConnected && styles.continueButtonDisabled]}
-          onPress={() => isAnyDeviceConnected && setCurrentStep(2)}
+          onPress={() => isAnyDeviceConnected && handleStartSession()}
           disabled={!isAnyDeviceConnected}
         >
           <Text style={[styles.continueButtonText, !isAnyDeviceConnected && styles.continueButtonTextDisabled]}>
@@ -236,7 +244,9 @@ const SessionSetupScreen = ({ navigation }) => {
     </View>
   );
 
-  const renderStep2 = () => {
+
+
+  const renderStep3 = () => {
     // Dynamic title and description based on connected devices
     let title = "Ready to Begin";
     let description = "Your devices are connected and reading data. You're ready to start your IHHT training session.";
@@ -380,11 +390,11 @@ const SessionSetupScreen = ({ navigation }) => {
         </ScrollView>
 
         <View style={styles.stepActions}>
-          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+          <TouchableOpacity style={styles.backButton} onPress={() => setCurrentStep(1)}>
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.startSessionButton} onPress={handleStartSession}>
-            <Text style={styles.startSessionButtonText}>Continue to Survey</Text>
+          <TouchableOpacity style={styles.startSessionButton} onPress={handleDirectStartTraining}>
+            <Text style={styles.startSessionButtonText}>Start Training</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -395,10 +405,14 @@ const SessionSetupScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StepIndicator currentStep={currentStep} totalSteps={2} />
+      <StepIndicator 
+        currentStep={currentStep} 
+        totalSteps={3}
+        steps={['Connect Device', 'Complete check-in', 'Ready to Begin']}
+      />
       
       {currentStep === 1 && renderStep1()}
-      {currentStep === 2 && renderStep2()}
+      {currentStep === 3 && renderStep3()}
       
       {/* Pre-Session Survey Modal */}
       {sessionId && (
@@ -805,6 +819,7 @@ const styles = StyleSheet.create({
   stableHrvContainer: {
     paddingVertical: 12,
   },
+
 
 });
 

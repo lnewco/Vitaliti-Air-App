@@ -12,12 +12,13 @@ import {
   Dimensions,
   SafeAreaView
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
 import SessionManager from '../services/SessionManager';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-const SessionHistoryScreen = () => {
+const SessionHistoryScreen = ({ route, navigation }) => {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState(null);
@@ -28,12 +29,106 @@ const SessionHistoryScreen = () => {
     loadSessions();
   }, []);
 
+  // Refresh sessions when screen comes into focus (e.g., after ending a session)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadSessions();
+    }, [])
+  );
+
+  // Check if we should auto-show a session modal (from post-session survey)
+  useEffect(() => {
+    const showSessionId = route?.params?.showSessionId;
+    
+    if (showSessionId) {
+      
+              if (sessions.length > 0) {
+          // Find the session in our loaded sessions (by ID or local_session_id)
+          const targetSession = sessions.find(session => 
+            session.id === showSessionId || 
+            session.local_session_id === showSessionId
+          );
+          if (targetSession) {
+            loadSessionDetails(targetSession.id); // Use the actual session ID, not the search ID
+            // Clear the navigation param to prevent re-triggering
+            navigation.setParams({ showSessionId: null });
+          } else {
+            // Wait a bit longer for sessions to sync, then try direct lookup
+            setTimeout(() => {
+              loadSessionDetails(showSessionId);
+            }, 1000);
+            // Clear the navigation param to prevent re-triggering
+            navigation.setParams({ showSessionId: null });
+          }
+        } else if (!loading) {
+          // Sessions list is empty but we're not loading, try direct lookup
+          loadSessionDetails(showSessionId);
+          // Clear the navigation param to prevent re-triggering
+          navigation.setParams({ showSessionId: null });
+        }
+        // If still loading, wait for next effect cycle
+    }
+  }, [sessions, route?.params?.showSessionId, loading]);
+
   const loadSessions = async () => {
     try {
       setLoading(true);
-      const allSessions = await SessionManager.getAllSessions();
       
-
+      // Get sessions from local database
+      const localSessions = await SessionManager.getAllSessions();
+      
+      // Get sessions from Supabase as backup/supplement
+      let supabaseSessions = [];
+      try {
+        const SupabaseService = require('../services/SupabaseService').default;
+        await SupabaseService.initialize();
+        
+        // Get recent sessions from Supabase (last 24 hours)
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        // Import supabase client directly
+        const supabase = require('../config/supabase').default;
+        
+        const { data: supabaseData, error } = await supabase
+          .from('sessions')
+          .select('*')
+          .gte('start_time', yesterday.toISOString())
+          .order('start_time', { ascending: false })
+          .limit(20);
+          
+        if (supabaseData && !error) {
+          // Convert Supabase format to match local format
+          supabaseSessions = supabaseData.map(session => ({
+            ...session,
+            start_time: new Date(session.start_time).getTime(),
+            end_time: session.end_time ? new Date(session.end_time).getTime() : null,
+            total_readings: session.total_readings || 0,
+            avg_spo2: session.avg_spo2,
+            avg_heart_rate: session.avg_heart_rate
+          }));
+        }
+      } catch (supabaseError) {
+        console.warn('⚠️ Could not load Supabase sessions:', supabaseError.message);
+      }
+      
+      // Merge and deduplicate sessions (local takes priority for conflicts)
+      const sessionMap = new Map();
+      
+      // Add local sessions first (priority)
+      localSessions.forEach(session => {
+        sessionMap.set(session.id, { ...session, source: 'local' });
+      });
+      
+      // Add Supabase sessions that aren't already in local
+      supabaseSessions.forEach(session => {
+        if (!sessionMap.has(session.id)) {
+          sessionMap.set(session.id, { ...session, source: 'supabase' });
+        }
+      });
+      
+      const allSessions = Array.from(sessionMap.values())
+        .sort((a, b) => b.start_time - a.start_time); // Sort by newest first
       
       setSessions(allSessions);
     } catch (error) {
@@ -50,18 +145,105 @@ const SessionHistoryScreen = () => {
 
   const loadSessionDetails = async (sessionId) => {
     try {
-      const data = await SessionManager.getSessionWithData(sessionId);
-      setSessionData(data);
+      // Show modal immediately with loading state
       setSelectedSession(sessionId);
+      setSessionData(null); // Clear previous data
       setModalVisible(true);
+      
+      // Try to get data from local database first
+      let sessionData = await SessionManager.getSessionWithData(sessionId);
+      
+              // If local data is missing, incomplete, or has no valid readings, try Supabase
+        const hasValidReadings = sessionData?.readings?.length > 0 && sessionData.total_readings > 0;
+        
+        if (!sessionData || !hasValidReadings) {
+        try {
+          const SupabaseService = require('../services/SupabaseService').default;
+          const { supabase } = require('../config/supabase');
+          
+          // Ensure SupabaseService is initialized
+          await SupabaseService.initialize();
+          
+          // Get session from Supabase using direct client
+          const supabaseSessionData = await supabase
+            .from('sessions')
+            .select('*')
+            .eq('id', sessionId)
+            .single();
+          
+                    if (supabaseSessionData.data) {
+            // Try to get readings using both the Supabase ID and local session ID
+            const possibleSessionIds = [
+              sessionId, // Current session ID (might be Supabase UUID)
+              supabaseSessionData.data.local_session_id // Original local session ID
+            ].filter(Boolean);
+            
+            let supabaseReadings = null;
+            for (const trySessionId of possibleSessionIds) {
+              const readingsResult = await supabase
+                .from('readings')
+                .select('*')
+                .eq('session_id', trySessionId)
+                .eq('is_valid', true)
+                .order('timestamp', { ascending: true });
+              
+              if (readingsResult.data && readingsResult.data.length > 0) {
+                supabaseReadings = readingsResult;
+                break;
+              }
+            }
+            
+            // Format Supabase data to match local format
+            const session = supabaseSessionData.data;
+            const readings = supabaseReadings.data || [];
+            
+            // Calculate stats from readings
+            const validSpo2Readings = readings.filter(r => r.spo2 && r.spo2 > 0).map(r => r.spo2);
+            const validHRReadings = readings.filter(r => r.heart_rate && r.heart_rate > 0).map(r => r.heart_rate);
+            
+
+            
+            sessionData = {
+              id: session.id,
+              start_time: session.start_time ? new Date(session.start_time).getTime() : null,
+              end_time: session.end_time ? new Date(session.end_time).getTime() : null,
+              status: session.status || 'unknown',
+              total_readings: session.total_readings || readings.length || 0,
+              readings: readings,
+              // Calculate stats from readings if available
+              min_spo2: validSpo2Readings.length > 0 ? Math.min(...validSpo2Readings) : null,
+              max_spo2: validSpo2Readings.length > 0 ? Math.max(...validSpo2Readings) : null,
+              min_heart_rate: validHRReadings.length > 0 ? Math.min(...validHRReadings) : null,
+              max_heart_rate: validHRReadings.length > 0 ? Math.max(...validHRReadings) : null,
+              source: 'supabase'
+            };
+          }
+        } catch (supabaseError) {
+          console.warn('⚠️ Failed to load from Supabase:', supabaseError.message);
+        }
+      }
+      
+      if (sessionData) {
+        setSessionData(sessionData); // Update modal with data
+      } else {
+        setModalVisible(false); // Hide modal on error
+        Alert.alert('Error', 'Session data not found');
+      }
     } catch (error) {
       console.error('Failed to load session details:', error);
-      Alert.alert('Error', 'Failed to load session data');
+      Alert.alert('Error', 'Failed to load session details');
     }
   };
 
   const formatDate = (timestamp) => {
+    if (!timestamp) return 'Unknown Date';
+    
     const date = new Date(timestamp);
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid timestamp for date formatting:', timestamp);
+      return 'Invalid Date';
+    }
+    
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {
       hour: '2-digit',
       minute: '2-digit'
@@ -175,10 +357,8 @@ const SessionHistoryScreen = () => {
   };
 
   const renderSessionModal = () => {
-    if (!sessionData) return null;
-
-    const spo2ChartData = prepareChartData(sessionData.readings, 'spo2');
-    const hrChartData = prepareChartData(sessionData.readings, 'heart_rate');
+    const spo2ChartData = sessionData ? prepareChartData(sessionData.readings, 'spo2') : null;
+    const hrChartData = sessionData ? prepareChartData(sessionData.readings, 'heart_rate') : null;
 
     return (
       <Modal
@@ -201,38 +381,53 @@ const SessionHistoryScreen = () => {
           {/* Session Summary */}
           <View style={styles.summaryContainer}>
             <Text style={styles.sectionTitle}>Session Summary</Text>
-            <Text style={styles.sessionId}>ID: {sessionData.id}</Text>
-            <Text style={styles.sessionTimestamp}>
-              {formatDate(sessionData.start_time)}
-            </Text>
             
-            <View style={styles.summaryGrid}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Duration</Text>
-                <Text style={styles.summaryValue}>
-                  {formatDuration(sessionData.start_time, sessionData.end_time)}
+            {sessionData ? (
+              <>
+                <Text style={styles.sessionId}>ID: {sessionData.id}</Text>
+                <Text style={styles.sessionTimestamp}>
+                  {formatDate(sessionData.start_time)}
                 </Text>
+                
+                <View style={styles.summaryGrid}>
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryLabel}>Duration</Text>
+                    <Text style={styles.summaryValue}>
+                      {formatDuration(sessionData.start_time, sessionData.end_time)}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryLabel}>Total Readings</Text>
+                    <Text style={styles.summaryValue}>{sessionData.total_readings}</Text>
+                  </View>
+                  
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryLabel}>SpO2 Range</Text>
+                    <Text style={styles.summaryValue}>
+                      {sessionData.min_spo2 && sessionData.max_spo2 
+                        ? `${Math.round(sessionData.min_spo2)}-${Math.round(sessionData.max_spo2)}%` 
+                        : 'No data'
+                      }
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryLabel}>HR Range</Text>
+                    <Text style={styles.summaryValue}>
+                      {sessionData.min_heart_rate && sessionData.max_heart_rate 
+                        ? `${Math.round(sessionData.min_heart_rate)}-${Math.round(sessionData.max_heart_rate)} bpm`
+                        : 'No data'
+                      }
+                    </Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>Loading session data...</Text>
               </View>
-              
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Total Readings</Text>
-                <Text style={styles.summaryValue}>{sessionData.total_readings}</Text>
-              </View>
-              
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>SpO2 Range</Text>
-                <Text style={styles.summaryValue}>
-                  {sessionData.min_spo2}-{sessionData.max_spo2}%
-                </Text>
-              </View>
-              
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>HR Range</Text>
-                <Text style={styles.summaryValue}>
-                  {sessionData.min_heart_rate}-{sessionData.max_heart_rate} bpm
-                </Text>
-              </View>
-            </View>
+            )}
           </View>
 
           {/* SpO2 Chart */}
@@ -321,7 +516,6 @@ const SessionHistoryScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-
       
       <FlatList
         data={sessions}
@@ -497,6 +691,16 @@ const styles = StyleSheet.create({
   chart: {
     marginVertical: 8,
     borderRadius: 16,
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666666',
+    textAlign: 'center',
   },
 });
 

@@ -258,13 +258,14 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     }
   };
 
-  const handleSessionComplete = (completedSessionData) => {
-    Alert.alert(
-      'Training Complete!',
-      `Congratulations! You've completed all ${completedSessionData.currentCycle || TOTAL_CYCLES} cycles of IHHT training.`,
-      [{ text: 'View Results', onPress: () => navigation.navigate('History') }]
-    );
+  const handleSessionComplete = (sessionData) => {
+    console.log('🎯 Navigating to post-session survey for completed session');
+    
+    const sessionIdForSurvey = sessionData?.id || sessionData?.sessionId;
+    navigation.navigate('PostSessionSurvey', { sessionId: sessionIdForSurvey });
   };
+
+
 
   const pauseSession = async () => {
     try {
@@ -289,30 +290,11 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       Vibration.cancel();
       const result = await EnhancedSessionManager.stopSession();
       
-      // Navigate to History to show session results
-      const sessionIdForNavigation = result?.id || result?.sessionId || sessionInfo?.sessionId || sessionInfo?.currentSession?.id;
-      console.log('🚀 Navigating to History after manual session end');
+      // Navigate to post-session survey screen
+      const sessionIdForSurvey = result?.id || result?.sessionId || sessionInfo?.sessionId || sessionInfo?.currentSession?.id;
+      console.log('🎯 Navigating to post-session survey for manual session end');
       
-      if (sessionIdForNavigation) {
-        navigation.navigate('MainTabs', {
-          screen: 'History',
-          params: {
-            highlightSession: sessionIdForNavigation,
-            justCompleted: true
-          }
-        });
-      } else {
-        navigation.navigate('MainTabs', { screen: 'History' });
-      }
-      
-      // Show confirmation after navigation
-      setTimeout(() => {
-        Alert.alert(
-          '✅ Session Ended',
-          `Your training session has been saved successfully!\n\nYour data has been recorded and you can view the results in your session history.`,
-          [{ text: 'OK' }]
-        );
-      }, 500);
+      navigation.navigate('PostSessionSurvey', { sessionId: sessionIdForSurvey });
       
     } catch (error) {
       console.error('Failed to terminate session:', error);

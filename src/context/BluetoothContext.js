@@ -55,7 +55,7 @@ export const BluetoothProvider = ({ children }) => {
     });
 
     BluetoothService.setOnPulseOxDataReceived((data) => {
-      console.log('Context received pulse ox data:', data);
+              // console.log('Context received pulse ox data:', data);
       setPulseOximeterData(data);
     });
 

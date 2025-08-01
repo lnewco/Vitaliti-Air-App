@@ -23,11 +23,11 @@ export const ENERGY_LABELS = {
 };
 
 export const STRESS_LABELS = {
-  1: "Strained",
-  2: "Tense",
+  1: "Negative stress",
+  2: "Somewhat negative",
   3: "Neutral",
-  4: "Focused", 
-  5: "Invigorated"
+  4: "Somewhat positive", 
+  5: "Positive stress"
 };
 
 // Default survey values

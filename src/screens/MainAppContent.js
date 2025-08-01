@@ -8,6 +8,7 @@ import DashboardScreen from './DashboardScreen';
 import SessionHistoryScreen from './SessionHistoryScreen';
 import SessionSetupScreen from './SessionSetupScreen';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
+import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -91,6 +92,13 @@ const MainAppContent = () => {
       <Stack.Screen 
         name="AirSession" 
         component={IHHTTrainingScreen}
+        options={{
+          presentation: 'card',
+        }}
+      />
+      <Stack.Screen 
+        name="PostSessionSurvey" 
+        component={PostSessionSurveyScreen}
         options={{
           presentation: 'card',
         }}

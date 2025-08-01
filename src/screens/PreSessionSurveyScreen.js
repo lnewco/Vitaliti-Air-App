@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
 import SurveyModal from '../components/SurveyModal';
 import SurveyScaleInput from '../components/SurveyScaleInput';
+import StepIndicator from '../components/StepIndicator';
 import DatabaseService from '../services/DatabaseService';
 import SupabaseService from '../services/SupabaseService';
 import { 
@@ -65,24 +66,26 @@ const PreSessionSurveyScreen = ({
 
       console.log('✅ Pre-session survey saved locally');
 
-      // Sync to Supabase
-      const supabaseResult = await SupabaseService.syncPreSessionSurvey(
+      // Complete immediately - don't wait for Supabase sync
+      console.log('🎉 Pre-session survey completed successfully');
+      onComplete();
+
+      // Sync to Supabase in background (non-blocking)
+      SupabaseService.syncPreSessionSurvey(
         sessionId,
         surveyData.clarity,
         surveyData.energy
-      );
-
-      if (supabaseResult.queued) {
-        console.log('📥 Pre-session survey queued for sync (offline)');
-      } else if (!supabaseResult.success) {
-        console.warn('⚠️ Failed to sync to Supabase immediately, but saved locally');
-      } else {
-        console.log('☁️ Pre-session survey synced to Supabase');
-      }
-
-      // Show success and complete
-      console.log('🎉 Pre-session survey completed successfully');
-      onComplete();
+      ).then(supabaseResult => {
+        if (supabaseResult.queued) {
+          console.log('📥 Pre-session survey queued for sync (offline)');
+        } else if (!supabaseResult.success) {
+          console.warn('⚠️ Failed to sync to Supabase immediately, but saved locally');
+        } else {
+          console.log('☁️ Pre-session survey synced to Supabase');
+        }
+      }).catch(error => {
+        console.warn('⚠️ Background Supabase sync failed:', error.message);
+      });
 
     } catch (error) {
       console.error('❌ Error saving pre-session survey:', error);
@@ -110,6 +113,13 @@ const PreSessionSurveyScreen = ({
       submitDisabled={!isComplete || isSubmitting}
       isRequired={true}
       validationErrors={validationErrors}
+      stepIndicator={
+        <StepIndicator 
+          currentStep={2} 
+          totalSteps={3}
+          steps={['Connect Device', 'Complete check-in', 'Ready to Begin']}
+        />
+      }
     >
       <View style={styles.surveyContent}>
 

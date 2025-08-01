@@ -88,48 +88,8 @@ class SupabaseService {
         session.device_id = this.deviceId;
       }
 
-      // CRITICAL: Set PostgreSQL session variable for RLS policy
-      console.log('🔧 Setting PostgreSQL session variable app.device_id =', this.deviceId);
-      
-      try {
-        // Use raw SQL to set the session variable
-        const { error: setConfigError } = await supabase
-          .from('sessions')
-          .select('set_config')
-          .eq('set_config', `SELECT set_config('app.device_id', '${this.deviceId}', true)`);
-        
-        if (setConfigError) {
-          console.warn('⚠️ Method 1 failed, trying method 2...');
-          
-          // Alternative: Use rpc call
-          const { error: rpcError } = await supabase.rpc('exec', {
-            sql: `SELECT set_config('app.device_id', '${this.deviceId}', true);`
-          });
-          
-          if (rpcError) {
-            console.warn('⚠️ Method 2 failed, trying method 3...');
-            
-            // Alternative: Direct PostgreSQL function call
-            const { error: directError } = await supabase.rpc('set_config', {
-              setting_name: 'app.device_id',
-              new_value: this.deviceId,
-              is_local: true
-            });
-            
-            if (directError) {
-              console.warn('⚠️ All session variable methods failed, proceeding with insert...');
-            } else {
-              console.log('✅ PostgreSQL session variable set via method 3');
-            }
-          } else {
-            console.log('✅ PostgreSQL session variable set via method 2');
-          }
-        } else {
-          console.log('✅ PostgreSQL session variable set via method 1');
-        }
-      } catch (configErr) {
-        console.warn('⚠️ Session variable setup failed:', configErr);
-      }
+      // RLS policy now fixed - device_id check works directly without session variables
+      console.log('✅ RLS policy allows device_id-based sessions');
 
       const { data, error } = await supabase
         .from('sessions')
@@ -634,9 +594,8 @@ class SupabaseService {
           console.log('🧹 Cleared', authKeys.length, 'auth storage keys');
         }
         
-        // Force sign out any existing sessions
-        await supabase.auth.signOut({ scope: 'local' });
-        console.log('🧹 Cleared any existing auth sessions');
+        // Note: Not clearing auth sessions to avoid interfering with app auth flow
+        console.log('🔒 Skipping auth session clear to prevent login redirect');
       } catch (authError) {
         console.log('🔒 No auth sessions to clear (expected for anonymous mode)');
       }
