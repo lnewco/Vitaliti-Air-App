@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useBluetoothConnection, useBluetoothData } from '../context/BluetoothContext';
-import { CommonStyles } from '../styles/CommonStyles';
 import StepIndicator from '../components/StepIndicator';
-import SafetyIndicator from '../components/SafetyIndicator';
-import HRV_CONFIG from '../config/hrvConfig';
 
 // Optimized: Separate component for high-frequency data display (memoized)
 const BluetoothDataDisplay = React.memo(() => {
