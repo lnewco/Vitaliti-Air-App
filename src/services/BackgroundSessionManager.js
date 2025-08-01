@@ -38,14 +38,19 @@ if (TaskManager) {
       const phaseElapsed = Math.floor((now - sessionState.phaseStartTime) / 1000);
       let updatedState = { ...sessionState };
       
-      if (sessionState.currentPhase === 'HYPOXIC' && phaseElapsed >= 300) { // 5 minutes
+      // Get protocol durations from session state (with fallbacks)
+      const hypoxicDuration = sessionState.hypoxicDuration || 300; // 5 minutes default
+      const hyperoxicDuration = sessionState.hyperoxicDuration || 120; // 2 minutes default  
+      const totalCycles = sessionState.totalCycles || 5; // 5 cycles default
+
+      if (sessionState.currentPhase === 'HYPOXIC' && phaseElapsed >= hypoxicDuration) {
         // Advance to hyperoxic phase
         updatedState.currentPhase = 'HYPEROXIC';
         updatedState.phaseStartTime = now;
         console.log('🔄 Advanced to HYPEROXIC phase in background');
-      } else if (sessionState.currentPhase === 'HYPEROXIC' && phaseElapsed >= 120) { // 2 minutes
+      } else if (sessionState.currentPhase === 'HYPEROXIC' && phaseElapsed >= hyperoxicDuration) {
         // Advance to next cycle or complete
-        if (sessionState.currentCycle >= 5) {
+        if (sessionState.currentCycle >= totalCycles) {
           // Session complete
           updatedState.isActive = false;
           updatedState.isCompleted = true;

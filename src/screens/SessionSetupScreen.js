@@ -98,6 +98,14 @@ const DualHRVDisplay = ({ heartRateData }) => {
 
 const SessionSetupScreen = ({ navigation }) => {
   const [currentStep, setCurrentStep] = useState(1);
+  
+  // Protocol configuration state
+  const [protocolConfig, setProtocolConfig] = useState({
+    totalCycles: 5,           // Default 5 rounds
+    hypoxicDuration: 5,       // Default 5 minutes  
+    hyperoxicDuration: 2      // Default 2 minutes
+  });
+
   const { 
     isPulseOxConnected, 
     isHRConnected, 
@@ -107,11 +115,14 @@ const SessionSetupScreen = ({ navigation }) => {
     isAnyDeviceConnected 
   } = useBluetooth();
 
+  // Calculate total session duration in minutes
+  const calculateTotalDuration = () => {
+    return (protocolConfig.hypoxicDuration + protocolConfig.hyperoxicDuration) * protocolConfig.totalCycles;
+  };
 
-
-  // Auto-regress to step 1 if no devices are connected (instead of just pulse ox)
+  // Auto-regress to step 1 if no devices are connected
   useEffect(() => {
-    if (!isAnyDeviceConnected && currentStep === 2) {
+    if (!isAnyDeviceConnected && (currentStep === 2 || currentStep === 3)) {
       setCurrentStep(1);
     }
   }, [isAnyDeviceConnected, currentStep]);
@@ -120,7 +131,7 @@ const SessionSetupScreen = ({ navigation }) => {
     if (currentStep === 1) {
       navigation.goBack();
     } else {
-      setCurrentStep(1);
+      setCurrentStep(currentStep - 1);
     }
   };
 
@@ -134,8 +145,8 @@ const SessionSetupScreen = ({ navigation }) => {
       return;
     }
 
-    // Navigate to IHHT training session
-    navigation.navigate('AirSession');
+    // Pass protocol configuration to the training session
+    navigation.navigate('AirSession', { protocolConfig });
   };
 
   const renderStep1 = () => (
@@ -174,7 +185,105 @@ const SessionSetupScreen = ({ navigation }) => {
     </View>
   );
 
-  const renderStep2 = () => {
+  // Configuration Slider Component
+  const ConfigSlider = ({ label, value, onValueChange, min, max, suffix, step = 1 }) => (
+    <View style={styles.configSliderContainer}>
+      <View style={styles.configSliderHeader}>
+        <Text style={styles.configSliderLabel}>{label}</Text>
+        <Text style={styles.configSliderValue}>{value} {suffix}</Text>
+      </View>
+      <CustomSlider
+        value={value}
+        onValueChange={onValueChange}
+        minimumValue={min}
+        maximumValue={max}
+        step={step}
+      />
+      <View style={styles.configSliderRange}>
+        <Text style={styles.configSliderRangeText}>{min}</Text>
+        <Text style={styles.configSliderRangeText}>{max}</Text>
+      </View>
+    </View>
+  );
+
+  const renderStep2 = () => (
+    <View style={styles.stepContainer}>
+      <ScrollView 
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.stepHeader}>
+          <Text style={styles.stepTitle}>Configure Your Session</Text>
+          <Text style={styles.stepDescription}>
+            Customize your IHHT training protocol. Adjust the number of rounds and phase durations to match your training goals.
+          </Text>
+        </View>
+
+        <View style={styles.stepContent}>
+          <View style={styles.configContainer}>
+            <ConfigSlider
+              label="Number of Rounds"
+              value={protocolConfig.totalCycles}
+              onValueChange={(value) => setProtocolConfig(prev => ({ ...prev, totalCycles: Math.round(value) }))}
+              min={1}
+              max={10}
+              suffix="rounds"
+            />
+
+            <ConfigSlider
+              label="Hypoxia Phase"
+              value={protocolConfig.hypoxicDuration}
+              onValueChange={(value) => setProtocolConfig(prev => ({ ...prev, hypoxicDuration: Math.round(value) }))}
+              min={3}
+              max={15}
+              suffix="minutes"
+            />
+
+            <ConfigSlider
+              label="Hyperoxia Phase"
+              value={protocolConfig.hyperoxicDuration}
+              onValueChange={(value) => setProtocolConfig(prev => ({ ...prev, hyperoxicDuration: Math.round(value) }))}
+              min={1}
+              max={10}
+              suffix="minutes"
+            />
+
+            <View style={styles.totalDurationCard}>
+              <Text style={styles.totalDurationLabel}>Total Session Duration</Text>
+              <Text style={styles.totalDurationValue}>{calculateTotalDuration()} minutes</Text>
+              <Text style={styles.totalDurationBreakdown}>
+                {protocolConfig.totalCycles} × ({protocolConfig.hypoxicDuration} + {protocolConfig.hyperoxicDuration}) minutes
+              </Text>
+            </View>
+
+            {calculateTotalDuration() > 60 && (
+              <View style={styles.warningCard}>
+                <Text style={styles.warningIcon}>⚠️</Text>
+                <Text style={styles.warningText}>
+                  Long session detected ({calculateTotalDuration()} min). Consider shorter durations for your first sessions.
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+
+      <View style={styles.stepActions}>
+        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.continueButton}
+          onPress={() => setCurrentStep(3)}
+        >
+          <Text style={styles.continueButtonText}>Continue →</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderStep3 = () => {
     // Dynamic title and description based on connected devices
     let title = "Ready to Begin";
     let description = "Your devices are connected and reading data. You're ready to start your IHHT training session.";
@@ -306,10 +415,11 @@ const SessionSetupScreen = ({ navigation }) => {
             )}
 
             <View style={styles.sessionInfo}>
-              <Text style={styles.sessionInfoTitle}>🎯 IHHT Training Session</Text>
+              <Text style={styles.sessionInfoTitle}>🎯 Your IHHT Training Session</Text>
               <Text style={styles.sessionInfoText}>
-                • 5 cycles of hypoxic-hyperoxic training{'\n'}
-                • Approximately 35 minutes duration{'\n'}
+                • {protocolConfig.totalCycles} cycles of hypoxic-hyperoxic training{'\n'}
+                • {protocolConfig.hypoxicDuration} min hypoxia + {protocolConfig.hyperoxicDuration} min hyperoxia per cycle{'\n'}
+                • Total duration: {calculateTotalDuration()} minutes{'\n'}
                 • Real-time {isHRConnected ? (heartRateData?.hrv ? 'HRV and ' : 'HRV (loading) and ') : ''}safety monitoring{'\n'}
                 • Guided breathing phases
               </Text>
@@ -331,10 +441,11 @@ const SessionSetupScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StepIndicator currentStep={currentStep} totalSteps={2} />
+      <StepIndicator currentStep={currentStep} totalSteps={3} />
       
       {currentStep === 1 && renderStep1()}
       {currentStep === 2 && renderStep2()}
+      {currentStep === 3 && renderStep3()}
     </SafeAreaView>
   );
 };
@@ -529,7 +640,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 12,
+    marginBottom: 16,
+    textAlign: 'center',
   },
   // Dual-Timeframe HRV Styles
   dualHrvContainer: {
@@ -730,6 +842,92 @@ const styles = StyleSheet.create({
   },
   stableHrvContainer: {
     paddingVertical: 12,
+  },
+  
+  // Configuration step styles
+  configContainer: {
+    paddingVertical: 10,
+  },
+  configSliderContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  configSliderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  configSliderLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  configSliderValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#3B82F6',
+  },
+  configSliderRange: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  configSliderRangeText: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  totalDurationCard: {
+    backgroundColor: '#F0F9FF',
+    borderRadius: 12,
+    padding: 20,
+    marginVertical: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+    alignItems: 'center',
+  },
+  totalDurationLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  totalDurationValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  totalDurationBreakdown: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontStyle: 'italic',
+  },
+  warningCard: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  warningIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#92400E',
+    lineHeight: 20,
   },
 
 });

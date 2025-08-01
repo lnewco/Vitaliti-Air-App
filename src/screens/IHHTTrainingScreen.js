@@ -68,12 +68,14 @@ const PHASE_TYPES = {
   TERMINATED: 'TERMINATED'
 };
 
-const HYPOXIC_DURATION = 5 * 60; // 5 minutes in seconds
-const HYPEROXIC_DURATION = 2 * 60; // 2 minutes in seconds
-const TOTAL_CYCLES = 5;
-const TOTAL_DURATION = (HYPOXIC_DURATION + HYPEROXIC_DURATION) * TOTAL_CYCLES; // 35 minutes
+const IHHTTrainingScreen = ({ navigation, route }) => {
+  // Extract protocol configuration from navigation params
+  const protocolConfig = route?.params?.protocolConfig || {
+    totalCycles: 5,
+    hypoxicDuration: 5,     // in minutes
+    hyperoxicDuration: 2    // in minutes
+  };
 
-const IHHTTrainingScreen = ({ navigation }) => {
   const { 
     pulseOximeterData, 
     heartRateData, 
@@ -106,10 +108,10 @@ const IHHTTrainingScreen = ({ navigation }) => {
 
   // Reset hypoxia level to default when starting new hypoxic phase
   useEffect(() => {
-    if (sessionInfo.currentPhase === 'HYPOXIC' && sessionInfo.phaseTimeRemaining === HYPOXIC_DURATION) {
+    if (sessionInfo.currentPhase === 'HYPOXIC' && sessionInfo.phaseTimeRemaining === sessionInfo.hypoxicDuration) {
       setHypoxiaLevel(defaultHypoxiaLevel);
     }
-  }, [sessionInfo.currentPhase, sessionInfo.phaseTimeRemaining, defaultHypoxiaLevel]);
+  }, [sessionInfo.currentPhase, sessionInfo.phaseTimeRemaining, sessionInfo.hypoxicDuration, defaultHypoxiaLevel]);
 
   const loadHypoxiaLevel = async () => {
     try {
@@ -245,7 +247,7 @@ const IHHTTrainingScreen = ({ navigation }) => {
 
   const startSession = async () => {
     try {
-      await EnhancedSessionManager.startSession();
+      await EnhancedSessionManager.startSession(protocolConfig);
       setSessionInfo(EnhancedSessionManager.getSessionInfo());
     } catch (error) {
       console.error('Failed to start enhanced session:', error);
@@ -257,7 +259,7 @@ const IHHTTrainingScreen = ({ navigation }) => {
   const handleSessionComplete = (completedSessionData) => {
     Alert.alert(
       'Training Complete!',
-      `Congratulations! You've completed all ${completedSessionData.currentCycle || TOTAL_CYCLES} cycles of IHHT training.`,
+      `Congratulations! You've completed all ${completedSessionData.currentCycle || sessionInfo.totalCycles} cycles of IHHT training.`,
       [{ text: 'View Results', onPress: () => navigation.navigate('History') }]
     );
   };
@@ -350,7 +352,7 @@ const IHHTTrainingScreen = ({ navigation }) => {
   };
 
   const formatTotalTime = (seconds) => {
-    const totalDuration = (HYPOXIC_DURATION + HYPEROXIC_DURATION) * sessionInfo.totalCycles;
+    const totalDuration = (sessionInfo.hypoxicDuration + sessionInfo.hyperoxicDuration) * sessionInfo.totalCycles;
     const totalMins = Math.floor(totalDuration / 60);
     const currentMins = Math.floor(seconds / 60);
     const currentSecs = seconds % 60;
