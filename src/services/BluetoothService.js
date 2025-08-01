@@ -532,7 +532,7 @@ class BluetoothService {
         packets = [buffer];
       } else if (buffer.length === 20) {
         // Four 5-byte packets concatenated
-        console.log('📦 Processing 20-byte packet as 4x5-byte packets');
+        // console.log('📦 Processing 20-byte packet as 4x5-byte packets'); // Disabled: high frequency logging
         for (let i = 0; i < 4; i++) {
           const packetStart = i * 5;
           const packet = buffer.slice(packetStart, packetStart + 5);
@@ -551,7 +551,7 @@ class BluetoothService {
       
       // Process the latest (most recent) packet
       const latestPacket = packets[packets.length - 1];
-      console.log('🎯 Processing latest packet:', Array.from(latestPacket).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' '));
+      // console.log('🎯 Processing latest packet:', Array.from(latestPacket).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
       
       return this.parseSingle5BytePacket(latestPacket, base64Data);
       
@@ -570,13 +570,13 @@ class BluetoothService {
       const byte4 = buffer[3]; // Pulse rate bits 0-6, sync bit
       const byte5 = buffer[4]; // SpO2 bits 0-6, sync bit
       
-      console.log('📊 BCI Bytes:', {
-        byte1: '0x' + byte1.toString(16).padStart(2, '0').toUpperCase(),
-        byte2: '0x' + byte2.toString(16).padStart(2, '0').toUpperCase(), 
-        byte3: '0x' + byte3.toString(16).padStart(2, '0').toUpperCase(),
-        byte4: '0x' + byte4.toString(16).padStart(2, '0').toUpperCase(),
-        byte5: '0x' + byte5.toString(16).padStart(2, '0').toUpperCase()
-      });
+      // console.log('📊 BCI Bytes:', { // Disabled: high frequency logging
+      //   byte1: '0x' + byte1.toString(16).padStart(2, '0').toUpperCase(),
+      //   byte2: '0x' + byte2.toString(16).padStart(2, '0').toUpperCase(), 
+      //   byte3: '0x' + byte3.toString(16).padStart(2, '0').toUpperCase(),
+      //   byte4: '0x' + byte4.toString(16).padStart(2, '0').toUpperCase(),
+      //   byte5: '0x' + byte5.toString(16).padStart(2, '0').toUpperCase()
+      // });
       
       // Parse according to BCI protocol specification
       
@@ -634,9 +634,9 @@ class BluetoothService {
       };
       
       if (spo2 !== null || pulseRate !== null) {
-        console.log('✅ Valid BCI data:', result);
+        // console.log('✅ Valid BCI data:', result); // Disabled: high frequency logging
       } else {
-        console.log('⚠️ BCI status data (no valid measurements):', result);
+        // console.log('⚠️ BCI status data (no valid measurements):', result); // Disabled: high frequency logging
       }
       
       return result;
@@ -735,13 +735,13 @@ class BluetoothService {
           this.realHRVWindow.add(interval, now);
         });
         
-        console.log(`📈 Quick HRV: ${this.quickHRVWindow.getSize()} intervals, Real HRV: ${this.realHRVWindow.getSize()} intervals`);
+        // console.log(`📈 Quick HRV: ${this.quickHRVWindow.getSize()} intervals, Real HRV: ${this.realHRVWindow.getSize()} intervals`); // Disabled: frequent logging
         
         // Calculate dual-timeframe HRV
         const hrvResults = this.calculateDualHRV(now);
         
         if (hrvResults) {
-          console.log(`✅ HRV Results:`, hrvResults);
+          // console.log(`✅ HRV Results:`, hrvResults); // Disabled: frequent logging
         }
       }
 
@@ -762,9 +762,9 @@ class BluetoothService {
       };
 
       if (heartRate > 0) {
-        console.log('✅ Valid HR data:', result);
+        // console.log('✅ Valid HR data:', result); // Disabled: high frequency logging
       } else {
-        console.log('⚠️ HR status data (no valid measurement):', result);
+        // console.log('⚠️ HR status data (no valid measurement):', result); // Disabled: high frequency logging
       }
 
       return result;
