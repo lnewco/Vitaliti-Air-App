@@ -366,7 +366,7 @@ class BluetoothService {
           }
           
           if (characteristic && characteristic.value) {
-            console.log('📦 Raw BCI data received:', characteristic.value);
+            // console.log('📦 Raw BCI data received:', characteristic.value); // Disabled: high frequency logging
             this.handleBCIDataReceived(characteristic.value);
           }
         });
@@ -462,7 +462,7 @@ class BluetoothService {
           }
           
           if (characteristic && characteristic.value) {
-            console.log('📦 Raw HR data received:', characteristic.value);
+            // console.log('📦 Raw HR data received:', characteristic.value); // Disabled: high frequency logging
             this.handleHRDataReceived(characteristic.value);
           }
         });
@@ -517,12 +517,12 @@ class BluetoothService {
 
   parseBCIData(base64Data) {
     try {
-      console.log('🔍 Parsing BCI data:', base64Data);
+      // console.log('🔍 Parsing BCI data:', base64Data); // Disabled: high frequency logging
       
       // Decode base64 to buffer
       const buffer = Buffer.from(base64Data, 'base64');
-      console.log('📊 Buffer length:', buffer.length);
-      console.log('📊 Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' '));
+      // console.log('📊 Buffer length:', buffer.length); // Disabled: high frequency logging
+      // console.log('📊 Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
       
       // Handle different packet sizes
       let packets = [];
@@ -607,19 +607,19 @@ class BluetoothService {
       const pleth = byte2 & 0x7F;
       const isPlethValid = pleth !== 0;
       
-      console.log('🔬 BCI Parsed Values:', {
-        signalStrength,
-        isSignalValid,
-        isProbePlugged,
-        isFingerDetected,
-        isSearchingForPulse,
-        pulseRateRaw,
-        pulseRate,
-        spo2Raw, 
-        spo2,
-        pleth,
-        isPlethValid
-      });
+      // console.log('🔬 BCI Parsed Values:', { // Disabled: high frequency logging
+      //   signalStrength,
+      //   isSignalValid,
+      //   isProbePlugged,
+      //   isFingerDetected,
+      //   isSearchingForPulse,
+      //   pulseRateRaw,
+      //   pulseRate,
+      //   spo2Raw, 
+      //   spo2,
+      //   pleth,
+      //   isPlethValid
+      // });
       
       // Return data even if values are invalid so we can show status
       const result = {
@@ -649,12 +649,12 @@ class BluetoothService {
 
   parseHRData(base64Data) {
     try {
-      console.log('🔍 Parsing HR data:', base64Data);
+      // console.log('🔍 Parsing HR data:', base64Data); // Disabled: high frequency logging
       
       // Decode base64 to buffer
       const buffer = Buffer.from(base64Data, 'base64');
-      console.log('📊 HR Buffer length:', buffer.length);
-      console.log('📊 HR Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' '));
+      // console.log('📊 HR Buffer length:', buffer.length); // Disabled: high frequency logging
+      // console.log('📊 HR Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
       
       if (buffer.length < 2) {
         console.log('❌ HR buffer too short');
@@ -714,16 +714,16 @@ class BluetoothService {
         }
       }
 
-      console.log('🔬 HR Parsed Values:', {
-        flags: '0x' + flags.toString(16).padStart(2, '0'),
-        hrFormat16Bit,
-        sensorContactSupported,
-        sensorContactDetected,
-        energyExpendedPresent,
-        rrIntervalsPresent,
-        heartRate,
-        rrIntervals
-      });
+      // console.log('🔬 HR Parsed Values:', { // Disabled: high frequency logging
+      //   flags: '0x' + flags.toString(16).padStart(2, '0'),
+      //   hrFormat16Bit,
+      //   sensorContactSupported,
+      //   sensorContactDetected,
+      //   energyExpendedPresent,
+      //   rrIntervalsPresent,
+      //   heartRate,
+      //   rrIntervals
+      // });
 
       // Store RR intervals in dual timeframe windows
       if (rrIntervals.length > 0) {

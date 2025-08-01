@@ -55,12 +55,12 @@ export const BluetoothProvider = ({ children }) => {
     });
 
     BluetoothService.setOnPulseOxDataReceived((data) => {
-      console.log('Context received pulse ox data:', data);
+      // console.log('Context received pulse ox data:', data); // Disabled: high frequency logging
       setPulseOximeterData(data);
     });
 
     BluetoothService.setOnHRDataReceived((data) => {
-      console.log('Context received HR data:', data);
+      // console.log('Context received HR data:', data); // Disabled: high frequency logging
       
       // Handle dual-timeframe HRV processing
       let processedData = { ...data };
