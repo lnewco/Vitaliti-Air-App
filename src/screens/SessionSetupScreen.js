@@ -252,9 +252,6 @@ const SessionSetupScreen = ({ navigation }) => {
       >
         <View style={styles.stepHeader}>
           <Text style={styles.stepTitle}>Configure Your Session</Text>
-          <Text style={styles.stepDescription}>
-            Customize your IHHT training protocol. Adjust the number of rounds and phase durations to match your training goals.
-          </Text>
         </View>
 
         <View style={styles.stepContent}>
