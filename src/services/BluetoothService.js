@@ -615,7 +615,7 @@ class BluetoothService {
       //   isSearchingForPulse,
       //   pulseRateRaw,
       //   pulseRate,
-      //   spo2Raw, 
+      //   spo2Raw,
       //   spo2,
       //   pleth,
       //   isPlethValid

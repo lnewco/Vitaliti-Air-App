@@ -3,6 +3,9 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Ale
 import { useBluetoothConnection } from '../context/BluetoothContext';
 import StepIndicator from '../components/StepIndicator';
 import OptimizedConnectionManager from '../components/OptimizedConnectionManager';
+import PreSessionSurveyScreen from './PreSessionSurveyScreen';
+import SupabaseService from '../services/SupabaseService';
+import HRV_CONFIG from '../config/hrvConfig';
 
 
 
@@ -14,6 +17,8 @@ const SessionSetupScreen = ({ navigation }) => {
     hypoxicDuration: 7, // minutes
     hyperoxicDuration: 3 // minutes
   });
+  const [sessionId, setSessionId] = useState(null);
+  const [showPreSessionSurvey, setShowPreSessionSurvey] = useState(false);
 
   // Only use connection state - no high-frequency data to prevent re-renders
   const { 
@@ -47,9 +52,16 @@ const SessionSetupScreen = ({ navigation }) => {
     }
   }, [isAnyDeviceConnected, currentStep]);
 
+  // Generate session ID when needed
+  const generateSessionId = () => {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  };
+
   const handleBack = () => {
     if (currentStep === 1) {
       navigation.goBack();
+    } else if (currentStep === 2) {
+      setCurrentStep(1);
     } else {
       setCurrentStep(currentStep - 1);
     }
@@ -65,9 +77,70 @@ const SessionSetupScreen = ({ navigation }) => {
       return;
     }
 
-    // Pass protocol configuration to the training session
-    navigation.navigate('AirSession', { protocolConfig });
+    // Generate session ID and show pre-session survey
+    const newSessionId = generateSessionId();
+    setSessionId(newSessionId);
+    setShowPreSessionSurvey(true);
   };
+
+  const handleSurveyComplete = () => {
+    console.log('✅ Pre-session survey completed for session:', sessionId);
+    
+    // Show confirmation popup immediately - no waiting for async operations
+    Alert.alert(
+      '🎯 Starting Your IHHT Session',
+      `Great! Your pre-session survey is complete.\n\n• 5 cycles of hypoxic-hyperoxic training\n• Approximately 35 minutes duration\n• Real-time safety monitoring\n\nGet comfortable and prepare to begin!`,
+      [
+        {
+          text: 'Start Training',
+          onPress: () => {
+            console.log('🚀 Starting IHHT session directly after survey completion with sessionId:', sessionId);
+            // Hide survey and navigate directly to training
+            setShowPreSessionSurvey(false);
+            navigation.navigate('AirSession', { sessionId: sessionId });
+          }
+        }
+      ]
+    );
+
+    // Create Supabase session in background (non-blocking)
+    (async () => {
+      try {
+        console.log('🔄 Creating Supabase session for survey sync in background...');
+        
+        // Ensure SupabaseService is initialized (fixes deviceId being null)
+        await SupabaseService.initialize();
+        console.log('🔧 SupabaseService initialized for session creation');
+        
+        const deviceId = await SupabaseService.getDeviceId();
+        console.log('📱 Using device ID for session:', deviceId);
+        
+        await SupabaseService.createSession({
+          id: sessionId,
+          startTime: Date.now(),
+          deviceId: deviceId,
+          sessionType: 'IHHT'
+        });
+        console.log('✅ Supabase session created in background, survey should sync now');
+      } catch (error) {
+        console.warn('⚠️ Failed to create Supabase session for survey sync:', error);
+        // Continue anyway - survey will remain queued
+      }
+    })();
+  };
+
+  const handleSurveyCancel = () => {
+    console.log('❌ Pre-session survey cancelled');
+    setShowPreSessionSurvey(false);
+    setSessionId(null);
+  };
+
+  const handleDirectStartTraining = () => {
+    console.log('🚀 Starting training directly from Ready to Begin step with sessionId:', sessionId);
+    navigation.navigate('AirSession', { sessionId: sessionId });
+  };
+
+
 
   const renderStep1 = () => (
     <View style={styles.stepContainer}>
@@ -94,7 +167,7 @@ const SessionSetupScreen = ({ navigation }) => {
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.continueButton, !isAnyDeviceConnected && styles.continueButtonDisabled]}
-          onPress={() => isAnyDeviceConnected && setCurrentStep(2)}
+          onPress={() => isAnyDeviceConnected && handleStartSession()}
           disabled={!isAnyDeviceConnected}
         >
           <Text style={[styles.continueButtonText, !isAnyDeviceConnected && styles.continueButtonTextDisabled]}>
@@ -283,24 +356,40 @@ const SessionSetupScreen = ({ navigation }) => {
         </ScrollView>
 
         <View style={styles.stepActions}>
-          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+          <TouchableOpacity style={styles.backButton} onPress={() => setCurrentStep(1)}>
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.startSessionButton} onPress={handleStartSession}>
-            <Text style={styles.startSessionButtonText}>Start Air Session</Text>
+          <TouchableOpacity style={styles.startSessionButton} onPress={handleDirectStartTraining}>
+            <Text style={styles.startSessionButtonText}>Start Training</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
   };
 
+
+
   return (
     <SafeAreaView style={styles.container}>
-      <StepIndicator currentStep={currentStep} totalSteps={3} />
+      <StepIndicator 
+        currentStep={currentStep} 
+        totalSteps={3}
+        steps={['Connect Device', 'Configure Protocol', 'Ready to Begin']}
+      />
       
       {currentStep === 1 && renderStep1()}
       {currentStep === 2 && renderStep2()}
       {currentStep === 3 && renderStep3()}
+      
+      {/* Pre-Session Survey Modal */}
+      {sessionId && (
+        <PreSessionSurveyScreen
+          visible={showPreSessionSurvey}
+          sessionId={sessionId}
+          onComplete={handleSurveyComplete}
+          onCancel={handleSurveyCancel}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -830,6 +919,7 @@ const styles = StyleSheet.create({
      color: '#6B7280',
      textAlign: 'center',
        },
+
 
 });
 

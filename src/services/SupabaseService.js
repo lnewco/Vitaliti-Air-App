@@ -8,6 +8,7 @@ class SupabaseService {
     this.syncQueue = [];
     this.deviceId = null;
     this.sessionMapping = new Map(); // local_session_id -> supabase_uuid
+    this.lastSyncTime = null; // For throttling sync queue processing
   }
 
   async initializeDeviceId() {
@@ -22,6 +23,13 @@ class SupabaseService {
     } catch (error) {
       console.error('❌ Failed to initialize device ID:', error);
     }
+  }
+
+  async getDeviceId() {
+    if (!this.deviceId) {
+      await this.initializeDeviceId();
+    }
+    return this.deviceId;
   }
 
   async setupNetworkMonitoring() {
@@ -44,6 +52,15 @@ class SupabaseService {
     try {
       // Get current authenticated user (fall back to anonymous)
       const currentUser = authService.getCurrentUser();
+      console.log('🔍 AuthService getCurrentUser():', currentUser);
+      
+      // Check actual Supabase auth state
+      const { data: authUser, error: authError } = await supabase.auth.getUser();
+      console.log('🔍 Supabase auth.getUser():', authUser, authError);
+      
+      // Check auth session
+      const { data: authSession, error: sessionError } = await supabase.auth.getSession();
+      console.log('🔍 Supabase auth.getSession():', authSession, sessionError);
       
       const session = {
         device_id: this.deviceId,
@@ -62,6 +79,21 @@ class SupabaseService {
         // Store the local session ID as metadata
         local_session_id: sessionData.id
       };
+
+      console.log('💾 Creating session with device_id:', this.deviceId, 'user_id:', currentUser?.id || 'null');
+      console.log('🔐 Auth uid:', currentUser?.id);
+      console.log('📱 Device ID for RLS:', this.deviceId);
+      
+      // Ensure device ID is set
+      if (!this.deviceId) {
+        console.error('🚨 CRITICAL: deviceId is null! Initializing now...');
+        await this.initializeDeviceId();
+        console.log('🔧 Initialized deviceId:', this.deviceId);
+        session.device_id = this.deviceId;
+      }
+
+      // RLS policy now fixed - device_id check works directly without session variables
+      console.log('✅ RLS policy allows device_id-based sessions');
 
       const { data, error } = await supabase
         .from('sessions')
@@ -349,11 +381,25 @@ class SupabaseService {
 
   // Sync Queue Management
   queueForSync(operation, data) {
+    // Check for duplicate survey items to prevent infinite queuing
+    if (operation.includes('survey') || operation.includes('response')) {
+      const isDuplicate = this.syncQueue.some(item => 
+        item.operation === operation && 
+        item.data.localSessionId === data.localSessionId
+      );
+      
+      if (isDuplicate) {
+        console.log(`⚠️ Skipping duplicate queue item: ${operation} for session ${data.localSessionId}`);
+        return;
+      }
+    }
+
     const syncItem = {
       id: Date.now() + Math.random(),
       operation,
       data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      retryCount: 0
     };
     
     this.syncQueue.push(syncItem);
@@ -386,8 +432,21 @@ class SupabaseService {
   async processSyncQueue() {
     if (!this.isOnline || this.syncQueue.length === 0) return;
 
+    // Throttle sync processing to prevent infinite loops (minimum 1 second between runs)
+    const now = Date.now();
+    if (this.lastSyncTime && (now - this.lastSyncTime) < 1000) {
+      console.log('⏱️ Sync queue throttled - too soon since last run');
+      return;
+    }
+    this.lastSyncTime = now;
+
     console.log(`🔄 Processing ${this.syncQueue.length} sync queue items`);
     console.log('🔄 Current session mappings:', Array.from(this.sessionMapping.entries()));
+    
+    // Debug: Log details of queued items
+    this.syncQueue.forEach((item, index) => {
+      console.log(`📋 Queue item ${index + 1}: ${item.operation} for session ${item.data.localSessionId || item.data.sessionId || 'unknown'}`);
+    });
     
     const processedItems = [];
     
@@ -407,6 +466,39 @@ class SupabaseService {
             break;
           case 'addReadingsBatch':
             success = await this.addReadingsBatch(item.data) !== null;
+            break;
+          case 'pre_session_survey':
+            // Check if session mapping exists before trying to sync
+            const supabaseId1 = this.sessionMapping.get(item.data.localSessionId);
+            if (supabaseId1) {
+              const preResult = await this.syncPreSessionSurvey(item.data.localSessionId, item.data.clarityPre, item.data.energyPre);
+              success = preResult.success && !preResult.queued;
+            } else {
+              // Keep in queue but don't retry yet (session mapping doesn't exist)
+              success = false;
+            }
+            break;
+          case 'post_session_survey':
+            // Check if session mapping exists before trying to sync
+            const supabaseId2 = this.sessionMapping.get(item.data.localSessionId);
+            if (supabaseId2) {
+              const postResult = await this.syncPostSessionSurvey(item.data.localSessionId, item.data.clarityPost, item.data.energyPost, item.data.stressPost, item.data.notesPost);
+              success = postResult.success && !postResult.queued;
+            } else {
+              // Keep in queue but don't retry yet (session mapping doesn't exist)
+              success = false;
+            }
+            break;
+          case 'intra_session_response':
+            // Check if session mapping exists before trying to sync
+            const supabaseId3 = this.sessionMapping.get(item.data.localSessionId);
+            if (supabaseId3) {
+              const intraResult = await this.syncIntraSessionResponse(item.data.localSessionId, item.data.phaseNumber, item.data.clarity, item.data.energy, item.data.stress, item.data.timestamp);
+              success = intraResult.success && !intraResult.queued;
+            } else {
+              // Keep in queue but don't retry yet (session mapping doesn't exist)
+              success = false;
+            }
             break;
         }
 
@@ -506,9 +598,8 @@ class SupabaseService {
           console.log('🧹 Cleared', authKeys.length, 'auth storage keys');
         }
         
-        // Force sign out any existing sessions
-        await supabase.auth.signOut({ scope: 'local' });
-        console.log('🧹 Cleared any existing auth sessions');
+        // Note: Not clearing auth sessions to avoid interfering with app auth flow
+        console.log('🔒 Skipping auth session clear to prevent login redirect');
       } catch (authError) {
         console.log('🔒 No auth sessions to clear (expected for anonymous mode)');
       }
@@ -649,6 +740,224 @@ class SupabaseService {
       }
     } catch (error) {
       console.error('❌ Failed to load session mapping:', error);
+    }
+  }
+
+  // ========================================
+  // SURVEY DATA SYNC
+  // ========================================
+
+  /**
+   * Sync pre-session survey data to Supabase
+   */
+  async syncPreSessionSurvey(localSessionId, clarityPre, energyPre) {
+    try {
+      console.log(`🔄 Syncing pre-session survey for: ${localSessionId}`);
+      
+      // Get the Supabase session UUID
+      const supabaseId = this.sessionMapping.get(localSessionId);
+      if (!supabaseId) {
+        console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
+        this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
+        return { success: true, queued: true };
+      }
+
+      // Get current authenticated user
+      const currentUser = authService.getCurrentUser();
+      
+      // Create survey data
+      const surveyData = {
+        session_id: supabaseId,
+        clarity_pre: clarityPre,
+        energy_pre: energyPre,
+        user_id: currentUser?.id || null
+      };
+
+      const { data, error } = await supabase
+        .from('session_surveys')
+        .upsert(surveyData, { 
+          onConflict: 'session_id',
+          ignoreDuplicates: false 
+        });
+
+      if (error) {
+        console.error('❌ Failed to sync pre-session survey:', error);
+        this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Pre-session survey synced to Supabase');
+      return { success: true, data };
+    } catch (error) {
+      console.error('❌ Error syncing pre-session survey:', error);
+      this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Sync post-session survey data to Supabase
+   */
+  async syncPostSessionSurvey(localSessionId, clarityPost, energyPost, stressPost, notesPost = null) {
+    try {
+      console.log(`🔄 Syncing post-session survey for: ${localSessionId}`);
+      
+      // Get the Supabase session UUID
+      const supabaseId = this.sessionMapping.get(localSessionId);
+      if (!supabaseId) {
+        console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
+        this.queueForSync('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
+        return { success: true, queued: true };
+      }
+
+      // Get current authenticated user
+      const currentUser = authService.getCurrentUser();
+      
+      // Create survey data
+      const surveyData = {
+        session_id: supabaseId,
+        clarity_post: clarityPost,
+        energy_post: energyPost,
+        stress_post: stressPost,
+        notes_post: notesPost,
+        user_id: currentUser?.id || null
+      };
+
+      const { data, error } = await supabase
+        .from('session_surveys')
+        .upsert(surveyData, { 
+          onConflict: 'session_id',
+          ignoreDuplicates: false 
+        });
+
+      if (error) {
+        console.error('❌ Failed to sync post-session survey:', error);
+        this.queueForSync('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Post-session survey synced to Supabase');
+      return { success: true, data };
+    } catch (error) {
+      console.error('❌ Error syncing post-session survey:', error);
+      this.queueForSync('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Sync intra-session response to Supabase
+   */
+  async syncIntraSessionResponse(localSessionId, phaseNumber, clarity, energy, stress, timestamp) {
+    try {
+      console.log(`🔄 Syncing intra-session response for: ${localSessionId}, phase: ${phaseNumber}`);
+      
+      // Get the Supabase session UUID
+      const supabaseId = this.sessionMapping.get(localSessionId);
+      if (!supabaseId) {
+        console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
+        this.queueForSync('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
+        return { success: true, queued: true };
+      }
+
+      // Get current authenticated user
+      const currentUser = authService.getCurrentUser();
+      
+      // Create response data
+      const responseData = {
+        session_id: supabaseId,
+        phase_number: phaseNumber,
+        clarity,
+        energy,
+        stress,
+        timestamp: new Date(timestamp).toISOString(),
+        user_id: currentUser?.id || null
+      };
+
+      const { data, error } = await supabase
+        .from('intra_session_responses')
+        .upsert(responseData, { 
+          onConflict: 'session_id,phase_number',
+          ignoreDuplicates: false 
+        });
+
+      if (error) {
+        console.error('❌ Failed to sync intra-session response:', error);
+        this.queueForSync('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Intra-session response synced to Supabase');
+      return { success: true, data };
+    } catch (error) {
+      console.error('❌ Error syncing intra-session response:', error);
+      this.queueForSync('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get survey data for a session from Supabase
+   */
+  async getSessionSurveyData(sessionId) {
+    try {
+      console.log(`📊 Fetching survey data from Supabase for session: ${sessionId}`);
+      
+      // Get main survey data
+      const { data: surveyData, error: surveyError } = await supabase
+        .from('session_surveys')
+        .select('*')
+        .eq('session_id', sessionId)
+        .single();
+
+      // Get intra-session responses
+      const { data: responsesData, error: responsesError } = await supabase
+        .from('intra_session_responses')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('phase_number', { ascending: true });
+
+      if (surveyError && surveyError.code !== 'PGRST116') { // PGRST116 = no rows found
+        console.error('❌ Failed to fetch survey data:', surveyError);
+        return { success: false, error: surveyError.message };
+      }
+
+      if (responsesError) {
+        console.error('❌ Failed to fetch intra-session responses:', responsesError);
+        return { success: false, error: responsesError.message };
+      }
+
+      const result = {
+        sessionId,
+        preSession: null,
+        postSession: null,
+        intraSessionResponses: responsesData || []
+      };
+
+      // Process survey data
+      if (surveyData) {
+        if (surveyData.clarity_pre !== null && surveyData.energy_pre !== null) {
+          result.preSession = {
+            clarity: surveyData.clarity_pre,
+            energy: surveyData.energy_pre
+          };
+        }
+
+        if (surveyData.clarity_post !== null && surveyData.energy_post !== null && surveyData.stress_post !== null) {
+          result.postSession = {
+            clarity: surveyData.clarity_post,
+            energy: surveyData.energy_post,
+            stress: surveyData.stress_post,
+            notes: surveyData.notes_post || undefined
+          };
+        }
+      }
+
+      console.log(`✅ Survey data fetched from Supabase for ${sessionId}`);
+      return { success: true, data: result };
+    } catch (error) {
+      console.error('❌ Error fetching survey data from Supabase:', error);
+      return { success: false, error: error.message };
     }
   }
 }

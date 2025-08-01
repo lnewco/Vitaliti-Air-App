@@ -129,9 +129,9 @@ const styles = StyleSheet.create({
   },
   connector: {
     position: 'absolute',
-    top: 20,
+    top: 19, // Center of circle (40px height / 2 - 1px for line)
     left: '50%',
-    right: '-50%',
+    width: '100%',
     height: 2,
     backgroundColor: '#D1D5DB',
     zIndex: -1,

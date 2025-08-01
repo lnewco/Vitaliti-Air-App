@@ -62,9 +62,49 @@ class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
     `;
 
+    const createSessionSurveysTable = `
+      CREATE TABLE IF NOT EXISTS session_surveys (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL UNIQUE,
+        clarity_pre INTEGER CHECK (clarity_pre >= 1 AND clarity_pre <= 5),
+        energy_pre INTEGER CHECK (energy_pre >= 1 AND energy_pre <= 5),
+        clarity_post INTEGER CHECK (clarity_post >= 1 AND clarity_post <= 5),
+        energy_post INTEGER CHECK (energy_post >= 1 AND energy_post <= 5),
+        stress_post INTEGER CHECK (stress_post >= 1 AND stress_post <= 5),
+        notes_post TEXT,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE
+      );
+    `;
+
+    const createIntraSessionResponsesTable = `
+      CREATE TABLE IF NOT EXISTS intra_session_responses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        phase_number INTEGER NOT NULL,
+        clarity INTEGER NOT NULL CHECK (clarity >= 1 AND clarity <= 5),
+        energy INTEGER NOT NULL CHECK (energy >= 1 AND energy <= 5),
+        stress INTEGER NOT NULL CHECK (stress >= 1 AND stress <= 5),
+        timestamp INTEGER NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE,
+        UNIQUE(session_id, phase_number)
+      );
+    `;
+
+    const createSurveyIndexes = `
+      CREATE INDEX IF NOT EXISTS idx_session_surveys_session_id ON session_surveys(session_id);
+      CREATE INDEX IF NOT EXISTS idx_intra_responses_session_id ON intra_session_responses(session_id);
+      CREATE INDEX IF NOT EXISTS idx_intra_responses_phase ON intra_session_responses(session_id, phase_number);
+    `;
+
     await this.db.executeSql(createSessionsTable);
     await this.db.executeSql(createReadingsTable);
+    await this.db.executeSql(createSessionSurveysTable);
+    await this.db.executeSql(createIntraSessionResponsesTable);
     await this.db.executeSql(createIndexes);
+    await this.db.executeSql(createSurveyIndexes);
     
     // Add new columns one by one (will silently fail if columns already exist, which is fine)
     try {
@@ -453,6 +493,242 @@ class DatabaseService {
       maxHypoxiaLevel: stats.maxHypoxiaLevel || 0,
       completedSessions: stats.completedSessions || 0
     };
+  }
+
+  // ========================================
+  // SURVEY DATA MANAGEMENT
+  // ========================================
+
+  /**
+   * Create or update pre-session survey data
+   */
+  async savePreSessionSurvey(sessionId, clarityPre, energyPre) {
+    try {
+      // Validate input
+      if (!this.isValidSurveyScale(clarityPre) || !this.isValidSurveyScale(energyPre)) {
+        throw new Error('Survey values must be integers between 1 and 5');
+      }
+
+      console.log(`📝 Saving pre-session survey for: ${sessionId}`);
+      
+      // Use INSERT OR IGNORE followed by UPDATE to preserve existing data
+      const insertQuery = `
+        INSERT OR IGNORE INTO session_surveys (session_id, clarity_pre, energy_pre, updated_at)
+        VALUES (?, ?, ?, strftime('%s', 'now'))
+      `;
+      
+      const updateQuery = `
+        UPDATE session_surveys 
+        SET clarity_pre = ?, energy_pre = ?, updated_at = strftime('%s', 'now')
+        WHERE session_id = ?
+      `;
+      
+      await this.db.executeSql(insertQuery, [sessionId, clarityPre, energyPre]);
+      await this.db.executeSql(updateQuery, [clarityPre, energyPre, sessionId]);
+      
+      console.log(`✅ Pre-session survey saved: clarity=${clarityPre}, energy=${energyPre}`);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Failed to save pre-session survey:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Save post-session survey data
+   */
+  async savePostSessionSurvey(sessionId, clarityPost, energyPost, stressPost, notesPost = null) {
+    try {
+      // Validate input
+      if (!this.isValidSurveyScale(clarityPost) || !this.isValidSurveyScale(energyPost) || !this.isValidSurveyScale(stressPost)) {
+        throw new Error('Survey values must be integers between 1 and 5');
+      }
+
+      console.log(`📝 Saving post-session survey for: ${sessionId}`);
+      
+      // Use INSERT OR IGNORE followed by UPDATE to preserve existing data
+      const insertQuery = `
+        INSERT OR IGNORE INTO session_surveys (session_id, clarity_post, energy_post, stress_post, notes_post, updated_at)
+        VALUES (?, ?, ?, ?, ?, strftime('%s', 'now'))
+      `;
+      
+      const updateQuery = `
+        UPDATE session_surveys 
+        SET clarity_post = ?, energy_post = ?, stress_post = ?, notes_post = ?, updated_at = strftime('%s', 'now')
+        WHERE session_id = ?
+      `;
+      
+      await this.db.executeSql(insertQuery, [sessionId, clarityPost, energyPost, stressPost, notesPost]);
+      await this.db.executeSql(updateQuery, [clarityPost, energyPost, stressPost, notesPost, sessionId]);
+      
+      console.log(`✅ Post-session survey saved: clarity=${clarityPost}, energy=${energyPost}, stress=${stressPost}`);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Failed to save post-session survey:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Save intra-session response
+   */
+  async saveIntraSessionResponse(sessionId, phaseNumber, clarity, energy, stress, timestamp) {
+    try {
+      // Validate input
+      if (!this.isValidSurveyScale(clarity) || !this.isValidSurveyScale(energy) || !this.isValidSurveyScale(stress)) {
+        throw new Error('Survey values must be integers between 1 and 5');
+      }
+
+      console.log(`📝 Saving intra-session response for: ${sessionId}, phase: ${phaseNumber}`);
+      
+      const query = `
+        INSERT OR REPLACE INTO intra_session_responses 
+        (session_id, phase_number, clarity, energy, stress, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `;
+      
+      await this.db.executeSql(query, [sessionId, phaseNumber, clarity, energy, stress, timestamp]);
+      console.log(`✅ Intra-session response saved: phase=${phaseNumber}, clarity=${clarity}, energy=${energy}, stress=${stress}`);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Failed to save intra-session response:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get complete survey data for a session
+   */
+  async getSessionSurveyData(sessionId) {
+    try {
+      console.log(`📊 Fetching survey data for session: ${sessionId}`);
+      
+      // Get main survey data
+      const [surveyResult] = await this.db.executeSql(
+        'SELECT * FROM session_surveys WHERE session_id = ?',
+        [sessionId]
+      );
+      
+      // Get intra-session responses
+      const [responsesResult] = await this.db.executeSql(
+        'SELECT * FROM intra_session_responses WHERE session_id = ? ORDER BY phase_number ASC',
+        [sessionId]
+      );
+      
+      const surveyData = {
+        sessionId,
+        preSession: null,
+        postSession: null,
+        intraSessionResponses: []
+      };
+      
+      // Process main survey data
+      if (surveyResult.rows.length > 0) {
+        const row = surveyResult.rows.item(0);
+        
+        if (row.clarity_pre !== null && row.energy_pre !== null) {
+          surveyData.preSession = {
+            clarity: row.clarity_pre,
+            energy: row.energy_pre
+          };
+        }
+        
+        if (row.clarity_post !== null && row.energy_post !== null && row.stress_post !== null) {
+          surveyData.postSession = {
+            clarity: row.clarity_post,
+            energy: row.energy_post,
+            stress: row.stress_post,
+            notes: row.notes_post || undefined
+          };
+        }
+      }
+      
+      // Process intra-session responses
+      for (let i = 0; i < responsesResult.rows.length; i++) {
+        const row = responsesResult.rows.item(i);
+        surveyData.intraSessionResponses.push({
+          clarity: row.clarity,
+          energy: row.energy,
+          stress: row.stress,
+          phaseNumber: row.phase_number,
+          timestamp: row.timestamp
+        });
+      }
+      
+      console.log(`✅ Survey data retrieved for ${sessionId}:`, {
+        hasPreSession: !!surveyData.preSession,
+        hasPostSession: !!surveyData.postSession,
+        intraResponseCount: surveyData.intraSessionResponses.length
+      });
+      
+      return surveyData;
+    } catch (error) {
+      console.error('❌ Failed to get survey data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get survey completion status for a session
+   */
+  async getSurveyCompletionStatus(sessionId) {
+    try {
+      const [result] = await this.db.executeSql(
+        'SELECT clarity_pre, energy_pre, clarity_post, energy_post, stress_post FROM session_surveys WHERE session_id = ?',
+        [sessionId]
+      );
+      
+      if (result.rows.length === 0) {
+        return {
+          hasPreSession: false,
+          hasPostSession: false,
+          isPreSessionComplete: false,
+          isPostSessionComplete: false
+        };
+      }
+      
+      const row = result.rows.item(0);
+      const hasPreSession = row.clarity_pre !== null && row.energy_pre !== null;
+      const hasPostSession = row.clarity_post !== null && row.energy_post !== null && row.stress_post !== null;
+      
+      return {
+        hasPreSession,
+        hasPostSession,
+        isPreSessionComplete: hasPreSession,
+        isPostSessionComplete: hasPostSession
+      };
+    } catch (error) {
+      console.error('❌ Failed to check survey completion status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Validate survey scale value (1-5)
+   */
+  isValidSurveyScale(value) {
+    return Number.isInteger(value) && value >= 1 && value <= 5;
+  }
+
+  /**
+   * Delete all survey data for a session
+   */
+  async deleteSurveyData(sessionId) {
+    try {
+      console.log(`🗑️ Deleting survey data for session: ${sessionId}`);
+      
+      await this.db.executeSql('DELETE FROM session_surveys WHERE session_id = ?', [sessionId]);
+      await this.db.executeSql('DELETE FROM intra_session_responses WHERE session_id = ?', [sessionId]);
+      
+      console.log(`✅ Survey data deleted for session: ${sessionId}`);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Failed to delete survey data:', error);
+      throw error;
+    }
   }
 
   async close() {

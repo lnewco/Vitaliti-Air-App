@@ -184,32 +184,48 @@ class EnhancedSessionManager {
   }
 
   // Enhanced session lifecycle with Live Activity support
-  async startSession(protocolConfig = null) {
+  async startSession(protocolConfigOrSessionId = null) {
     if (this.isActive) {
       throw new Error('Session already active');
     }
 
     try {
+      // Handle both protocol config (object) and existing session ID (string)
+      let protocolConfig = null;
+      let existingSessionId = null;
+      
+      if (typeof protocolConfigOrSessionId === 'string') {
+        existingSessionId = protocolConfigOrSessionId;
+      } else if (typeof protocolConfigOrSessionId === 'object' && protocolConfigOrSessionId !== null) {
+        protocolConfig = protocolConfigOrSessionId;
+      }
+      
       // Set protocol configuration if provided
       if (protocolConfig) {
         this.setProtocol(protocolConfig);
       }
 
-      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Use existing session ID if provided (from survey), otherwise generate new one
+      const sessionId = existingSessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log(`🚀 Starting session with ID: ${sessionId} ${existingSessionId ? '(existing)' : '(new)'}`);
       
       // Initialize database if needed
       if (!DatabaseService.db) {
         await DatabaseService.init();
       }
 
-      // Create session in databases with protocol configuration
-      await DatabaseService.createSession(sessionId, this.currentHypoxiaLevel, this.protocolConfig);
-      await SupabaseService.createSession({
-        id: sessionId,
-        startTime: Date.now(),
-        defaultHypoxiaLevel: this.currentHypoxiaLevel,
-        protocolConfig: this.protocolConfig
-      });
+      // Create session in databases (skip if already exists)
+      if (!existingSessionId) {
+        await DatabaseService.createSession(sessionId, this.currentHypoxiaLevel, this.protocolConfig);
+        await SupabaseService.createSession({
+          id: sessionId,
+          startTime: Date.now(),
+          defaultHypoxiaLevel: this.currentHypoxiaLevel,
+          protocolConfig: this.protocolConfig
+        });
+      } else {
+        console.log('📋 Using existing session - skipping database creation');
+      }
 
       // Set session state
       this.currentSession = {
@@ -635,19 +651,19 @@ class EnhancedSessionManager {
     console.log('📋 SESSION SUMMARY - EASY TO READ');
     console.log('='.repeat(60));
     console.log(`🆔 Session ID: ${sessionId}`);
-    console.log(`⏰ Duration: ${Math.round((Date.now() - this.currentSession.startTime) / 1000)} seconds`);
+    console.log(`⏰ Duration: ${Math.round((Date.now() - (completedSession.startTime || Date.now())) / 1000)} seconds`);
     console.log(`📊 Total readings collected: ${stats ? stats.totalReadings : 'Unknown'}`);
     console.log(`💓 Average Heart Rate: ${stats ? (stats.avgHeartRate || 'No data') : 'Unknown'}`);
     console.log(`🫁 Average SpO2: ${stats ? (stats.avgSpO2 || 'No data') : 'Unknown'}`);
     console.log(`🔄 Reading buffer size: ${this.readingBuffer.length}`);
-    console.log(`📱 Session reading count: ${this.currentSession.readingCount}`);
+    console.log(`📱 Session reading count: ${completedSession.readingCount || 0}`);
     console.log(`🔗 Session mapping entries: ${SupabaseService.sessionMapping.size}`);
     console.log(`📤 Sync queue items: ${SupabaseService.syncQueue.length}`);
     console.log(`💾 Has session mapping for this ID: ${SupabaseService.sessionMapping.has(sessionId) ? '✅ Yes' : '❌ No'}`);
     
     if (stats && stats.totalReadings > 0) {
       console.log('✅ SUCCESS: Pulse oximeter data was collected and saved!');
-    } else if (this.currentSession.readingCount > 0) {
+    } else if (completedSession.readingCount > 0) {
       console.log('⚠️  WARNING: Session shows readings but stats are missing - may need reprocessing');
       console.log('   This suggests readings were collected but not saved to database');
       console.log('   Check session mapping recovery in next session');

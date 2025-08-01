@@ -84,6 +84,9 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     isAnyDeviceConnected 
   } = useBluetooth();
   
+  // Get sessionId from navigation params (from survey completion)
+  const existingSessionId = route?.params?.sessionId;
+  
   // Enhanced session state - using the enhanced session manager
   const [sessionInfo, setSessionInfo] = useState(EnhancedSessionManager.getSessionInfo());
   const [totalTimeElapsed, setTotalTimeElapsed] = useState(0);
@@ -247,7 +250,9 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
 
   const startSession = async () => {
     try {
-      await EnhancedSessionManager.startSession(protocolConfig);
+      console.log('🔄 Starting IHHT session', existingSessionId ? `with existing sessionId: ${existingSessionId}` : 'with new sessionId');
+      // Support both protocol config and existing session ID
+      await EnhancedSessionManager.startSession(existingSessionId || protocolConfig);
       setSessionInfo(EnhancedSessionManager.getSessionInfo());
     } catch (error) {
       console.error('Failed to start enhanced session:', error);
@@ -256,13 +261,14 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     }
   };
 
-  const handleSessionComplete = (completedSessionData) => {
-    Alert.alert(
-      'Training Complete!',
-      `Congratulations! You've completed all ${completedSessionData.currentCycle || sessionInfo.totalCycles} cycles of IHHT training.`,
-      [{ text: 'View Results', onPress: () => navigation.navigate('History') }]
-    );
+  const handleSessionComplete = (sessionData) => {
+    console.log('🎯 Navigating to post-session survey for completed session');
+    
+    const sessionIdForSurvey = sessionData?.id || sessionData?.sessionId;
+    navigation.navigate('PostSessionSurvey', { sessionId: sessionIdForSurvey });
   };
+
+
 
   const pauseSession = async () => {
     try {
@@ -285,11 +291,18 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const terminateSession = async () => {
     try {
       Vibration.cancel();
-      await EnhancedSessionManager.stopSession();
-      navigation.goBack();
+      const result = await EnhancedSessionManager.stopSession();
+      
+      // Navigate to post-session survey screen
+      const sessionIdForSurvey = result?.id || result?.sessionId || sessionInfo?.sessionId || sessionInfo?.currentSession?.id;
+      console.log('🎯 Navigating to post-session survey for manual session end');
+      
+      navigation.navigate('PostSessionSurvey', { sessionId: sessionIdForSurvey });
+      
     } catch (error) {
       console.error('Failed to terminate session:', error);
-      navigation.goBack();
+      // Still navigate to history even if there's an error
+      navigation.navigate('MainTabs', { screen: 'History' });
     }
   };
 
