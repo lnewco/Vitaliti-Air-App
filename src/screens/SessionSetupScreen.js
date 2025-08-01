@@ -185,6 +185,52 @@ const SessionSetupScreen = ({ navigation }) => {
     </View>
   );
 
+  // Custom Slider Component (copied from IHHTTrainingScreen)
+  const CustomSlider = ({ value, onValueChange, minimumValue = 0, maximumValue = 10, step = 1 }) => {
+    const handlePress = (event) => {
+      const { locationX } = event.nativeEvent;
+      const sliderWidth = 280; // Fixed width for calculations
+      const percentage = Math.max(0, Math.min(1, locationX / sliderWidth));
+      const range = maximumValue - minimumValue;
+      const rawValue = minimumValue + (percentage * range);
+      const steppedValue = Math.round(rawValue / step) * step;
+      const clampedValue = Math.max(minimumValue, Math.min(maximumValue, steppedValue));
+      onValueChange(clampedValue);
+    };
+
+    const getThumbPosition = () => {
+      const range = maximumValue - minimumValue;
+      const percentage = (value - minimumValue) / range;
+      return percentage * 280; // Match slider width
+    };
+
+    return (
+      <View style={styles.customSliderContainer}>
+        <TouchableOpacity 
+          style={styles.sliderTrack} 
+          onPress={handlePress}
+          activeOpacity={1}
+        >
+          {/* Track Background */}
+          <View style={styles.sliderTrackBackground} />
+          
+          {/* Active Track */}
+          <View style={[styles.sliderActiveTrack, { width: getThumbPosition() }]} />
+          
+          {/* Thumb */}
+          <View style={[styles.sliderThumb, { left: getThumbPosition() - 12 }]} />
+        </TouchableOpacity>
+        
+        {/* Value Labels */}
+        <View style={styles.sliderLabels}>
+          <Text style={styles.sliderLabelText}>{minimumValue}</Text>
+          <Text style={styles.sliderCurrentValue}>{value}</Text>
+          <Text style={styles.sliderLabelText}>{maximumValue}</Text>
+        </View>
+      </View>
+    );
+  };
+
   // Configuration Slider Component
   const ConfigSlider = ({ label, value, onValueChange, min, max, suffix, step = 1 }) => (
     <View style={styles.configSliderContainer}>
@@ -926,9 +972,66 @@ const styles = StyleSheet.create({
   warningText: {
     flex: 1,
     fontSize: 14,
-    color: '#92400E',
-    lineHeight: 20,
-  },
+         color: '#92400E',
+     lineHeight: 20,
+   },
+   
+   // Custom Slider Styles (copied from IHHTTrainingScreen)
+   customSliderContainer: {
+     width: '100%',
+     alignItems: 'center',
+     marginTop: 10,
+   },
+   sliderTrack: {
+     width: 280, // Fixed width for the slider track
+     height: 10,
+     backgroundColor: '#E0E0E0',
+     borderRadius: 5,
+     position: 'relative',
+     marginBottom: 10,
+   },
+   sliderTrackBackground: {
+     position: 'absolute',
+     top: 0,
+     left: 0,
+     right: 0,
+     bottom: 0,
+     backgroundColor: '#E0E0E0',
+     borderRadius: 5,
+   },
+   sliderActiveTrack: {
+     position: 'absolute',
+     top: 0,
+     left: 0,
+     bottom: 0,
+     backgroundColor: '#2196F3', // Example color for active track
+     borderRadius: 5,
+   },
+   sliderThumb: {
+     position: 'absolute',
+     top: -5, // Adjust to center the thumb
+     width: 24,
+     height: 24,
+     backgroundColor: '#2196F3',
+     borderRadius: 12,
+     borderWidth: 2,
+     borderColor: '#FFFFFF',
+   },
+   sliderLabels: {
+     flexDirection: 'row',
+     justifyContent: 'space-between',
+     width: '100%',
+     marginTop: 10,
+   },
+   sliderLabelText: {
+     fontSize: 14,
+     color: '#666666',
+   },
+   sliderCurrentValue: {
+     fontSize: 18,
+     fontWeight: 'bold',
+     color: '#333333',
+   },
 
 });
 
