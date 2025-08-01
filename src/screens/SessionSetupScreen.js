@@ -243,15 +243,11 @@ const SessionSetupScreen = ({ navigation }) => {
     let description = "Your devices are connected and reading data. You're ready to start your IHHT training session.";
     
     if (isHRConnected && isPulseOxConnected) {
-      title = heartRateData?.hrv ? "Dual Device Setup Complete" : "Dual Device Setup - HRV Loading";
-      description = heartRateData?.hrv 
-        ? "Both heart rate monitor and pulse oximeter are connected. You have complete monitoring with enhanced HRV analysis and SpO2 tracking."
-        : "Both devices are connected! Pulse oximeter is providing SpO2 data while your heart rate monitor is collecting data for HRV analysis.";
+      title = "Dual Device Setup Complete";
+      description = "Both heart rate monitor and pulse oximeter are connected. You have complete monitoring with enhanced HRV analysis and SpO2 tracking.";
     } else if (isHRConnected && !isPulseOxConnected) {
-      title = heartRateData?.hrv ? "WHOOP Connected - Enhanced HRV Ready" : "WHOOP Connected - HRV Loading";
-      description = heartRateData?.hrv 
-        ? "Your heart rate monitor is connected and providing detailed HRV analysis. You're ready for HRV-focused IHHT training."
-        : "Your heart rate monitor is connected and collecting data for HRV analysis. HRV metrics will appear shortly.";
+      title = "Heart Rate Monitor Connected";
+      description = "Your heart rate monitor is connected and providing detailed HRV analysis. You're ready for HRV-focused IHHT training.";
     } else if (!isHRConnected && isPulseOxConnected) {
       title = "Pulse Oximeter Connected";
       description = "Your pulse oximeter is connected for SpO2 monitoring. You're ready for oxygen-focused IHHT training.";
@@ -272,109 +268,14 @@ const SessionSetupScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.stepContent}>
-            {/* Heart Rate Monitor Section - Show FIRST when connected */}
-            {isHRConnected && (
-              <View style={[styles.readyCard, styles.primaryCard]}>
-                <Text style={styles.readyIcon}>❤️</Text>
-                <Text style={styles.readyTitle}>Heart Rate Monitor Connected</Text>
-                <Text style={styles.readySubtitle}>Enhanced HR accuracy and HRV analysis active</Text>
-                
-                {heartRateData && (
-                  <View style={styles.liveData}>
-                    <View style={styles.dataRow}>
-                      <Text style={styles.dataLabel}>Heart Rate:</Text>
-                      <Text style={[styles.dataValue, styles.primaryDataValue]}>{heartRateData.heartRate || '--'} bpm</Text>
-                    </View>
-                    
-                    {/* Dual-Timeframe HRV Display */}
-                    <View style={styles.hrvSection}>
-                      <DualHRVDisplay 
-                        heartRateData={heartRateData} 
-                      />
-                    </View>
-                    
-                    <View style={styles.dataRow}>
-                      <Text style={styles.dataLabel}>Sensor Contact:</Text>
-                      <Text style={styles.dataValue}>
-                        {heartRateData.sensorContactDetected ? '✅ Good' : '⚠️ Check placement'}
-                      </Text>
-                    </View>
-                    
-                    {!heartRateData.sensorContactDetected && (
-                      <View style={styles.sensorTipCard}>
-                        <Text style={styles.sensorTipTitle}>💡 WHOOP Placement Tips</Text>
-                        <Text style={styles.sensorTipText}>
-                          • Ensure WHOOP is snug but not too tight{'\n'}
-                          • Position on wrist bone, not muscle{'\n'}
-                          • Clean sensor and skin if needed{'\n'}
-                          • Try different wrist position{'\n'}
-                          • Note: Some WHOOPs don't report contact but still work fine
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Pulse Oximeter Section - Show SECOND when both connected, or first if only pulse ox */}
-            {isPulseOxConnected && (
-              <View style={[styles.readyCard, isHRConnected ? styles.secondaryCard : styles.primaryCard]}>
-                <Text style={styles.readyIcon}>📱</Text>
-                <Text style={styles.readyTitle}>Pulse Oximeter Connected</Text>
-                <Text style={styles.readySubtitle}>SpO2 and heart rate monitoring active</Text>
-                
-                {pulseOximeterData && (
-                  <View style={styles.liveData}>
-                    <View style={styles.dataRow}>
-                      <Text style={styles.dataLabel}>SpO2:</Text>
-                      <Text style={[styles.dataValue, !isHRConnected && styles.primaryDataValue]}>{pulseOximeterData.spo2 || '--'}%</Text>
-                    </View>
-                    <View style={styles.dataRow}>
-                      <Text style={styles.dataLabel}>Heart Rate:</Text>
-                      <Text style={styles.dataValue}>{pulseOximeterData.heartRate || '--'} bpm</Text>
-                    </View>
-                    <View style={styles.dataRow}>
-                      <Text style={styles.dataLabel}>Signal:</Text>
-                      <Text style={styles.dataValue}>
-                        {pulseOximeterData.signalStrength ? `${pulseOximeterData.signalStrength}/15` : '--'}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Show connection encouragement if only one device connected */}
-            {(isHRConnected && !isPulseOxConnected) && (
-              <View style={styles.optionalDeviceCard}>
-                <Text style={styles.optionalIcon}>📱</Text>
-                <Text style={styles.optionalTitle}>Pulse Oximeter (Optional)</Text>
-                <Text style={styles.optionalDescription}>
-                  Add a pulse oximeter for SpO2 monitoring and enhanced safety during training. 
-                  Click "Back" to connect additional devices.
-                </Text>
-              </View>
-            )}
-
-            {(!isHRConnected && isPulseOxConnected) && (
-              <View style={styles.optionalDeviceCard}>
-                <Text style={styles.optionalIcon}>❤️</Text>
-                <Text style={styles.optionalTitle}>Heart Rate Monitor (Optional)</Text>
-                <Text style={styles.optionalDescription}>
-                  Add a WHOOP or other heart rate monitor for detailed HRV analysis and enhanced training insights. 
-                  Click "Back" to connect additional devices.
-                </Text>
-              </View>
-            )}
-
+            {/* Session Protocol Summary */}
             <View style={styles.sessionInfo}>
               <Text style={styles.sessionInfoTitle}>🎯 Your IHHT Training Session</Text>
               <Text style={styles.sessionInfoText}>
                 • {protocolConfig.totalCycles} cycles of hypoxic-hyperoxic training{'\n'}
                 • {protocolConfig.hypoxicDuration} min hypoxia + {protocolConfig.hyperoxicDuration} min hyperoxia per cycle{'\n'}
                 • Total duration: {calculateTotalDuration} minutes{'\n'}
-                • Real-time {isHRConnected ? (heartRateData?.hrv ? 'HRV and ' : 'HRV (loading) and ') : ''}safety monitoring{'\n'}
+                • Real-time {isHRConnected ? 'HRV and ' : ''}safety monitoring{'\n'}
                 • Guided breathing phases
               </Text>
             </View>

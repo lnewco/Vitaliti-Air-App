@@ -149,7 +149,7 @@ export const BluetoothProvider = ({ children }) => {
     });
 
     return () => {
-      BluetoothService.clearHandlers();
+      BluetoothService.cleanup();
     };
   }, [throttledUIUpdate, persistentHRV, lastHRVUpdate]);
 
