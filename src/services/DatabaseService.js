@@ -74,7 +74,9 @@ class DatabaseService {
         'session_type TEXT DEFAULT \'IHHT\'', 
         'current_phase TEXT', 
         'current_cycle INTEGER DEFAULT 1', 
-        'total_cycles INTEGER DEFAULT 5',
+        'total_cycles INTEGER DEFAULT 3',
+        'hypoxic_duration INTEGER DEFAULT 420',
+        'hyperoxic_duration INTEGER DEFAULT 180',
         'default_hypoxia_level INTEGER'
       ];
       
@@ -112,9 +114,9 @@ class DatabaseService {
     const startTime = Date.now();
     
     // Use protocol config or defaults
-    const totalCycles = protocolConfig?.totalCycles || 5;
-    const hypoxicDuration = protocolConfig?.hypoxicDuration || 300;
-    const hyperoxicDuration = protocolConfig?.hyperoxicDuration || 120;
+    const totalCycles = protocolConfig?.totalCycles || 3;
+    const hypoxicDuration = protocolConfig?.hypoxicDuration || 420; // 7 minutes
+    const hyperoxicDuration = protocolConfig?.hyperoxicDuration || 180; // 3 minutes
     
     await this.db.executeSql(query, [
       sessionId, 

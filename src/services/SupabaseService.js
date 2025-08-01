@@ -54,9 +54,9 @@ class SupabaseService {
         session_type: 'IHHT',
         default_hypoxia_level: sessionData.defaultHypoxiaLevel || null,
         // Protocol configuration
-        total_cycles: sessionData.protocolConfig?.totalCycles || 5,
-        hypoxic_duration: sessionData.protocolConfig?.hypoxicDuration || 300,
-        hyperoxic_duration: sessionData.protocolConfig?.hyperoxicDuration || 120,
+        total_cycles: sessionData.protocolConfig?.totalCycles || 3,
+        hypoxic_duration: sessionData.protocolConfig?.hypoxicDuration || 420, // 7 minutes
+        hyperoxic_duration: sessionData.protocolConfig?.hyperoxicDuration || 180, // 3 minutes
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         // Store the local session ID as metadata
