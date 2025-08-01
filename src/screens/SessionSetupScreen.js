@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert, ScrollView, PanResponder } from 'react-native';
 import { useBluetooth } from '../context/BluetoothContext';
 import StepIndicator from '../components/StepIndicator';
 import DualDeviceConnectionManager from '../components/DualDeviceConnectionManager';
@@ -185,11 +185,11 @@ const SessionSetupScreen = ({ navigation }) => {
     </View>
   );
 
-  // Custom Slider Component (copied from IHHTTrainingScreen)
+  // Custom Slider Component with drag support
   const CustomSlider = ({ value, onValueChange, minimumValue = 0, maximumValue = 10, step = 1 }) => {
-    const handlePress = (event) => {
-      const { locationX } = event.nativeEvent;
-      const sliderWidth = 280; // Fixed width for calculations
+    const sliderWidth = 280;
+
+    const updateValue = (locationX) => {
       const percentage = Math.max(0, Math.min(1, locationX / sliderWidth));
       const range = maximumValue - minimumValue;
       const rawValue = minimumValue + (percentage * range);
@@ -198,18 +198,34 @@ const SessionSetupScreen = ({ navigation }) => {
       onValueChange(clampedValue);
     };
 
+    const panResponder = PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderGrant: (evt) => {
+        updateValue(evt.nativeEvent.locationX);
+      },
+      onPanResponderMove: (evt) => {
+        updateValue(evt.nativeEvent.locationX);
+      },
+      onPanResponderTerminationRequest: () => true,
+      onPanResponderRelease: () => {},
+      onPanResponderTerminate: () => {},
+      onShouldBlockNativeResponder: () => false,
+    });
+
     const getThumbPosition = () => {
       const range = maximumValue - minimumValue;
       const percentage = (value - minimumValue) / range;
-      return percentage * 280; // Match slider width
+      return percentage * sliderWidth;
     };
 
     return (
       <View style={styles.customSliderContainer}>
-        <TouchableOpacity 
+        <View 
           style={styles.sliderTrack} 
-          onPress={handlePress}
-          activeOpacity={1}
+          {...panResponder.panHandlers}
         >
           {/* Track Background */}
           <View style={styles.sliderTrackBackground} />
@@ -219,12 +235,11 @@ const SessionSetupScreen = ({ navigation }) => {
           
           {/* Thumb */}
           <View style={[styles.sliderThumb, { left: getThumbPosition() - 12 }]} />
-        </TouchableOpacity>
+        </View>
         
-        {/* Value Labels */}
+        {/* Range Labels */}
         <View style={styles.sliderLabels}>
           <Text style={styles.sliderLabelText}>{minimumValue}</Text>
-          <Text style={styles.sliderCurrentValue}>{value}</Text>
           <Text style={styles.sliderLabelText}>{maximumValue}</Text>
         </View>
       </View>
@@ -245,10 +260,6 @@ const SessionSetupScreen = ({ navigation }) => {
         maximumValue={max}
         step={step}
       />
-      <View style={styles.configSliderRange}>
-        <Text style={styles.configSliderRangeText}>{min}</Text>
-        <Text style={styles.configSliderRangeText}>{max}</Text>
-      </View>
     </View>
   );
 
@@ -281,8 +292,8 @@ const SessionSetupScreen = ({ navigation }) => {
               label="Hypoxia Phase"
               value={protocolConfig.hypoxicDuration}
               onValueChange={(value) => setProtocolConfig(prev => ({ ...prev, hypoxicDuration: Math.round(value) }))}
-              min={3}
-              max={15}
+              min={1}
+              max={10}
               suffix="minutes"
             />
 
