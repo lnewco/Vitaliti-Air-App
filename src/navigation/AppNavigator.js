@@ -5,12 +5,16 @@ import { createStackNavigator } from '@react-navigation/stack';
 
 import { useAuth } from '../auth/AuthContext';
 import AuthNavigator from './AuthNavigator';
+import OnboardingNavigator from './OnboardingNavigator';
 import MainAppContent from '../screens/MainAppContent';
 
 const Stack = createStackNavigator();
 
 const AppNavigator = () => {
   const { isAuthenticated, isLoading, user } = useAuth();
+  
+  // TODO: In Phase 6, this will check if user has completed onboarding
+  const hasCompletedOnboarding = false; // Temporary for Phase 1 testing
 
   // Show loading screen while checking authentication
   if (isLoading) {
@@ -25,12 +29,21 @@ const AppNavigator = () => {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isAuthenticated ? (
-          // User is authenticated - show main app
-          <Stack.Screen 
-            name="Main" 
-            component={MainAppContent}
-            options={{ title: 'Vitaliti Air' }}
-          />
+          hasCompletedOnboarding ? (
+            // User is authenticated and has completed onboarding - show main app
+            <Stack.Screen 
+              name="Main" 
+              component={MainAppContent}
+              options={{ title: 'Vitaliti Air' }}
+            />
+          ) : (
+            // User is authenticated but needs to complete onboarding
+            <Stack.Screen 
+              name="Onboarding" 
+              component={OnboardingNavigator}
+              options={{ title: 'Get Started' }}
+            />
+          )
         ) : (
           // User is not authenticated - show auth screens
           <Stack.Screen 
