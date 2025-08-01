@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { useBluetooth } from '../context/BluetoothContext';
 import StepIndicator from '../components/StepIndicator';
@@ -116,9 +116,22 @@ const SessionSetupScreen = ({ navigation }) => {
   } = useBluetooth();
 
   // Calculate total session duration in minutes
-  const calculateTotalDuration = () => {
+  const calculateTotalDuration = useMemo(() => {
     return (protocolConfig.hypoxicDuration + protocolConfig.hyperoxicDuration) * protocolConfig.totalCycles;
-  };
+  }, [protocolConfig.hypoxicDuration, protocolConfig.hyperoxicDuration, protocolConfig.totalCycles]);
+
+  // Memoized onValueChange handlers to prevent re-renders
+  const handleTotalCyclesChange = useCallback((value) => {
+    setProtocolConfig(prev => ({ ...prev, totalCycles: Math.round(value) }));
+  }, []);
+
+  const handleHypoxicDurationChange = useCallback((value) => {
+    setProtocolConfig(prev => ({ ...prev, hypoxicDuration: Math.round(value) }));
+  }, []);
+
+  const handleHyperoxicDurationChange = useCallback((value) => {
+    setProtocolConfig(prev => ({ ...prev, hyperoxicDuration: Math.round(value) }));
+  }, []);
 
   // Auto-regress to step 1 if no devices are connected
   useEffect(() => {
@@ -185,17 +198,17 @@ const SessionSetupScreen = ({ navigation }) => {
     </View>
   );
 
-  // Picker Wheel Component with up/down arrows
-  const PickerWheel = ({ value, onValueChange, minimumValue = 0, maximumValue = 10, step = 1 }) => {
-    const increment = () => {
+  // Picker Wheel Component with up/down arrows (memoized)
+  const PickerWheel = React.memo(({ value, onValueChange, minimumValue = 0, maximumValue = 10, step = 1 }) => {
+    const increment = useCallback(() => {
       const newValue = Math.min(maximumValue, value + step);
       onValueChange(newValue);
-    };
+    }, [value, maximumValue, step, onValueChange]);
 
-    const decrement = () => {
+    const decrement = useCallback(() => {
       const newValue = Math.max(minimumValue, value - step);
       onValueChange(newValue);
-    };
+    }, [value, minimumValue, step, onValueChange]);
 
     return (
       <View style={styles.pickerContainer}>
@@ -224,10 +237,10 @@ const SessionSetupScreen = ({ navigation }) => {
         </View>
       </View>
     );
-  };
+  });
 
-  // Configuration Picker Component
-  const ConfigPicker = ({ label, value, onValueChange, min, max, suffix, step = 1 }) => (
+  // Configuration Picker Component (memoized)
+  const ConfigPicker = React.memo(({ label, value, onValueChange, min, max, suffix, step = 1 }) => (
     <View style={styles.configContainer}>
       <View style={styles.configHeader}>
         <Text style={styles.configLabel}>{label}</Text>
@@ -241,7 +254,7 @@ const SessionSetupScreen = ({ navigation }) => {
         step={step}
       />
     </View>
-  );
+  ));
 
   const renderStep2 = () => (
     <View style={styles.stepContainer}>
@@ -259,7 +272,7 @@ const SessionSetupScreen = ({ navigation }) => {
             <ConfigPicker
               label="Number of Rounds"
               value={protocolConfig.totalCycles}
-              onValueChange={(value) => setProtocolConfig(prev => ({ ...prev, totalCycles: Math.round(value) }))}
+              onValueChange={handleTotalCyclesChange}
               min={1}
               max={10}
               suffix="rounds"
@@ -268,7 +281,7 @@ const SessionSetupScreen = ({ navigation }) => {
             <ConfigPicker
               label="Hypoxia Phase"
               value={protocolConfig.hypoxicDuration}
-              onValueChange={(value) => setProtocolConfig(prev => ({ ...prev, hypoxicDuration: Math.round(value) }))}
+              onValueChange={handleHypoxicDurationChange}
               min={1}
               max={10}
               suffix="minutes"
@@ -277,7 +290,7 @@ const SessionSetupScreen = ({ navigation }) => {
             <ConfigPicker
               label="Hyperoxia Phase"
               value={protocolConfig.hyperoxicDuration}
-              onValueChange={(value) => setProtocolConfig(prev => ({ ...prev, hyperoxicDuration: Math.round(value) }))}
+              onValueChange={handleHyperoxicDurationChange}
               min={1}
               max={10}
               suffix="minutes"
@@ -285,17 +298,17 @@ const SessionSetupScreen = ({ navigation }) => {
 
             <View style={styles.totalDurationCard}>
               <Text style={styles.totalDurationLabel}>Total Session Duration</Text>
-              <Text style={styles.totalDurationValue}>{calculateTotalDuration()} minutes</Text>
+              <Text style={styles.totalDurationValue}>{calculateTotalDuration} minutes</Text>
               <Text style={styles.totalDurationBreakdown}>
                 {protocolConfig.totalCycles} × ({protocolConfig.hypoxicDuration} + {protocolConfig.hyperoxicDuration}) minutes
               </Text>
             </View>
 
-            {calculateTotalDuration() > 60 && (
+            {calculateTotalDuration > 60 && (
               <View style={styles.warningCard}>
                 <Text style={styles.warningIcon}>⚠️</Text>
                 <Text style={styles.warningText}>
-                  Long session detected ({calculateTotalDuration()} min). Consider shorter durations for your first sessions.
+                  Long session detected ({calculateTotalDuration} min). Consider shorter durations for your first sessions.
                 </Text>
               </View>
             )}
@@ -453,7 +466,7 @@ const SessionSetupScreen = ({ navigation }) => {
               <Text style={styles.sessionInfoText}>
                 • {protocolConfig.totalCycles} cycles of hypoxic-hyperoxic training{'\n'}
                 • {protocolConfig.hypoxicDuration} min hypoxia + {protocolConfig.hyperoxicDuration} min hyperoxia per cycle{'\n'}
-                • Total duration: {calculateTotalDuration()} minutes{'\n'}
+                • Total duration: {calculateTotalDuration} minutes{'\n'}
                 • Real-time {isHRConnected ? (heartRateData?.hrv ? 'HRV and ' : 'HRV (loading) and ') : ''}safety monitoring{'\n'}
                 • Guided breathing phases
               </Text>
