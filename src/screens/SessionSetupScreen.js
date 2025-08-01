@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert, ScrollView, PanResponder } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { useBluetooth } from '../context/BluetoothContext';
 import StepIndicator from '../components/StepIndicator';
 import DualDeviceConnectionManager from '../components/DualDeviceConnectionManager';
@@ -185,75 +185,55 @@ const SessionSetupScreen = ({ navigation }) => {
     </View>
   );
 
-  // Custom Slider Component with drag support
-  const CustomSlider = ({ value, onValueChange, minimumValue = 0, maximumValue = 10, step = 1 }) => {
-    const sliderWidth = 280;
-
-    const updateValue = (locationX) => {
-      const percentage = Math.max(0, Math.min(1, locationX / sliderWidth));
-      const range = maximumValue - minimumValue;
-      const rawValue = minimumValue + (percentage * range);
-      const steppedValue = Math.round(rawValue / step) * step;
-      const clampedValue = Math.max(minimumValue, Math.min(maximumValue, steppedValue));
-      onValueChange(clampedValue);
+  // Picker Wheel Component with up/down arrows
+  const PickerWheel = ({ value, onValueChange, minimumValue = 0, maximumValue = 10, step = 1 }) => {
+    const increment = () => {
+      const newValue = Math.min(maximumValue, value + step);
+      onValueChange(newValue);
     };
 
-    const panResponder = PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponderCapture: () => true,
-      onPanResponderGrant: (evt) => {
-        updateValue(evt.nativeEvent.locationX);
-      },
-      onPanResponderMove: (evt) => {
-        updateValue(evt.nativeEvent.locationX);
-      },
-      onPanResponderTerminationRequest: () => true,
-      onPanResponderRelease: () => {},
-      onPanResponderTerminate: () => {},
-      onShouldBlockNativeResponder: () => false,
-    });
-
-    const getThumbPosition = () => {
-      const range = maximumValue - minimumValue;
-      const percentage = (value - minimumValue) / range;
-      return percentage * sliderWidth;
+    const decrement = () => {
+      const newValue = Math.max(minimumValue, value - step);
+      onValueChange(newValue);
     };
 
     return (
-      <View style={styles.customSliderContainer}>
-        <View 
-          style={styles.sliderTrack} 
-          {...panResponder.panHandlers}
+      <View style={styles.pickerContainer}>
+        <TouchableOpacity 
+          style={[styles.pickerButton, value >= maximumValue && styles.pickerButtonDisabled]} 
+          onPress={increment}
+          disabled={value >= maximumValue}
         >
-          {/* Track Background */}
-          <View style={styles.sliderTrackBackground} />
-          
-          {/* Active Track */}
-          <View style={[styles.sliderActiveTrack, { width: getThumbPosition() }]} />
-          
-          {/* Thumb */}
-          <View style={[styles.sliderThumb, { left: getThumbPosition() - 12 }]} />
+          <Text style={[styles.pickerButtonText, value >= maximumValue && styles.pickerButtonTextDisabled]}>▲</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.pickerValueContainer}>
+          <Text style={styles.pickerValue}>{value}</Text>
         </View>
         
-        {/* Range Labels */}
-        <View style={styles.sliderLabels}>
-          <Text style={styles.sliderLabelText}>{minimumValue}</Text>
-          <Text style={styles.sliderLabelText}>{maximumValue}</Text>
+        <TouchableOpacity 
+          style={[styles.pickerButton, value <= minimumValue && styles.pickerButtonDisabled]} 
+          onPress={decrement}
+          disabled={value <= minimumValue}
+        >
+          <Text style={[styles.pickerButtonText, value <= minimumValue && styles.pickerButtonTextDisabled]}>▼</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.pickerRange}>
+          <Text style={styles.pickerRangeText}>{minimumValue}-{maximumValue}</Text>
         </View>
       </View>
     );
   };
 
-  // Configuration Slider Component
-  const ConfigSlider = ({ label, value, onValueChange, min, max, suffix, step = 1 }) => (
-    <View style={styles.configSliderContainer}>
-      <View style={styles.configSliderHeader}>
-        <Text style={styles.configSliderLabel}>{label}</Text>
-        <Text style={styles.configSliderValue}>{value} {suffix}</Text>
+  // Configuration Picker Component
+  const ConfigPicker = ({ label, value, onValueChange, min, max, suffix, step = 1 }) => (
+    <View style={styles.configContainer}>
+      <View style={styles.configHeader}>
+        <Text style={styles.configLabel}>{label}</Text>
+        <Text style={styles.configSuffix}>{suffix}</Text>
       </View>
-      <CustomSlider
+      <PickerWheel
         value={value}
         onValueChange={onValueChange}
         minimumValue={min}
@@ -278,8 +258,8 @@ const SessionSetupScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.stepContent}>
-          <View style={styles.configContainer}>
-            <ConfigSlider
+          <View style={styles.configGrid}>
+            <ConfigPicker
               label="Number of Rounds"
               value={protocolConfig.totalCycles}
               onValueChange={(value) => setProtocolConfig(prev => ({ ...prev, totalCycles: Math.round(value) }))}
@@ -288,7 +268,7 @@ const SessionSetupScreen = ({ navigation }) => {
               suffix="rounds"
             />
 
-            <ConfigSlider
+            <ConfigPicker
               label="Hypoxia Phase"
               value={protocolConfig.hypoxicDuration}
               onValueChange={(value) => setProtocolConfig(prev => ({ ...prev, hypoxicDuration: Math.round(value) }))}
@@ -297,7 +277,7 @@ const SessionSetupScreen = ({ navigation }) => {
               suffix="minutes"
             />
 
-            <ConfigSlider
+            <ConfigPicker
               label="Hyperoxia Phase"
               value={protocolConfig.hyperoxicDuration}
               onValueChange={(value) => setProtocolConfig(prev => ({ ...prev, hyperoxicDuration: Math.round(value) }))}
@@ -902,42 +882,38 @@ const styles = StyleSheet.create({
   },
   
   // Configuration step styles
-  configContainer: {
+  configGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    flexWrap: 'wrap',
     paddingVertical: 10,
   },
-  configSliderContainer: {
+  configContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 20,
     marginBottom: 16,
+    minWidth: 100,
+    maxWidth: 120,
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  configSliderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  configHeader: {
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  configSliderLabel: {
-    fontSize: 16,
+  configLabel: {
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#1F2937',
+    textAlign: 'center',
+    marginBottom: 4,
   },
-  configSliderValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#3B82F6',
-  },
-  configSliderRange: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  configSliderRangeText: {
+  configSuffix: {
     fontSize: 12,
     color: '#6B7280',
   },
@@ -987,61 +963,54 @@ const styles = StyleSheet.create({
      lineHeight: 20,
    },
    
-   // Custom Slider Styles (copied from IHHTTrainingScreen)
-   customSliderContainer: {
-     width: '100%',
+   // Picker Wheel Styles
+   pickerContainer: {
      alignItems: 'center',
-     marginTop: 10,
+     justifyContent: 'center',
    },
-   sliderTrack: {
-     width: 280, // Fixed width for the slider track
-     height: 10,
-     backgroundColor: '#E0E0E0',
-     borderRadius: 5,
-     position: 'relative',
-     marginBottom: 10,
+   pickerButton: {
+     backgroundColor: '#3B82F6',
+     borderRadius: 8,
+     width: 40,
+     height: 32,
+     justifyContent: 'center',
+     alignItems: 'center',
+     marginVertical: 4,
    },
-   sliderTrackBackground: {
-     position: 'absolute',
-     top: 0,
-     left: 0,
-     right: 0,
-     bottom: 0,
-     backgroundColor: '#E0E0E0',
-     borderRadius: 5,
+   pickerButtonDisabled: {
+     backgroundColor: '#E5E7EB',
    },
-   sliderActiveTrack: {
-     position: 'absolute',
-     top: 0,
-     left: 0,
-     bottom: 0,
-     backgroundColor: '#2196F3', // Example color for active track
-     borderRadius: 5,
-   },
-   sliderThumb: {
-     position: 'absolute',
-     top: -5, // Adjust to center the thumb
-     width: 24,
-     height: 24,
-     backgroundColor: '#2196F3',
-     borderRadius: 12,
-     borderWidth: 2,
-     borderColor: '#FFFFFF',
-   },
-   sliderLabels: {
-     flexDirection: 'row',
-     justifyContent: 'space-between',
-     width: '100%',
-     marginTop: 10,
-   },
-   sliderLabelText: {
-     fontSize: 14,
-     color: '#666666',
-   },
-   sliderCurrentValue: {
-     fontSize: 18,
+   pickerButtonText: {
+     fontSize: 16,
      fontWeight: 'bold',
-     color: '#333333',
+     color: '#FFFFFF',
+   },
+   pickerButtonTextDisabled: {
+     color: '#9CA3AF',
+   },
+   pickerValueContainer: {
+     backgroundColor: '#F3F4F6',
+     borderRadius: 8,
+     borderWidth: 2,
+     borderColor: '#E5E7EB',
+     paddingVertical: 12,
+     paddingHorizontal: 16,
+     marginVertical: 8,
+     minWidth: 60,
+   },
+   pickerValue: {
+     fontSize: 24,
+     fontWeight: 'bold',
+     color: '#1F2937',
+     textAlign: 'center',
+   },
+   pickerRange: {
+     marginTop: 8,
+   },
+   pickerRangeText: {
+     fontSize: 10,
+     color: '#6B7280',
+     textAlign: 'center',
    },
 
 });
