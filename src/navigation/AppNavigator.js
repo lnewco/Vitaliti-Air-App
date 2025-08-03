@@ -28,6 +28,13 @@ const AppNavigator = () => {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {/* TEMPORARY: Force show onboarding for testing */}
+        <Stack.Screen 
+          name="Onboarding" 
+          component={OnboardingNavigator}
+          options={{ title: 'Get Started' }}
+        />
+        {/* Original logic commented out for testing
         {isAuthenticated ? (
           hasCompletedOnboarding ? (
             // User is authenticated and has completed onboarding - show main app
@@ -52,6 +59,7 @@ const AppNavigator = () => {
             options={{ title: 'Sign In' }}
           />
         )}
+        */}
       </Stack.Navigator>
     </NavigationContainer>
   );
