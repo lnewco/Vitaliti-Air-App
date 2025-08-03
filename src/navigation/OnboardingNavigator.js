@@ -1,7 +1,7 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 
-// Import onboarding screens
+// Import all onboarding screens
 import WelcomeScreen from '../screens/onboarding/WelcomeScreen';
 import BasicInfoScreen from '../screens/onboarding/BasicInfoScreen';
 import ConsentScreen from '../screens/onboarding/ConsentScreen';
@@ -16,7 +16,9 @@ const OnboardingNavigator = () => {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        gestureEnabled: true,
+        gestureEnabled: false, // Prevent going back during onboarding
+        presentation: 'card',
+        animationTypeForReplace: 'push',
         cardStyleInterpolator: ({ current, layouts }) => {
           return {
             cardStyle: {
@@ -46,7 +48,7 @@ const OnboardingNavigator = () => {
       <Stack.Screen 
         name="Consent" 
         component={ConsentScreen}
-        options={{ title: 'Legal Consent' }}
+        options={{ title: 'Consent & Agreements' }}
       />
       <Stack.Screen 
         name="HealthSafety" 
@@ -56,7 +58,7 @@ const OnboardingNavigator = () => {
       <Stack.Screen 
         name="PhoneVerification" 
         component={PhoneVerificationScreen}
-        options={{ title: 'Create Account' }}
+        options={{ title: 'Phone Verification' }}
       />
       <Stack.Screen 
         name="Completion" 

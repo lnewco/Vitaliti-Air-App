@@ -4,13 +4,15 @@ import OnboardingProgressIndicator from '../../components/OnboardingProgressIndi
 import FormTextInput from '../../components/onboarding/FormTextInput';
 import FormDatePicker from '../../components/onboarding/FormDatePicker';
 import FormRadioGroup from '../../components/onboarding/FormRadioGroup';
+import { useOnboarding } from '../../context/OnboardingContext';
 
 const BasicInfoScreen = ({ navigation }) => {
-  const [formData, setFormData] = useState({
-    fullName: '',
-    dateOfBirth: null,
-    gender: '',
-  });
+  const { 
+    onboardingData, 
+    updateOnboardingData, 
+    updateMultipleFields,
+    validateBasicInfo 
+  } = useOnboarding();
   
   const [errors, setErrors] = useState({});
 
@@ -20,41 +22,16 @@ const BasicInfoScreen = ({ navigation }) => {
     { value: 'prefer_not_to_say', label: 'Prefer not to say' },
   ];
 
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.fullName.trim()) {
-      newErrors.fullName = 'Full name is required';
-    } else if (formData.fullName.trim().length < 2) {
-      newErrors.fullName = 'Please enter your full name';
-    }
-    
-    if (!formData.dateOfBirth) {
-      newErrors.dateOfBirth = 'Date of birth is required';
-    } else {
-      const today = new Date();
-      const birthDate = new Date(formData.dateOfBirth);
-      const age = today.getFullYear() - birthDate.getFullYear();
-      
-      if (age < 18) {
-        newErrors.dateOfBirth = 'You must be at least 18 years old';
-      } else if (age > 100) {
-        newErrors.dateOfBirth = 'Please enter a valid date of birth';
-      }
-    }
-    
-    if (!formData.gender) {
-      newErrors.gender = 'Please select your gender';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleNext = () => {
-    if (validateForm()) {
-      // TODO: Save form data to storage/context for later use
-      console.log('Basic info collected:', formData);
+    const validationErrors = validateBasicInfo();
+    setErrors(validationErrors);
+    
+    if (Object.keys(validationErrors).length === 0) {
+      console.log('Basic info collected:', {
+        fullName: onboardingData.fullName,
+        dateOfBirth: onboardingData.dateOfBirth,
+        gender: onboardingData.gender
+      });
       navigation.navigate('Consent');
     }
   };
@@ -64,7 +41,7 @@ const BasicInfoScreen = ({ navigation }) => {
   };
 
   const updateFormData = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    updateOnboardingData(field, value);
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -100,7 +77,7 @@ const BasicInfoScreen = ({ navigation }) => {
           <View style={styles.formContainer}>
             <FormTextInput
               label="Full Name"
-              value={formData.fullName}
+              value={onboardingData.fullName}
               onChangeText={(value) => updateFormData('fullName', value)}
               placeholder="Enter your full name"
               error={errors.fullName}
@@ -109,7 +86,7 @@ const BasicInfoScreen = ({ navigation }) => {
             
             <FormDatePicker
               label="Date of Birth"
-              value={formData.dateOfBirth}
+              value={onboardingData.dateOfBirth}
               onChange={(date) => updateFormData('dateOfBirth', date)}
               error={errors.dateOfBirth}
               required
@@ -120,7 +97,7 @@ const BasicInfoScreen = ({ navigation }) => {
             <FormRadioGroup
               label="Gender"
               options={genderOptions}
-              value={formData.gender}
+              value={onboardingData.gender}
               onSelect={(value) => updateFormData('gender', value)}
               error={errors.gender}
               required
