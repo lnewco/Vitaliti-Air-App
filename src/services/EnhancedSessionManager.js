@@ -41,9 +41,9 @@ class EnhancedSessionManager {
     
     // Protocol configuration (defaults)
     this.protocolConfig = {
-      totalCycles: 5,
-      hypoxicDuration: 300,    // 5 minutes in seconds
-      hyperoxicDuration: 120   // 2 minutes in seconds
+      totalCycles: 3,
+      hypoxicDuration: 420,    // 7 minutes in seconds
+      hyperoxicDuration: 180   // 3 minutes in seconds
     };
     
     // Live Activity state
@@ -405,6 +405,9 @@ class EnhancedSessionManager {
       this.phaseTimeRemaining = this.protocolConfig.hypoxicDuration;
       this.phaseStartTime = Date.now();
       
+      // Update database with new cycle
+      await this.updateSessionCycle();
+      
       console.log(`🔄 Advanced to Cycle ${this.currentCycle} - HYPOXIC phase`);
     }
 
@@ -570,7 +573,7 @@ class EnhancedSessionManager {
         await DatabaseService.init();
       }
       
-      const result = await DatabaseService.endSession(sessionId);
+      const result = await DatabaseService.endSession(sessionId, this.currentSession?.startTime || this.startTime);
       console.log('✅ Step 6: Local database updated');
       return result;
     }, 5000, 'Database end');
@@ -613,7 +616,7 @@ class EnhancedSessionManager {
         ...stats,
         totalCycles: this.currentCycle,
         completedPhases: this.currentPhase === 'COMPLETED' ? this.totalCycles * 2 : (this.currentCycle - 1) * 2 + (this.currentPhase === 'HYPEROXIC' ? 1 : 0)
-      });
+      }, this.currentSession?.startTime || this.startTime);
       
       if (result) {
         console.log('✅ Step 7: Supabase updated successfully');
@@ -695,6 +698,23 @@ class EnhancedSessionManager {
       console.log('🛑 Live Activity stopped');
     } catch (error) {
       console.error('❌ Failed to stop Live Activity:', error);
+    }
+  }
+
+  // Update current cycle in database
+  async updateSessionCycle() {
+    if (!this.currentSession?.id) return;
+
+    try {
+      // Update local database
+      await DatabaseService.updateSessionCycle(this.currentSession.id, this.currentCycle);
+      
+      // Update Supabase
+      await SupabaseService.updateSessionCycle(this.currentSession.id, this.currentCycle);
+      
+      console.log(`📊 Updated session cycle to ${this.currentCycle} in database`);
+    } catch (error) {
+      console.error('❌ Failed to update session cycle:', error);
     }
   }
 
@@ -947,8 +967,8 @@ class EnhancedSessionManager {
                 await DatabaseService.init();
               }
               
-              const stats = await DatabaseService.endSession(sessionData.id);
-              await SupabaseService.endSession(sessionData.id, stats);
+              const stats = await DatabaseService.endSession(sessionData.id, sessionData.startTime);
+              await SupabaseService.endSession(sessionData.id, stats, sessionData.startTime);
               console.log('✅ Cleaned up stuck session in databases');
             } catch (dbError) {
               console.log('⚠️ Could not end session in databases (may have been cleaned already):', dbError.message);

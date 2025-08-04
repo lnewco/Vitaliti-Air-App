@@ -124,7 +124,7 @@ class SupabaseService {
     }
   }
 
-  async endSession(sessionId, stats) {
+  async endSession(sessionId, stats, startTime = null) {
     try {
       // Get the Supabase UUID for this local session ID
       let supabaseSessionId = this.sessionMapping.get(sessionId);
@@ -158,6 +158,12 @@ class SupabaseService {
         return null;
       }
 
+      // Calculate total duration if startTime provided
+      let totalDuration = null;
+      if (startTime) {
+        totalDuration = Math.floor((Date.now() - startTime) / 1000); // Convert to seconds
+      }
+
       const updates = {
         end_time: new Date().toISOString(),
         status: 'completed',
@@ -168,6 +174,7 @@ class SupabaseService {
         avg_heart_rate: stats.avgHeartRate,
         min_heart_rate: stats.minHeartRate,
         max_heart_rate: stats.maxHeartRate,
+        total_duration_seconds: totalDuration,
         updated_at: new Date().toISOString()
       };
 
@@ -190,6 +197,41 @@ class SupabaseService {
       console.error('❌ Supabase error details:', error.message, error.stack);
       console.error('❌ Session ID:', sessionId, 'Stats:', stats);
       this.queueForSync('endSession', { sessionId, stats });
+      return null;
+    }
+  }
+
+  async updateSessionCycle(sessionId, currentCycle) {
+    try {
+      // Get the Supabase UUID for this local session ID
+      let supabaseSessionId = this.sessionMapping.get(sessionId);
+      
+      if (!supabaseSessionId) {
+        console.warn('⚠️ No Supabase session mapping found for cycle update:', sessionId);
+        this.queueForSync('updateSessionCycle', { sessionId, currentCycle });
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from('sessions')
+        .update({ 
+          current_cycle: currentCycle,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', supabaseSessionId)
+        .select();
+
+      if (error) {
+        console.error('❌ Supabase cycle update failed:', error);
+        this.queueForSync('updateSessionCycle', { sessionId, currentCycle });
+        return null;
+      }
+
+      console.log(`☁️ Updated session ${sessionId} to cycle ${currentCycle} in Supabase`);
+      return data[0];
+    } catch (error) {
+      console.error('❌ Error updating session cycle in Supabase:', error);
+      this.queueForSync('updateSessionCycle', { sessionId, currentCycle });
       return null;
     }
   }
@@ -228,6 +270,11 @@ class SupabaseService {
         fio2_level: reading.fio2Level || null,
         phase_type: reading.phaseType || null,
         cycle_number: reading.cycleNumber || null,
+        hrv_rmssd: reading.hrv?.rmssd || null,
+        hrv_type: reading.hrv?.type || null,
+        hrv_interval_count: reading.hrv?.intervalCount || null,
+        hrv_data_quality: reading.hrv?.dataQuality || null,
+        hrv_confidence: reading.hrv?.confidence || null,
         created_at: new Date().toISOString()
       };
 
@@ -287,6 +334,11 @@ class SupabaseService {
         fio2_level: reading.fio2Level || null,
         phase_type: reading.phaseType || null,
         cycle_number: reading.cycleNumber || null,
+        hrv_rmssd: reading.hrv?.rmssd || null,
+        hrv_type: reading.hrv?.type || null,
+        hrv_interval_count: reading.hrv?.intervalCount || null,
+        hrv_data_quality: reading.hrv?.dataQuality || null,
+        hrv_confidence: reading.hrv?.confidence || null,
         created_at: new Date().toISOString()
       }));
 
@@ -460,6 +512,9 @@ class SupabaseService {
             break;
           case 'endSession':
             success = await this.endSession(item.data.sessionId, item.data.stats) !== null;
+            break;
+          case 'updateSessionCycle':
+            success = await this.updateSessionCycle(item.data.sessionId, item.data.currentCycle) !== null;
             break;
           case 'addReading':
             success = await this.addReading(item.data) !== null;

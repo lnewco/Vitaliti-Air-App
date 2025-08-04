@@ -1,7 +1,7 @@
 import { BleManager } from 'react-native-ble-plx';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { Buffer } from 'buffer';
-import SessionManager from './SessionManager';
+import EnhancedSessionManager from './EnhancedSessionManager';
 import HRV_CONFIG, { HRV_HELPERS } from '../config/hrvConfig';
 
 // Sliding Window class for managing RR intervals
@@ -502,8 +502,8 @@ class BluetoothService {
         }
         
         // Send to session manager if session is active
-        if (SessionManager.isSessionActive()) {
-          SessionManager.addReading(parsedData, 'pulse-ox');
+        if (EnhancedSessionManager.getSessionInfo().isActive) {
+          EnhancedSessionManager.addReading(parsedData);
         }
       }
     } catch (error) {
@@ -521,8 +521,8 @@ class BluetoothService {
         }
         
         // Send to session manager if session is active
-        if (SessionManager.isSessionActive()) {
-          SessionManager.addReading(parsedData, 'hr-monitor');
+        if (EnhancedSessionManager.getSessionInfo().isActive) {
+          EnhancedSessionManager.addReading(parsedData);
         }
       }
     } catch (error) {
@@ -762,13 +762,36 @@ class BluetoothService {
 
       // Prepare HRV data for context (maintain backward compatibility)
       const legacyHRV = this.currentQuickHRV || this.currentRealHRV;
+      
+      // Format HRV data for database storage
+      let formattedHRV = null;
+      if (this.currentRealHRV) {
+        // Prefer real HRV if available
+        formattedHRV = {
+          rmssd: this.currentRealHRV.rmssd,
+          type: this.currentRealHRV.type,
+          intervalCount: this.currentRealHRV.intervalCount,
+          dataQuality: this.currentRealHRV.dataQuality,
+          confidence: this.currentRealHRV.confidence
+        };
+      } else if (this.currentQuickHRV) {
+        // Fall back to quick HRV
+        formattedHRV = {
+          rmssd: this.currentQuickHRV.rmssd,
+          type: this.currentQuickHRV.type,
+          intervalCount: this.currentQuickHRV.intervalCount,
+          dataQuality: this.currentQuickHRV.dataQuality,
+          confidence: this.currentQuickHRV.confidence
+        };
+      }
 
       const result = {
         heartRate: heartRate > 0 ? heartRate : null,
         sensorContactDetected,
         sensorContactSupported,
         rrIntervals,
-        hrv: legacyHRV, // For backward compatibility
+        hrv: formattedHRV, // Formatted for database storage
+        legacyHRV, // For backward compatibility
         quickHRV: this.currentQuickHRV,
         realHRV: this.currentRealHRV,
         sessionDuration: Date.now() - this.sessionStartTime,

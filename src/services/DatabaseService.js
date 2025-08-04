@@ -171,7 +171,7 @@ class DatabaseService {
     return sessionId;
   }
 
-  async endSession(sessionId) {
+  async endSession(sessionId, startTime = null) {
     const endTime = Date.now();
     
     try {
@@ -182,11 +182,18 @@ class DatabaseService {
       const stats = await this.getSessionStats(sessionId);
       console.log(`📊 Session stats calculated:`, stats);
       
+      // Calculate total duration if startTime provided
+      let totalDuration = null;
+      if (startTime) {
+        totalDuration = Math.floor((endTime - startTime) / 1000); // Convert to seconds
+        console.log(`⏱️ Session duration: ${totalDuration} seconds`);
+      }
+      
       const query = `
         UPDATE sessions 
         SET end_time = ?, status = 'completed',
             total_readings = ?, avg_spo2 = ?, min_spo2 = ?, max_spo2 = ?,
-            avg_heart_rate = ?, min_heart_rate = ?, max_heart_rate = ?
+            avg_heart_rate = ?, min_heart_rate = ?, max_heart_rate = ?, total_duration_seconds = ?
         WHERE id = ?
       `;
       
@@ -200,16 +207,27 @@ class DatabaseService {
         stats.avgHeartRate,
         stats.minHeartRate,
         stats.maxHeartRate,
+        totalDuration,
         sessionId
       ]);
       
-      console.log(`✅ Session ended successfully in local DB: ${sessionId}`);
+      console.log(`✅ Session ended successfully in local DB: ${sessionId} (Duration: ${totalDuration}s)`);
       return stats;
     } catch (error) {
       console.error(`❌ Failed to end session ${sessionId} in local DB:`, error);
       console.error(`❌ Error details:`, error.message, error.stack);
       throw error;
     }
+  }
+
+  async updateSessionCycle(sessionId, currentCycle) {
+    const query = `
+      UPDATE sessions 
+      SET current_cycle = ?, updated_at = ?
+      WHERE id = ?
+    `;
+    await this.db.executeSql(query, [currentCycle, Date.now(), sessionId]);
+    console.log(`📊 Updated session ${sessionId} to cycle ${currentCycle} in local DB`);
   }
 
   async getSession(sessionId) {
@@ -232,8 +250,8 @@ class DatabaseService {
   // Reading Management
   async addReading(sessionId, reading) {
     const query = `
-      INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid, fio2_level, phase_type, cycle_number)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid, fio2_level, phase_type, cycle_number, hrv_rmssd, hrv_type, hrv_interval_count, hrv_data_quality, hrv_confidence)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     // More flexible validation: valid if we have either spo2 or heart rate data
@@ -249,7 +267,12 @@ class DatabaseService {
       isValid ? 1 : 0,
       reading.fio2Level || null,
       reading.phaseType || null,
-      reading.cycleNumber || null
+      reading.cycleNumber || null,
+      reading.hrv?.rmssd || null,
+      reading.hrv?.type || null,
+      reading.hrv?.intervalCount || null,
+      reading.hrv?.dataQuality || null,
+      reading.hrv?.confidence || null
     ]);
   }
 
@@ -258,8 +281,8 @@ class DatabaseService {
     
     await this.db.transaction(async (tx) => {
       const query = `
-        INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid, fio2_level, phase_type, cycle_number)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid, fio2_level, phase_type, cycle_number, hrv_rmssd, hrv_type, hrv_interval_count, hrv_data_quality, hrv_confidence)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       for (const reading of readings) {
@@ -275,7 +298,12 @@ class DatabaseService {
           isValid ? 1 : 0,
           reading.fio2Level || null,
           reading.phaseType || null,
-          reading.cycleNumber || null
+          reading.cycleNumber || null,
+          reading.hrv?.rmssd || null,
+          reading.hrv?.type || null,
+          reading.hrv?.intervalCount || null,
+          reading.hrv?.dataQuality || null,
+          reading.hrv?.confidence || null
         ]);
       }
     });
