@@ -183,6 +183,11 @@ class BluetoothService {
       rssi: device.rssi,
       serviceUUIDs: device.serviceUUIDs
     });
+    
+    // Debug WHOOP detection specifically
+    if (device.name && device.name.toLowerCase().includes('whoop')) {
+      console.log('🎯 WHOOP device detected by name!', device.name);
+    }
 
     // Determine device type and log appropriate message
     const deviceType = this.getDeviceType(device);
@@ -191,7 +196,7 @@ class BluetoothService {
     } else if (deviceType === 'hr-monitor') {
       console.log('✅ Heart Rate Monitor device found:', device.name || device.localName || 'Unknown');
     } else {
-      console.log('🔍 Unknown device found:', device.name || device.localName || 'Unknown');
+      console.log('🔍 Unknown device found:', device.name || device.localName || 'Unknown', 'Services:', device.serviceUUIDs);
     }
 
     // Only report devices that match the current scan type (or if scanning for 'all')
@@ -231,14 +236,17 @@ class BluetoothService {
       deviceText.includes(keyword.toLowerCase())
     );
 
-    // Check for HR monitor keywords
-    const hrKeywords = ['whoop', 'heart', 'rate', 'hr', 'polar', 'garmin', 'chest'];
+    // Check for HR monitor keywords - expanded for WHOOP and other devices
+    const hrKeywords = ['whoop', 'heart', 'rate', 'hr', 'polar', 'garmin', 'chest', 'hrm', 'strap', 'monitor', 'wahoo', 'suunto', 'sensor'];
     const hasHRKeyword = hrKeywords.some(keyword =>
       deviceText.includes(keyword.toLowerCase())
     );
+    
+    // Also check for devices that might not have descriptive names but have HR service
+    const hasHRService = device.serviceUUIDs && device.serviceUUIDs.includes(this.HR_SERVICE_UUID);
 
     if (hasPulseOxKeyword) return 'pulse-ox';
-    if (hasHRKeyword) return 'hr-monitor';
+    if (hasHRKeyword || hasHRService) return 'hr-monitor';
     
     return 'unknown';
   }

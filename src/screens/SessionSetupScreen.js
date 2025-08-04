@@ -97,7 +97,10 @@ const SessionSetupScreen = ({ navigation }) => {
             console.log('🚀 Starting IHHT session directly after survey completion with sessionId:', sessionId);
             // Hide survey and navigate directly to training
             setShowPreSessionSurvey(false);
-            navigation.navigate('AirSession', { sessionId: sessionId });
+            navigation.navigate('AirSession', { 
+              sessionId: sessionId,
+              protocolConfig: protocolConfig 
+            });
           }
         }
       ]
@@ -167,7 +170,7 @@ const SessionSetupScreen = ({ navigation }) => {
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.continueButton, !isAnyDeviceConnected && styles.continueButtonDisabled]}
-          onPress={() => isAnyDeviceConnected && handleStartSession()}
+          onPress={() => isAnyDeviceConnected && setCurrentStep(2)}
           disabled={!isAnyDeviceConnected}
         >
           <Text style={[styles.continueButtonText, !isAnyDeviceConnected && styles.continueButtonTextDisabled]}>
@@ -302,7 +305,7 @@ const SessionSetupScreen = ({ navigation }) => {
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.continueButton}
-          onPress={() => setCurrentStep(3)}
+          onPress={handleStartSession}
         >
           <Text style={styles.continueButtonText}>Continue →</Text>
         </TouchableOpacity>

@@ -251,8 +251,17 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const startSession = async () => {
     try {
       console.log('🔄 Starting IHHT session', existingSessionId ? `with existing sessionId: ${existingSessionId}` : 'with new sessionId');
-      // Support both protocol config and existing session ID
-      await EnhancedSessionManager.startSession(existingSessionId || protocolConfig);
+      
+      // If we have both sessionId and protocolConfig, we need to set the protocol first
+      if (existingSessionId && protocolConfig) {
+        console.log('🔧 Setting protocol config for existing session:', protocolConfig);
+        EnhancedSessionManager.setProtocol(protocolConfig);
+        await EnhancedSessionManager.startSession(existingSessionId);
+      } else {
+        // Support legacy single parameter (either sessionId or protocolConfig)
+        await EnhancedSessionManager.startSession(existingSessionId || protocolConfig);
+      }
+      
       setSessionInfo(EnhancedSessionManager.getSessionInfo());
     } catch (error) {
       console.error('Failed to start enhanced session:', error);
