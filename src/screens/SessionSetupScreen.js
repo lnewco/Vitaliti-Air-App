@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Alert, ScrollView } from 'react-native';
-import { useBluetooth } from '../context/BluetoothContext';
+import { useBluetoothContext } from '../context/BluetoothContext';
 import StepIndicator from '../components/StepIndicator';
 import DualDeviceConnectionManager from '../components/DualDeviceConnectionManager';
-import PreSessionSurveyScreen from './PreSessionSurveyScreen';
 import SupabaseService from '../services/SupabaseService';
 import HRV_CONFIG from '../config/hrvConfig';
+import { useAuth } from '../auth/AuthContext';
+import BluetoothService from '../services/BluetoothService';
 
 // Dual-Timeframe HRV Display Component for Session Setup
 const DualHRVDisplay = ({ heartRateData }) => {
@@ -101,28 +102,29 @@ const DualHRVDisplay = ({ heartRateData }) => {
 const SessionSetupScreen = ({ navigation }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [sessionId, setSessionId] = useState(null);
-  const [showPreSessionSurvey, setShowPreSessionSurvey] = useState(false);
+  const { user } = useAuth();
   const { 
-    isPulseOxConnected, 
-    isHRConnected, 
-    pulseOximeterData, 
-    heartRateData,
-    persistentHRV,  // ✅ Add persistentHRV from context
-    isAnyDeviceConnected 
-  } = useBluetooth();
+    isBluetoothEnabled, 
+    heartRateDevice, 
+    pulseOximeterDevice,
+    connectToHeartRateDevice,
+    connectToPulseOximeterDevice,
+    scanForDevices
+  } = useBluetoothContext();
 
 
 
   // Auto-regress to step 1 if no devices are connected (instead of just pulse ox)
   useEffect(() => {
-    if (!isAnyDeviceConnected && currentStep === 2) {
+    if (!heartRateDevice?.connected && !pulseOximeterDevice?.connected && currentStep === 2) {
       setCurrentStep(1);
     }
-  }, [isAnyDeviceConnected, currentStep]);
+  }, [heartRateDevice?.connected, pulseOximeterDevice?.connected, currentStep]);
 
-  // Generate session ID when needed
   const generateSessionId = () => {
-    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const timestamp = Date.now();
+    const randomPart = Math.random().toString(36).substring(2, 15);
+    return `session_${timestamp}_${randomPart}`;
   };
 
   const handleBack = () => {
@@ -134,7 +136,8 @@ const SessionSetupScreen = ({ navigation }) => {
   };
 
   const handleStartSession = () => {
-    if (!isAnyDeviceConnected) {
+    // Check if at least one device is connected
+    if (!heartRateDevice?.connected && !pulseOximeterDevice?.connected) {
       Alert.alert(
         'Device Required',
         'Please connect either a heart rate monitor or pulse oximeter before starting the session.',
@@ -143,63 +146,13 @@ const SessionSetupScreen = ({ navigation }) => {
       return;
     }
 
-    // Generate session ID and show pre-session survey
+    // Generate session ID and navigate to pre-session survey
     const newSessionId = generateSessionId();
     setSessionId(newSessionId);
-    setShowPreSessionSurvey(true);
+    navigation.navigate('PreSessionSurvey', { sessionId: newSessionId });
   };
 
-  const handleSurveyComplete = () => {
-    console.log('✅ Pre-session survey completed for session:', sessionId);
-    
-    // Show confirmation popup immediately - no waiting for async operations
-    Alert.alert(
-      '🎯 Starting Your IHHT Session',
-      `Great! Your pre-session survey is complete.\n\n• 5 cycles of hypoxic-hyperoxic training\n• Approximately 35 minutes duration\n• Real-time safety monitoring\n\nGet comfortable and prepare to begin!`,
-      [
-        {
-          text: 'Start Training',
-          onPress: () => {
-            console.log('🚀 Starting IHHT session directly after survey completion with sessionId:', sessionId);
-            // Hide survey and navigate directly to training
-            setShowPreSessionSurvey(false);
-            navigation.navigate('AirSession', { sessionId: sessionId });
-          }
-        }
-      ]
-    );
 
-    // Create Supabase session in background (non-blocking)
-    (async () => {
-      try {
-        console.log('🔄 Creating Supabase session for survey sync in background...');
-        
-        // Ensure SupabaseService is initialized (fixes deviceId being null)
-        await SupabaseService.initialize();
-        console.log('🔧 SupabaseService initialized for session creation');
-        
-        const deviceId = await SupabaseService.getDeviceId();
-        console.log('📱 Using device ID for session:', deviceId);
-        
-        await SupabaseService.createSession({
-          id: sessionId,
-          startTime: Date.now(),
-          deviceId: deviceId,
-          sessionType: 'IHHT'
-        });
-        console.log('✅ Supabase session created in background, survey should sync now');
-      } catch (error) {
-        console.warn('⚠️ Failed to create Supabase session for survey sync:', error);
-        // Continue anyway - survey will remain queued
-      }
-    })();
-  };
-
-  const handleSurveyCancel = () => {
-    console.log('❌ Pre-session survey cancelled');
-    setShowPreSessionSurvey(false);
-    setSessionId(null);
-  };
 
   const handleDirectStartTraining = () => {
     console.log('🚀 Starting training directly from Ready to Begin step with sessionId:', sessionId);
@@ -232,12 +185,12 @@ const SessionSetupScreen = ({ navigation }) => {
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.continueButton, !isAnyDeviceConnected && styles.continueButtonDisabled]}
-          onPress={() => isAnyDeviceConnected && handleStartSession()}
-          disabled={!isAnyDeviceConnected}
+          style={[styles.continueButton, !heartRateDevice?.connected && !pulseOximeterDevice?.connected && styles.continueButtonDisabled]}
+          onPress={() => heartRateDevice?.connected || pulseOximeterDevice?.connected ? handleStartSession() : null}
+          disabled={!heartRateDevice?.connected && !pulseOximeterDevice?.connected}
         >
-          <Text style={[styles.continueButtonText, !isAnyDeviceConnected && styles.continueButtonTextDisabled]}>
-            {isAnyDeviceConnected ? 'Continue →' : 'Connect a Device First'}
+          <Text style={[styles.continueButtonText, !heartRateDevice?.connected && !pulseOximeterDevice?.connected && styles.continueButtonTextDisabled]}>
+            {heartRateDevice?.connected || pulseOximeterDevice?.connected ? 'Continue →' : 'Connect a Device First'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -251,17 +204,17 @@ const SessionSetupScreen = ({ navigation }) => {
     let title = "Ready to Begin";
     let description = "Your devices are connected and reading data. You're ready to start your IHHT training session.";
     
-    if (isHRConnected && isPulseOxConnected) {
-      title = heartRateData?.hrv ? "Dual Device Setup Complete" : "Dual Device Setup - HRV Loading";
-      description = heartRateData?.hrv 
+    if (heartRateDevice?.connected && pulseOximeterDevice?.connected) {
+      title = heartRateDevice?.hrv ? "Dual Device Setup Complete" : "Dual Device Setup - HRV Loading";
+      description = heartRateDevice?.hrv 
         ? "Both heart rate monitor and pulse oximeter are connected. You have complete monitoring with enhanced HRV analysis and SpO2 tracking."
         : "Both devices are connected! Pulse oximeter is providing SpO2 data while your heart rate monitor is collecting data for HRV analysis.";
-    } else if (isHRConnected && !isPulseOxConnected) {
-      title = heartRateData?.hrv ? "WHOOP Connected - Enhanced HRV Ready" : "WHOOP Connected - HRV Loading";
-      description = heartRateData?.hrv 
+    } else if (heartRateDevice?.connected && !pulseOximeterDevice?.connected) {
+      title = heartRateDevice?.hrv ? "WHOOP Connected - Enhanced HRV Ready" : "WHOOP Connected - HRV Loading";
+      description = heartRateDevice?.hrv 
         ? "Your heart rate monitor is connected and providing detailed HRV analysis. You're ready for HRV-focused IHHT training."
         : "Your heart rate monitor is connected and collecting data for HRV analysis. HRV metrics will appear shortly.";
-    } else if (!isHRConnected && isPulseOxConnected) {
+    } else if (!heartRateDevice?.connected && pulseOximeterDevice?.connected) {
       title = "Pulse Oximeter Connected";
       description = "Your pulse oximeter is connected for SpO2 monitoring. You're ready for oxygen-focused IHHT training.";
     }
@@ -282,34 +235,34 @@ const SessionSetupScreen = ({ navigation }) => {
 
           <View style={styles.stepContent}>
             {/* Heart Rate Monitor Section - Show FIRST when connected */}
-            {isHRConnected && (
+            {heartRateDevice?.connected && (
               <View style={[styles.readyCard, styles.primaryCard]}>
                 <Text style={styles.readyIcon}>❤️</Text>
                 <Text style={styles.readyTitle}>Heart Rate Monitor Connected</Text>
                 <Text style={styles.readySubtitle}>Enhanced HR accuracy and HRV analysis active</Text>
                 
-                {heartRateData && (
+                {heartRateDevice?.data && (
                   <View style={styles.liveData}>
                     <View style={styles.dataRow}>
                       <Text style={styles.dataLabel}>Heart Rate:</Text>
-                      <Text style={[styles.dataValue, styles.primaryDataValue]}>{heartRateData.heartRate || '--'} bpm</Text>
+                      <Text style={[styles.dataValue, styles.primaryDataValue]}>{heartRateDevice.data.heartRate || '--'} bpm</Text>
                     </View>
                     
                     {/* Dual-Timeframe HRV Display */}
                     <View style={styles.hrvSection}>
                       <DualHRVDisplay 
-                        heartRateData={heartRateData} 
+                        heartRateData={heartRateDevice.data} 
                       />
                     </View>
                     
                     <View style={styles.dataRow}>
                       <Text style={styles.dataLabel}>Sensor Contact:</Text>
                       <Text style={styles.dataValue}>
-                        {heartRateData.sensorContactDetected ? '✅ Good' : '⚠️ Check placement'}
+                        {heartRateDevice.data.sensorContactDetected ? '✅ Good' : '⚠️ Check placement'}
                       </Text>
                     </View>
                     
-                    {!heartRateData.sensorContactDetected && (
+                    {!heartRateDevice.data.sensorContactDetected && (
                       <View style={styles.sensorTipCard}>
                         <Text style={styles.sensorTipTitle}>💡 WHOOP Placement Tips</Text>
                         <Text style={styles.sensorTipText}>
@@ -327,26 +280,26 @@ const SessionSetupScreen = ({ navigation }) => {
             )}
 
             {/* Pulse Oximeter Section - Show SECOND when both connected, or first if only pulse ox */}
-            {isPulseOxConnected && (
-              <View style={[styles.readyCard, isHRConnected ? styles.secondaryCard : styles.primaryCard]}>
+            {pulseOximeterDevice?.connected && (
+              <View style={[styles.readyCard, heartRateDevice?.connected ? styles.secondaryCard : styles.primaryCard]}>
                 <Text style={styles.readyIcon}>📱</Text>
                 <Text style={styles.readyTitle}>Pulse Oximeter Connected</Text>
                 <Text style={styles.readySubtitle}>SpO2 and heart rate monitoring active</Text>
                 
-                {pulseOximeterData && (
+                {pulseOximeterDevice?.data && (
                   <View style={styles.liveData}>
                     <View style={styles.dataRow}>
                       <Text style={styles.dataLabel}>SpO2:</Text>
-                      <Text style={[styles.dataValue, !isHRConnected && styles.primaryDataValue]}>{pulseOximeterData.spo2 || '--'}%</Text>
+                      <Text style={[styles.dataValue, !heartRateDevice?.connected && styles.primaryDataValue]}>{pulseOximeterDevice.data.spo2 || '--'}%</Text>
                     </View>
                     <View style={styles.dataRow}>
                       <Text style={styles.dataLabel}>Heart Rate:</Text>
-                      <Text style={styles.dataValue}>{pulseOximeterData.heartRate || '--'} bpm</Text>
+                      <Text style={styles.dataValue}>{pulseOximeterDevice.data.heartRate || '--'} bpm</Text>
                     </View>
                     <View style={styles.dataRow}>
                       <Text style={styles.dataLabel}>Signal:</Text>
                       <Text style={styles.dataValue}>
-                        {pulseOximeterData.signalStrength ? `${pulseOximeterData.signalStrength}/15` : '--'}
+                        {pulseOximeterDevice.data.signalStrength ? `${pulseOximeterDevice.data.signalStrength}/15` : '--'}
                       </Text>
                     </View>
                   </View>
@@ -355,7 +308,7 @@ const SessionSetupScreen = ({ navigation }) => {
             )}
 
             {/* Show connection encouragement if only one device connected */}
-            {(isHRConnected && !isPulseOxConnected) && (
+            {(heartRateDevice?.connected && !pulseOximeterDevice?.connected) && (
               <View style={styles.optionalDeviceCard}>
                 <Text style={styles.optionalIcon}>📱</Text>
                 <Text style={styles.optionalTitle}>Pulse Oximeter (Optional)</Text>
@@ -366,7 +319,7 @@ const SessionSetupScreen = ({ navigation }) => {
               </View>
             )}
 
-            {(!isHRConnected && isPulseOxConnected) && (
+            {(!heartRateDevice?.connected && pulseOximeterDevice?.connected) && (
               <View style={styles.optionalDeviceCard}>
                 <Text style={styles.optionalIcon}>❤️</Text>
                 <Text style={styles.optionalTitle}>Heart Rate Monitor (Optional)</Text>
@@ -382,7 +335,7 @@ const SessionSetupScreen = ({ navigation }) => {
               <Text style={styles.sessionInfoText}>
                 • 5 cycles of hypoxic-hyperoxic training{'\n'}
                 • Approximately 35 minutes duration{'\n'}
-                • Real-time {isHRConnected ? (heartRateData?.hrv ? 'HRV and ' : 'HRV (loading) and ') : ''}safety monitoring{'\n'}
+                • Real-time {heartRateDevice?.connected ? (heartRateDevice?.hrv ? 'HRV and ' : 'HRV (loading) and ') : ''}safety monitoring{'\n'}
                 • Guided breathing phases
               </Text>
             </View>
@@ -413,16 +366,6 @@ const SessionSetupScreen = ({ navigation }) => {
       
       {currentStep === 1 && renderStep1()}
       {currentStep === 3 && renderStep3()}
-      
-      {/* Pre-Session Survey Modal */}
-      {sessionId && (
-        <PreSessionSurveyScreen
-          visible={showPreSessionSurvey}
-          sessionId={sessionId}
-          onComplete={handleSurveyComplete}
-          onCancel={handleSurveyCancel}
-        />
-      )}
     </SafeAreaView>
   );
 };
@@ -618,7 +561,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 12,
+    marginBottom: 16,
+    textAlign: 'center',
   },
   // Dual-Timeframe HRV Styles
   dualHrvContainer: {

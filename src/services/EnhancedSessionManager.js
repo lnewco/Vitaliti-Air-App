@@ -730,10 +730,18 @@ class EnhancedSessionManager {
       const readings = [...this.readingBuffer];
       this.readingBuffer = [];
 
+      // Always flush to local database
       await DatabaseService.addReadingsBatch(readings);
-      await SupabaseService.addReadingsBatch(readings);
 
-      console.log(`💾 Flushed ${readings.length} readings (Local + Cloud)`);
+      // Only flush to Supabase if there's an active session to prevent RLS policy violations
+      if (this.isActive && this.currentSession) {
+        await SupabaseService.addReadingsBatch(readings);
+        console.log(`💾 Flushed ${readings.length} readings (Local + Cloud)`);
+      } else {
+        // Queue for later sync when session becomes active
+        console.log(`💾 Flushed ${readings.length} readings (Local only - no active session)`);
+        SupabaseService.queueForSync('addReadingsBatch', readings);
+      }
     } catch (error) {
       console.error('❌ Failed to flush readings:', error);
       this.readingBuffer.unshift(...readings);

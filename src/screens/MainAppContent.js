@@ -9,6 +9,7 @@ import SessionHistoryScreen from './SessionHistoryScreen';
 import SessionSetupScreen from './SessionSetupScreen';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
+import PreSessionSurveyScreen from './PreSessionSurveyScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -85,6 +86,13 @@ const MainAppContent = () => {
       <Stack.Screen 
         name="SessionSetup" 
         component={SessionSetupScreen}
+        options={{
+          presentation: 'card',
+        }}
+      />
+      <Stack.Screen 
+        name="PreSessionSurvey" 
+        component={PreSessionSurveyScreen}
         options={{
           presentation: 'card',
         }}

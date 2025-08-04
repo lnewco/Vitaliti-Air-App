@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
-import SurveyModal from '../components/SurveyModal';
+import { View, Text, StyleSheet, Alert, SafeAreaView, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import SurveyScaleInput from '../components/SurveyScaleInput';
 import StepIndicator from '../components/StepIndicator';
 import DatabaseService from '../services/DatabaseService';
@@ -15,12 +14,8 @@ import {
   createDefaultPreSessionSurvey 
 } from '../utils/surveyValidation';
 
-const PreSessionSurveyScreen = ({
-  visible,
-  sessionId,
-  onComplete,
-  onCancel,
-}) => {
+const PreSessionSurveyScreen = ({ navigation, route }) => {
+  const sessionId = route?.params?.sessionId;
   const [surveyData, setSurveyData] = useState(createDefaultPreSessionSurvey());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -68,7 +63,21 @@ const PreSessionSurveyScreen = ({
 
       // Complete immediately - don't wait for Supabase sync
       console.log('🎉 Pre-session survey completed successfully');
-      onComplete();
+
+      // Show confirmation popup and navigate
+      Alert.alert(
+        '🎯 Starting Your IHHT Session',
+        `Great! Your pre-session survey is complete.\n\n• 5 cycles of hypoxic-hyperoxic training\n• Approximately 35 minutes duration\n• Real-time safety monitoring\n\nGet comfortable and prepare to begin!`,
+        [
+          {
+            text: 'Start Training',
+            onPress: () => {
+              console.log('🚀 Starting IHHT session directly after survey completion with sessionId:', sessionId);
+              navigation.navigate('AirSession', { sessionId: sessionId });
+            }
+          }
+        ]
+      );
 
       // Sync to Supabase in background (non-blocking)
       SupabaseService.syncPreSessionSurvey(
@@ -87,6 +96,31 @@ const PreSessionSurveyScreen = ({
         console.warn('⚠️ Background Supabase sync failed:', error.message);
       });
 
+      // Create Supabase session in background (non-blocking)
+      (async () => {
+        try {
+          console.log('🔄 Creating Supabase session for survey sync in background...');
+          
+          // Ensure SupabaseService is initialized (fixes deviceId being null)
+          await SupabaseService.initialize();
+          console.log('🔧 SupabaseService initialized for session creation');
+          
+          const deviceId = await SupabaseService.getDeviceId();
+          console.log('📱 Using device ID for session:', deviceId);
+          
+          await SupabaseService.createSession({
+            id: sessionId,
+            startTime: Date.now(),
+            deviceId: deviceId,
+            sessionType: 'IHHT'
+          });
+          console.log('✅ Supabase session created in background, survey should sync now');
+        } catch (error) {
+          console.warn('⚠️ Failed to create Supabase session for survey sync:', error);
+          // Continue anyway - survey will remain queued
+        }
+      })();
+
     } catch (error) {
       console.error('❌ Error saving pre-session survey:', error);
       Alert.alert(
@@ -99,78 +133,183 @@ const PreSessionSurveyScreen = ({
     }
   };
 
-  const isComplete = isPreSessionSurveyComplete(surveyData);
+  const handleCancel = () => {
+    console.log('❌ Pre-session survey cancelled');
+    navigation.goBack();
+  };
+
+  const canSubmit = isPreSessionSurveyComplete(surveyData) && !isSubmitting;
 
   return (
-    <SurveyModal
-      visible={visible}
-      title="Pre-Session Check-in"
-      subtitle="Please rate how you're feeling right now. This takes just a moment and helps us understand how IHHT training affects you over time."
-      onSubmit={handleSubmit}
-      onCancel={onCancel}
-      submitButtonText="Start Session"
-      cancelButtonText="Cancel"
-      submitDisabled={!isComplete || isSubmitting}
-      isRequired={true}
-      validationErrors={validationErrors}
-      stepIndicator={
-        <StepIndicator 
-          currentStep={2} 
-          totalSteps={3}
-          steps={['Connect Device', 'Complete check-in', 'Ready to Begin']}
-        />
-      }
-    >
-      <View style={styles.surveyContent}>
-
-        <SurveyScaleInput
-          label="Mental Clarity"
-          value={surveyData.clarity}
-          onValueChange={handleClarityChange}
-          scaleLabels={CLARITY_LABELS}
-          isRequired={true}
-          disabled={isSubmitting}
-        />
-
-        <SurveyScaleInput
-          label="Energy Level"
-          value={surveyData.energy}
-          onValueChange={handleEnergyChange}
-          scaleLabels={ENERGY_LABELS}
-          isRequired={true}
-          disabled={isSubmitting}
-        />
-
-        {!isComplete && (
-          <View style={styles.requirementNote}>
-            <Text style={styles.requirementText}>
-              ⚠️ Please complete both ratings to continue
+    <SafeAreaView style={styles.container}>
+      <View style={styles.innerContainer}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={handleCancel}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          
+          <StepIndicator 
+            currentStep={2} 
+            totalSteps={3}
+            steps={['Connect Device', 'Complete check-in', 'Ready to Begin']}
+          />
+          
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>Pre-Session Check-in</Text>
+            <Text style={styles.subtitle}>
+              Please rate how you're feeling right now. This takes just a moment and helps us understand how IHHT training affects you over time.
             </Text>
+            <Text style={styles.requiredNote}>* Required fields</Text>
+          </View>
+        </View>
+
+        {/* Validation Errors */}
+        {validationErrors.length > 0 && (
+          <View style={styles.errorContainer}>
+            {validationErrors.map((error, index) => (
+              <Text key={index} style={styles.errorText}>
+                • {error}
+              </Text>
+            ))}
           </View>
         )}
 
-        {isSubmitting && (
-          <View style={styles.savingNote}>
-            <Text style={styles.savingText}>
-              💾 Saving your responses...
-            </Text>
+        {/* Content */}
+        <ScrollView 
+          style={styles.content}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.surveyContent}>
+            {/* Mental Clarity Scale */}
+            <SurveyScaleInput
+              label="Mental Clarity"
+              value={surveyData.clarity}
+              onValueChange={handleClarityChange}
+              scaleLabels={CLARITY_LABELS}
+              isRequired={true}
+              disabled={isSubmitting}
+            />
+
+            {/* Energy Level Scale */}
+            <SurveyScaleInput
+              label="Energy Level"
+              value={surveyData.energy}
+              onValueChange={handleEnergyChange}
+              scaleLabels={ENERGY_LABELS}
+              isRequired={true}
+              disabled={isSubmitting}
+            />
+
+            {!canSubmit && !isSubmitting && (
+              <View style={styles.requirementNote}>
+                <Text style={styles.requirementText}>
+                  ⚠️ Please complete both ratings to continue
+                </Text>
+              </View>
+            )}
+
+            {isSubmitting && (
+              <View style={styles.savingNote}>
+                <Text style={styles.savingText}>
+                  💾 Saving your responses...
+                </Text>
+              </View>
+            )}
           </View>
-        )}
+        </ScrollView>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.button, styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={!canSubmit}
+          >
+            <Text style={[styles.buttonText, styles.submitButtonText, !canSubmit && styles.submitButtonTextDisabled]}>
+              {isSubmitting ? 'Saving...' : 'Start Session'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </SurveyModal>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  surveyContent: {
-    paddingVertical: 8,
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
   },
-  introText: {
+  innerContainer: {
+    flex: 1,
+  },
+  header: {
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+    paddingTop: Platform.OS === 'ios' ? 0 : 20,
+    paddingBottom: 20,
+    paddingHorizontal: 24,
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#007bff',
+    fontWeight: '500',
+  },
+  headerContent: {
+    marginTop: 16,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#212529',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
     fontSize: 16,
     color: '#6c757d',
     lineHeight: 24,
-    marginBottom: 24,
+    marginBottom: 12,
     textAlign: 'center',
+  },
+  requiredNote: {
+    fontSize: 14,
+    color: '#dc3545',
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  errorContainer: {
+    backgroundColor: '#f8d7da',
+    borderColor: '#f5c6cb',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 16,
+    margin: 16,
+  },
+  errorText: {
+    color: '#721c24',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  content: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 40,
+  },
+  surveyContent: {
+    gap: 24,
   },
   requirementNote: {
     backgroundColor: '#fff3cd',
@@ -178,7 +317,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     padding: 12,
-    marginTop: 16,
   },
   requirementText: {
     color: '#856404',
@@ -192,13 +330,42 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     padding: 12,
-    marginTop: 16,
   },
   savingText: {
     color: '#0c5460',
     fontSize: 14,
     textAlign: 'center',
     fontWeight: '500',
+  },
+  footer: {
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+  },
+  button: {
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  submitButton: {
+    backgroundColor: '#007bff',
+  },
+  submitButtonText: {
+    color: '#ffffff',
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#6c757d',
+  },
+  submitButtonTextDisabled: {
+    color: '#adb5bd',
   },
 });
 
