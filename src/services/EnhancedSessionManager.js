@@ -225,6 +225,7 @@ class EnhancedSessionManager {
         });
       } else {
         console.log('📋 Using existing session - skipping database creation');
+        await this.updateSessionProtocol(sessionId);
       }
 
       // Set session state
@@ -626,20 +627,8 @@ class EnhancedSessionManager {
       }
     }, 10000, 'Supabase end');
 
-    // Step 8: Reset state (immediate, can't fail)
-    console.log('🔄 Step 8: Resetting session state...');
-    this.resetSessionState();
-    console.log('✅ Step 8: State reset');
-
-    // Step 9: Clear storage (with timeout)
-    await withTimeout(async () => {
-      console.log('🔄 Step 9: Clearing AsyncStorage...');
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      await AsyncStorage.removeItem('activeSession');
-      console.log('✅ Step 9: Storage cleared');
-    }, 2000, 'Storage clear');
-
-    // Always complete successfully
+    // Step 8: Create completion object BEFORE resetting state
+    console.log('🔄 Step 8: Creating session completion object...');
     const completedSession = {
       ...this.currentSession,
       endTime: Date.now(),
@@ -648,6 +637,20 @@ class EnhancedSessionManager {
       currentCycle: this.currentCycle,
       currentPhase: this.currentPhase
     };
+    console.log('✅ Step 8: Session completion object created');
+
+    // Step 9: Reset state (immediate, can't fail)
+    console.log('🔄 Step 9: Resetting session state...');
+    this.resetSessionState();
+    console.log('✅ Step 9: State reset');
+
+    // Step 10: Clear storage (with timeout)
+    await withTimeout(async () => {
+      console.log('🔄 Step 10: Clearing AsyncStorage...');
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      await AsyncStorage.removeItem('activeSession');
+      console.log('✅ Step 10: Storage cleared');
+    }, 2000, 'Storage clear');
 
     // Session summary
     console.log('\n' + '='.repeat(60));
@@ -715,6 +718,20 @@ class EnhancedSessionManager {
       console.log(`📊 Updated session cycle to ${this.currentCycle} in database`);
     } catch (error) {
       console.error('❌ Failed to update session cycle:', error);
+    }
+  }
+
+  // Update protocol for an existing session
+  async updateSessionProtocol(sessionId) {
+    if (!DatabaseService.db) {
+      await DatabaseService.init();
+    }
+    try {
+      await DatabaseService.updateSessionProtocol(sessionId, this.protocolConfig);
+             await SupabaseService.updateSessionProtocolConfig(sessionId, this.protocolConfig);
+      console.log(`📊 Updated protocol for session ${sessionId}`);
+    } catch (error) {
+      console.error('❌ Failed to update session protocol:', error);
     }
   }
 
