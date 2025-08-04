@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import authService from './AuthService';
+import { AuthService } from './AuthService';
 
 // Create Auth Context
 const AuthContext = createContext({
@@ -13,6 +13,9 @@ const AuthContext = createContext({
   getUserProfile: async () => {},
 });
 
+// Create AuthService instance
+const authService = new AuthService();
+
 // Auth Provider Component
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -21,13 +24,22 @@ export const AuthProvider = ({ children }) => {
 
   // Initialize auth service and check for existing session
   useEffect(() => {
+    console.log('🔐 AuthContext: useEffect triggered');
+    console.log('🔐 AuthContext: authService instance:', authService);
+    console.log('🔐 AuthContext: authService type:', typeof authService);
+    console.log('🔐 AuthContext: authService methods:', authService ? Object.getOwnPropertyNames(Object.getPrototypeOf(authService)) : 'N/A');
     initializeAuth();
   }, []);
 
   const initializeAuth = async () => {
     try {
       console.log('🔐 AuthContext: Initializing authentication...');
+      console.log('🔐 AuthContext: authService in initializeAuth:', authService);
       setIsLoading(true);
+
+      if (!authService) {
+        throw new Error('AuthService instance not available');
+      }
 
       // Initialize auth service
       await authService.initialize();
@@ -49,9 +61,7 @@ export const AuthProvider = ({ children }) => {
       // Store unsubscribe function for cleanup
       return unsubscribe;
     } catch (error) {
-      console.error('❌ AuthContext: Error initializing auth:', error.message);
-      setUser(null);
-      setIsAuthenticated(false);
+      console.error('❌ AuthContext: Auth initialization failed:', error.message);
     } finally {
       setIsLoading(false);
     }
@@ -61,6 +71,17 @@ export const AuthProvider = ({ children }) => {
   const sendOTP = async (phoneNumber) => {
     try {
       console.log('📱 AuthContext: Sending OTP to:', phoneNumber);
+      console.log('📱 AuthContext: authService available:', !!authService);
+      console.log('📱 AuthContext: authService methods:', authService ? Object.getOwnPropertyNames(Object.getPrototypeOf(authService)) : 'N/A');
+      
+      if (!authService) {
+        throw new Error('AuthService not available');
+      }
+      
+      if (!authService.sendOTP) {
+        throw new Error('sendOTP method not available on AuthService');
+      }
+      
       const result = await authService.sendOTP(phoneNumber);
       return result;
     } catch (error) {

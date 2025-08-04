@@ -134,7 +134,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 36, // Same top padding as SessionSetupScreen for consistency
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
   },

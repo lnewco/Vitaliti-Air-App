@@ -413,7 +413,8 @@ const styles = StyleSheet.create({
     paddingBottom: 40, // Extra padding to prevent content hiding behind actions
   },
   stepHeader: {
-    paddingVertical: 24,
+    paddingTop: 36, // Increased top padding for better spacing from step indicator
+    paddingBottom: 24,
     alignItems: 'center',
   },
   stepTitle: {

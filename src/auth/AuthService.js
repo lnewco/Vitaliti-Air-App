@@ -157,7 +157,7 @@ class AuthService {
       const { data: existingProfile, error: fetchError } = await supabase
         .from('user_profiles')
         .select('*')
-        .eq('id', user.id)
+        .eq('user_id', user.id) // Fixed: use user_id instead of id
         .single();
 
       if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "not found"
@@ -170,23 +170,9 @@ class AuthService {
         return;
       }
 
-      // Create new profile
-      const { error: createError } = await supabase
-        .from('user_profiles')
-        .insert([
-          {
-            id: user.id,
-            phone_number: phoneNumber,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-        ]);
-
-      if (createError) {
-        console.error('❌ Error creating user profile:', createError.message);
-      } else {
-        console.log('✅ User profile created successfully');
-      }
+      // Don't create profile here - let onboarding flow handle it
+      console.log('✅ User authenticated - profile creation will be handled by onboarding flow');
+      
     } catch (error) {
       console.error('❌ Error in createUserProfileIfNeeded:', error.message);
     }
@@ -260,4 +246,7 @@ class AuthService {
 
 // Create and export singleton instance
 const authService = new AuthService();
+
+// Export both the class and the singleton instance
+export { AuthService };
 export default authService; 

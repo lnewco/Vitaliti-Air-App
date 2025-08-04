@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Platform } from 'react-native';
 
 const SurveyNotesInput = ({
   label,
@@ -37,6 +37,9 @@ const SurveyNotesInput = ({
         textAlignVertical="top"
         accessibilityLabel={label}
         accessibilityHint={`${characterCount} of ${maxLength} characters used`}
+        returnKeyType={Platform.OS === 'ios' ? 'done' : 'default'}
+        blurOnSubmit={true}
+        enablesReturnKeyAutomatically={true}
       />
       
       <View style={styles.footer}>
