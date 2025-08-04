@@ -434,7 +434,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
 
         {/* Phase Status Card */}
         <View style={[styles.phaseCard, { backgroundColor: sessionInfo.currentPhase === 'HYPOXIC' ? '#E3F2FD' : '#E8F5E8' }]}>
-          <Text style={styles.phaseIcon}>{sessionInfo.currentPhase === 'HYPOXIC' ? '🫁' : '��'}</Text>
+          <Text style={styles.phaseIcon}>{sessionInfo.currentPhase === 'HYPOXIC' ? '🫁' : '🧘'}</Text>
           <Text style={styles.phaseTitle}>
             {sessionInfo.currentPhase === 'HYPOXIC' ? 'HYPOXIC PHASE' : 'RECOVERY PHASE'}
           </Text>

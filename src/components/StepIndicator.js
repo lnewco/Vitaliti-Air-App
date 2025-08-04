@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 const StepIndicator = ({ currentStep, totalSteps, steps }) => {
-  const defaultSteps = ['Connect Device', 'Ready to Begin'];
+  const defaultSteps = ['Connect Device', 'Protocol Setup', 'Pre-session Check-in', 'Ready to Begin'];
   const stepLabels = steps || defaultSteps;
 
   return (
