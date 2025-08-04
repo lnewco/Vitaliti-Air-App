@@ -114,7 +114,9 @@ class DatabaseService {
         'session_type TEXT DEFAULT \'IHHT\'', 
         'current_phase TEXT', 
         'current_cycle INTEGER DEFAULT 1', 
-        'total_cycles INTEGER DEFAULT 5',
+        'total_cycles INTEGER DEFAULT 3',
+        'hypoxic_duration INTEGER DEFAULT 420',
+        'hyperoxic_duration INTEGER DEFAULT 180',
         'default_hypoxia_level INTEGER'
       ];
       
@@ -141,15 +143,31 @@ class DatabaseService {
   }
 
   // Session Management
-  async createSession(sessionId, hypoxiaLevel = null) {
+  async createSession(sessionId, hypoxiaLevel = null, protocolConfig = null) {
     const query = `
-      INSERT INTO sessions (id, start_time, status, session_type, default_hypoxia_level)
-      VALUES (?, ?, 'active', 'IHHT', ?)
+      INSERT INTO sessions (
+        id, start_time, status, session_type, default_hypoxia_level,
+        total_cycles, hypoxic_duration, hyperoxic_duration
+      )
+      VALUES (?, ?, 'active', 'IHHT', ?, ?, ?, ?)
     `;
     const startTime = Date.now();
     
-    await this.db.executeSql(query, [sessionId, startTime, hypoxiaLevel]);
-    console.log(`🎬 Session created: ${sessionId} (Hypoxia Level: ${hypoxiaLevel})`);
+    // Use protocol config or defaults
+    const totalCycles = protocolConfig?.totalCycles || 3;
+    const hypoxicDuration = protocolConfig?.hypoxicDuration || 420; // 7 minutes
+    const hyperoxicDuration = protocolConfig?.hyperoxicDuration || 180; // 3 minutes
+    
+    await this.db.executeSql(query, [
+      sessionId, 
+      startTime, 
+      hypoxiaLevel, 
+      totalCycles, 
+      hypoxicDuration, 
+      hyperoxicDuration
+    ]);
+    
+    console.log(`🎬 Session created: ${sessionId} (Cycles: ${totalCycles}, Hypoxic: ${hypoxicDuration}s, Hyperoxic: ${hyperoxicDuration}s, Hypoxia Level: ${hypoxiaLevel})`);
     return sessionId;
   }
 

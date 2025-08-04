@@ -35,10 +35,16 @@ class EnhancedSessionManager {
     // IHHT Protocol state
     this.currentPhase = 'HYPOXIC'; // 'HYPOXIC' | 'HYPEROXIC'
     this.currentCycle = 1;
-    this.totalCycles = 5;
     this.phaseStartTime = null;
-    this.phaseTimeRemaining = 300; // 5 minutes for hypoxic phase
+    this.phaseTimeRemaining = 300; // Will be set based on protocol
     this.phaseTimer = null;
+    
+    // Protocol configuration (defaults)
+    this.protocolConfig = {
+      totalCycles: 5,
+      hypoxicDuration: 300,    // 5 minutes in seconds
+      hyperoxicDuration: 120   // 2 minutes in seconds
+    };
     
     // Live Activity state
     this.hasActiveLiveActivity = false;
@@ -54,10 +60,6 @@ class EnhancedSessionManager {
     // Buffer settings
     this.BATCH_SIZE = 50;
     this.BATCH_INTERVAL = 2000;
-    
-    // IHHT timing constants (in seconds)
-    this.HYPOXIC_DURATION = 300; // 5 minutes
-    this.HYPEROXIC_DURATION = 120; // 2 minutes
     
     // App state handling
     this.setupAppStateHandling();
@@ -170,13 +172,39 @@ class EnhancedSessionManager {
     });
   }
 
+  // Protocol configuration method
+  setProtocol(protocolConfig) {
+    this.protocolConfig = {
+      totalCycles: protocolConfig.totalCycles,
+      hypoxicDuration: protocolConfig.hypoxicDuration * 60,   // Convert minutes to seconds
+      hyperoxicDuration: protocolConfig.hyperoxicDuration * 60 // Convert minutes to seconds
+    };
+    
+    console.log('🔧 Protocol configured:', this.protocolConfig);
+  }
+
   // Enhanced session lifecycle with Live Activity support
-  async startSession(existingSessionId = null) {
+  async startSession(protocolConfigOrSessionId = null) {
     if (this.isActive) {
       throw new Error('Session already active');
     }
 
     try {
+      // Handle both protocol config (object) and existing session ID (string)
+      let protocolConfig = null;
+      let existingSessionId = null;
+      
+      if (typeof protocolConfigOrSessionId === 'string') {
+        existingSessionId = protocolConfigOrSessionId;
+      } else if (typeof protocolConfigOrSessionId === 'object' && protocolConfigOrSessionId !== null) {
+        protocolConfig = protocolConfigOrSessionId;
+      }
+      
+      // Set protocol configuration if provided
+      if (protocolConfig) {
+        this.setProtocol(protocolConfig);
+      }
+
       // Use existing session ID if provided (from survey), otherwise generate new one
       const sessionId = existingSessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       console.log(`🚀 Starting session with ID: ${sessionId} ${existingSessionId ? '(existing)' : '(new)'}`);
@@ -188,11 +216,12 @@ class EnhancedSessionManager {
 
       // Create session in databases (skip if already exists)
       if (!existingSessionId) {
-        await DatabaseService.createSession(sessionId, this.currentHypoxiaLevel);
+        await DatabaseService.createSession(sessionId, this.currentHypoxiaLevel, this.protocolConfig);
         await SupabaseService.createSession({
           id: sessionId,
           startTime: Date.now(),
-          defaultHypoxiaLevel: this.currentHypoxiaLevel
+          defaultHypoxiaLevel: this.currentHypoxiaLevel,
+          protocolConfig: this.protocolConfig
         });
       } else {
         console.log('📋 Using existing session - skipping database creation');
@@ -207,7 +236,9 @@ class EnhancedSessionManager {
         sessionType: 'IHHT',
         currentPhase: this.currentPhase,
         currentCycle: this.currentCycle,
-        totalCycles: this.totalCycles,
+        totalCycles: this.protocolConfig.totalCycles,
+        hypoxicDuration: this.protocolConfig.hypoxicDuration,
+        hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
         defaultHypoxiaLevel: this.currentHypoxiaLevel
       };
 
@@ -217,7 +248,7 @@ class EnhancedSessionManager {
       this.phaseStartTime = Date.now();
       this.currentPhase = 'HYPOXIC';
       this.currentCycle = 1;
-      this.phaseTimeRemaining = this.HYPOXIC_DURATION;
+      this.phaseTimeRemaining = this.protocolConfig.hypoxicDuration;
       this.readingBuffer = [];
 
       // Start background monitoring
@@ -356,14 +387,14 @@ class EnhancedSessionManager {
     if (this.currentPhase === 'HYPOXIC') {
       // Transition to hyperoxic phase
       this.currentPhase = 'HYPEROXIC';
-      this.phaseTimeRemaining = this.HYPEROXIC_DURATION;
+      this.phaseTimeRemaining = this.protocolConfig.hyperoxicDuration;
       this.phaseStartTime = Date.now();
       
       console.log(`🔄 Advanced to HYPEROXIC phase (Cycle ${this.currentCycle})`);
       
     } else if (this.currentPhase === 'HYPEROXIC') {
       // Check if session is complete
-      if (this.currentCycle >= this.totalCycles) {
+      if (this.currentCycle >= this.protocolConfig.totalCycles) {
         await this.completeSession();
         return;
       }
@@ -371,7 +402,7 @@ class EnhancedSessionManager {
       // Advance to next cycle
       this.currentCycle++;
       this.currentPhase = 'HYPOXIC';
-      this.phaseTimeRemaining = this.HYPOXIC_DURATION;
+      this.phaseTimeRemaining = this.protocolConfig.hypoxicDuration;
       this.phaseStartTime = Date.now();
       
       console.log(`🔄 Advanced to Cycle ${this.currentCycle} - HYPOXIC phase`);
@@ -769,7 +800,9 @@ class EnhancedSessionManager {
       currentSession: this.currentSession,
       currentPhase: this.currentPhase,
       currentCycle: this.currentCycle,
-      totalCycles: this.totalCycles,
+      totalCycles: this.protocolConfig.totalCycles,
+      hypoxicDuration: this.protocolConfig.hypoxicDuration,
+      hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
       phaseTimeRemaining: this.phaseTimeRemaining,
       hasActiveLiveActivity: this.hasActiveLiveActivity,
       startTime: this.startTime,
@@ -781,7 +814,9 @@ class EnhancedSessionManager {
     return {
       phase: this.currentPhase,
       cycle: this.currentCycle,
-      totalCycles: this.totalCycles,
+      totalCycles: this.protocolConfig.totalCycles,
+      hypoxicDuration: this.protocolConfig.hypoxicDuration,
+      hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
       timeRemaining: this.phaseTimeRemaining,
       isActive: this.isActive,
       isPaused: this.isPaused

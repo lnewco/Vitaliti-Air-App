@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import OnboardingProgressIndicator from '../../components/OnboardingProgressIndicator';
 import FormTextInput from '../../components/onboarding/FormTextInput';
-import FormDatePicker from '../../components/onboarding/FormDatePicker';
+// import FormDatePicker from '../../components/onboarding/FormDatePicker'; // TEMPORARILY DISABLED
 import FormRadioGroup from '../../components/onboarding/FormRadioGroup';
 import { useOnboarding } from '../../context/OnboardingContext';
 
@@ -29,7 +29,7 @@ const BasicInfoScreen = ({ navigation }) => {
     if (Object.keys(validationErrors).length === 0) {
       console.log('Basic info collected:', {
         fullName: onboardingData.fullName,
-        dateOfBirth: onboardingData.dateOfBirth,
+        // dateOfBirth: onboardingData.dateOfBirth, // TEMPORARILY DISABLED
         gender: onboardingData.gender
       });
       navigation.navigate('Consent');
@@ -84,6 +84,7 @@ const BasicInfoScreen = ({ navigation }) => {
               required
             />
             
+            {/* TEMPORARILY DISABLED - DateTimePicker compatibility issue
             <FormDatePicker
               label="Date of Birth"
               value={onboardingData.dateOfBirth}
@@ -93,6 +94,7 @@ const BasicInfoScreen = ({ navigation }) => {
               minimumDate={minDate}
               maximumDate={maxDate}
             />
+            */}
             
             <FormRadioGroup
               label="Gender"

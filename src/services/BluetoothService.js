@@ -183,6 +183,11 @@ class BluetoothService {
       rssi: device.rssi,
       serviceUUIDs: device.serviceUUIDs
     });
+    
+    // Debug WHOOP detection specifically
+    if (device.name && device.name.toLowerCase().includes('whoop')) {
+      console.log('🎯 WHOOP device detected by name!', device.name);
+    }
 
     // Determine device type and log appropriate message
     const deviceType = this.getDeviceType(device);
@@ -191,7 +196,7 @@ class BluetoothService {
     } else if (deviceType === 'hr-monitor') {
       console.log('✅ Heart Rate Monitor device found:', device.name || device.localName || 'Unknown');
     } else {
-      console.log('🔍 Unknown device found:', device.name || device.localName || 'Unknown');
+      console.log('🔍 Unknown device found:', device.name || device.localName || 'Unknown', 'Services:', device.serviceUUIDs);
     }
 
     // Only report devices that match the current scan type (or if scanning for 'all')
@@ -231,14 +236,17 @@ class BluetoothService {
       deviceText.includes(keyword.toLowerCase())
     );
 
-    // Check for HR monitor keywords
-    const hrKeywords = ['whoop', 'heart', 'rate', 'hr', 'polar', 'garmin', 'chest'];
+    // Check for HR monitor keywords - expanded for WHOOP and other devices
+    const hrKeywords = ['whoop', 'heart', 'rate', 'hr', 'polar', 'garmin', 'chest', 'hrm', 'strap', 'monitor', 'wahoo', 'suunto', 'sensor'];
     const hasHRKeyword = hrKeywords.some(keyword =>
       deviceText.includes(keyword.toLowerCase())
     );
+    
+    // Also check for devices that might not have descriptive names but have HR service
+    const hasHRService = device.serviceUUIDs && device.serviceUUIDs.includes(this.HR_SERVICE_UUID);
 
     if (hasPulseOxKeyword) return 'pulse-ox';
-    if (hasHRKeyword) return 'hr-monitor';
+    if (hasHRKeyword || hasHRService) return 'hr-monitor';
     
     return 'unknown';
   }
@@ -283,6 +291,9 @@ class BluetoothService {
         this.onConnectionStatusChanged(deviceType, true);
       }
       
+      // Restart scanning for other device types if we don't have both connected
+      await this.restartScanningForMissingDevices();
+      
       return discoveredDevice;
     } catch (error) {
       console.error('Connection error:', error);
@@ -297,6 +308,10 @@ class BluetoothService {
       if (this.onConnectionStatusChanged) {
         this.onConnectionStatusChanged(deviceType, false);
       }
+      
+      // Restart scanning after failed connection attempt
+      await this.restartScanningForMissingDevices();
+      
       throw error;
     }
   }
@@ -366,7 +381,7 @@ class BluetoothService {
           }
           
           if (characteristic && characteristic.value) {
-            console.log('📦 Raw BCI data received:', characteristic.value);
+            // console.log('📦 Raw BCI data received:', characteristic.value); // Disabled: high frequency logging
             this.handleBCIDataReceived(characteristic.value);
           }
         });
@@ -462,7 +477,7 @@ class BluetoothService {
           }
           
           if (characteristic && characteristic.value) {
-            console.log('📦 Raw HR data received:', characteristic.value);
+            // console.log('📦 Raw HR data received:', characteristic.value); // Disabled: high frequency logging
             this.handleHRDataReceived(characteristic.value);
           }
         });
@@ -517,12 +532,12 @@ class BluetoothService {
 
   parseBCIData(base64Data) {
     try {
-      console.log('🔍 Parsing BCI data:', base64Data);
+      // console.log('🔍 Parsing BCI data:', base64Data); // Disabled: high frequency logging
       
       // Decode base64 to buffer
       const buffer = Buffer.from(base64Data, 'base64');
-      console.log('📊 Buffer length:', buffer.length);
-      console.log('📊 Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' '));
+      // console.log('📊 Buffer length:', buffer.length); // Disabled: high frequency logging
+      // console.log('📊 Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
       
       // Handle different packet sizes
       let packets = [];
@@ -532,7 +547,7 @@ class BluetoothService {
         packets = [buffer];
       } else if (buffer.length === 20) {
         // Four 5-byte packets concatenated
-        console.log('📦 Processing 20-byte packet as 4x5-byte packets');
+        // console.log('📦 Processing 20-byte packet as 4x5-byte packets'); // Disabled: high frequency logging
         for (let i = 0; i < 4; i++) {
           const packetStart = i * 5;
           const packet = buffer.slice(packetStart, packetStart + 5);
@@ -551,7 +566,7 @@ class BluetoothService {
       
       // Process the latest (most recent) packet
       const latestPacket = packets[packets.length - 1];
-      console.log('🎯 Processing latest packet:', Array.from(latestPacket).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' '));
+      // console.log('🎯 Processing latest packet:', Array.from(latestPacket).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
       
       return this.parseSingle5BytePacket(latestPacket, base64Data);
       
@@ -570,7 +585,7 @@ class BluetoothService {
       const byte4 = buffer[3]; // Pulse rate bits 0-6, sync bit
       const byte5 = buffer[4]; // SpO2 bits 0-6, sync bit
       
-      // console.log('📊 BCI Bytes:', {
+      // console.log('📊 BCI Bytes:', { // Disabled: high frequency logging
       //   byte1: '0x' + byte1.toString(16).padStart(2, '0').toUpperCase(),
       //   byte2: '0x' + byte2.toString(16).padStart(2, '0').toUpperCase(), 
       //   byte3: '0x' + byte3.toString(16).padStart(2, '0').toUpperCase(),
@@ -607,7 +622,7 @@ class BluetoothService {
       const pleth = byte2 & 0x7F;
       const isPlethValid = pleth !== 0;
       
-      // console.log('🔬 BCI Parsed Values:', {
+      // console.log('🔬 BCI Parsed Values:', { // Disabled: high frequency logging
       //   signalStrength,
       //   isSignalValid,
       //   isProbePlugged,
@@ -633,11 +648,11 @@ class BluetoothService {
         rawData: originalBase64Data
       };
       
-      // if (spo2 !== null || pulseRate !== null) {
-      //   console.log('✅ Valid BCI data:', result);
-      // } else {
-      //   console.log('⚠️ BCI status data (no valid measurements):', result);
-      // }
+      if (spo2 !== null || pulseRate !== null) {
+        // console.log('✅ Valid BCI data:', result); // Disabled: high frequency logging
+      } else {
+        // console.log('⚠️ BCI status data (no valid measurements):', result); // Disabled: high frequency logging
+      }
       
       return result;
       
@@ -649,12 +664,12 @@ class BluetoothService {
 
   parseHRData(base64Data) {
     try {
-      console.log('🔍 Parsing HR data:', base64Data);
+      // console.log('🔍 Parsing HR data:', base64Data); // Disabled: high frequency logging
       
       // Decode base64 to buffer
       const buffer = Buffer.from(base64Data, 'base64');
-      console.log('📊 HR Buffer length:', buffer.length);
-      console.log('📊 HR Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' '));
+      // console.log('📊 HR Buffer length:', buffer.length); // Disabled: high frequency logging
+      // console.log('📊 HR Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
       
       if (buffer.length < 2) {
         console.log('❌ HR buffer too short');
@@ -714,16 +729,16 @@ class BluetoothService {
         }
       }
 
-      console.log('🔬 HR Parsed Values:', {
-        flags: '0x' + flags.toString(16).padStart(2, '0'),
-        hrFormat16Bit,
-        sensorContactSupported,
-        sensorContactDetected,
-        energyExpendedPresent,
-        rrIntervalsPresent,
-        heartRate,
-        rrIntervals
-      });
+      // console.log('🔬 HR Parsed Values:', { // Disabled: high frequency logging
+      //   flags: '0x' + flags.toString(16).padStart(2, '0'),
+      //   hrFormat16Bit,
+      //   sensorContactSupported,
+      //   sensorContactDetected,
+      //   energyExpendedPresent,
+      //   rrIntervalsPresent,
+      //   heartRate,
+      //   rrIntervals
+      // });
 
       // Store RR intervals in dual timeframe windows
       if (rrIntervals.length > 0) {
@@ -735,13 +750,13 @@ class BluetoothService {
           this.realHRVWindow.add(interval, now);
         });
         
-        console.log(`📈 Quick HRV: ${this.quickHRVWindow.getSize()} intervals, Real HRV: ${this.realHRVWindow.getSize()} intervals`);
+        // console.log(`📈 Quick HRV: ${this.quickHRVWindow.getSize()} intervals, Real HRV: ${this.realHRVWindow.getSize()} intervals`); // Disabled: frequent logging
         
         // Calculate dual-timeframe HRV
         const hrvResults = this.calculateDualHRV(now);
         
         if (hrvResults) {
-          console.log(`✅ HRV Results:`, hrvResults);
+          // console.log(`✅ HRV Results:`, hrvResults); // Disabled: frequent logging
         }
       }
 
@@ -762,9 +777,9 @@ class BluetoothService {
       };
 
       if (heartRate > 0) {
-        console.log('✅ Valid HR data:', result);
+        // console.log('✅ Valid HR data:', result); // Disabled: high frequency logging
       } else {
-        console.log('⚠️ HR status data (no valid measurement):', result);
+        // console.log('⚠️ HR status data (no valid measurement):', result); // Disabled: high frequency logging
       }
 
       return result;
@@ -921,6 +936,33 @@ class BluetoothService {
       }
     } catch (error) {
       console.error('Error disconnecting:', error);
+    }
+  }
+
+  async restartScanningForMissingDevices() {
+    // If we have both devices connected, no need to keep scanning
+    if (this.isPulseOxConnected && this.isHRConnected) {
+      console.log('🎯 Both devices connected - stopping scan');
+      return;
+    }
+    
+    // Determine what device type we still need
+    let scanType = 'all';
+    if (this.isPulseOxConnected && !this.isHRConnected) {
+      scanType = 'hr-monitor';
+      console.log('🔍 Pulse ox connected - scanning for heart rate monitor');
+    } else if (!this.isPulseOxConnected && this.isHRConnected) {
+      scanType = 'pulse-ox';
+      console.log('🔍 Heart rate monitor connected - scanning for pulse oximeter');
+    } else {
+      console.log('🔍 No devices connected - scanning for all devices');
+    }
+    
+    try {
+      // Restart scanning for the missing device type
+      await this.startScanning(scanType);
+    } catch (error) {
+      console.error('❌ Failed to restart scanning:', error);
     }
   }
 
