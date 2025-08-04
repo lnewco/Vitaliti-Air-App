@@ -72,7 +72,7 @@ const CompletionScreen = ({ navigation }) => {
       const profileData = {
         user_id: user.id,
         full_name: onboardingData.fullName,
-        // date_of_birth: onboardingData.dateOfBirth.toISOString().split('T')[0], // TEMPORARILY DISABLED
+        // date_of_birth: null, // NULL allowed - date picker temporarily disabled
         gender: onboardingData.gender,
         onboarding_completed_at: new Date().toISOString(),
       };
