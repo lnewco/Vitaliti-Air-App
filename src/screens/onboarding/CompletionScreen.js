@@ -55,10 +55,11 @@ const CompletionScreen = ({ navigation }) => {
       }
 
       // Check if we have valid onboarding data
-      if (!onboardingData.fullName || !onboardingData.dateOfBirth || !onboardingData.gender) {
+      // TEMPORARILY DISABLED dateOfBirth validation
+      if (!onboardingData.fullName || !onboardingData.gender) {
         console.error('💾 Missing required onboarding data:', {
           fullName: !!onboardingData.fullName,
-          dateOfBirth: !!onboardingData.dateOfBirth,
+          // dateOfBirth: !!onboardingData.dateOfBirth, // TEMPORARILY DISABLED
           gender: !!onboardingData.gender,
           researchConsent: onboardingData.researchConsent,
           liabilityWaiver: onboardingData.liabilityWaiver,
@@ -71,7 +72,7 @@ const CompletionScreen = ({ navigation }) => {
       const profileData = {
         user_id: user.id,
         full_name: onboardingData.fullName,
-        date_of_birth: onboardingData.dateOfBirth.toISOString().split('T')[0], // YYYY-MM-DD format
+        // date_of_birth: onboardingData.dateOfBirth.toISOString().split('T')[0], // TEMPORARILY DISABLED
         gender: onboardingData.gender,
         onboarding_completed_at: new Date().toISOString(),
       };

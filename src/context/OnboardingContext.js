@@ -65,6 +65,8 @@ export const OnboardingProvider = ({ children }) => {
       errors.fullName = 'Please enter your full name';
     }
     
+    // TEMPORARILY DISABLED - DateTimePicker compatibility issue
+    /*
     if (!onboardingData.dateOfBirth) {
       errors.dateOfBirth = 'Date of birth is required';
     } else {
@@ -78,6 +80,7 @@ export const OnboardingProvider = ({ children }) => {
         errors.dateOfBirth = 'Please enter a valid date of birth';
       }
     }
+    */
     
     if (!onboardingData.gender) {
       errors.gender = 'Please select your gender';
