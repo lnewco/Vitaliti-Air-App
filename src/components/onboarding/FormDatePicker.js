@@ -14,8 +14,8 @@ const FormDatePicker = ({
   const [showPicker, setShowPicker] = useState(false);
 
   const handleDateChange = (event, selectedDate) => {
-    setShowPicker(Platform.OS === 'ios');
-    if (selectedDate) {
+    setShowPicker(false); // Always close picker after selection
+    if (selectedDate && event.type === 'set') {
       onChange(selectedDate);
     }
   };
@@ -59,7 +59,7 @@ const FormDatePicker = ({
         <DateTimePicker
           value={value || new Date()}
           mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          display="default"
           onChange={handleDateChange}
           minimumDate={minimumDate}
           maximumDate={maximumDate}

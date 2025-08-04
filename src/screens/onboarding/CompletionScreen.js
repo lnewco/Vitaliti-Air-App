@@ -55,10 +55,11 @@ const CompletionScreen = ({ navigation }) => {
       }
 
       // Check if we have valid onboarding data
-      if (!onboardingData.fullName || !onboardingData.dateOfBirth || !onboardingData.gender) {
+      // TEMPORARILY DISABLED dateOfBirth validation
+      if (!onboardingData.fullName || !onboardingData.gender) {
         console.error('💾 Missing required onboarding data:', {
           fullName: !!onboardingData.fullName,
-          dateOfBirth: !!onboardingData.dateOfBirth,
+          // dateOfBirth: !!onboardingData.dateOfBirth, // TEMPORARILY DISABLED
           gender: !!onboardingData.gender,
           researchConsent: onboardingData.researchConsent,
           liabilityWaiver: onboardingData.liabilityWaiver,
@@ -71,7 +72,7 @@ const CompletionScreen = ({ navigation }) => {
       const profileData = {
         user_id: user.id,
         full_name: onboardingData.fullName,
-        date_of_birth: onboardingData.dateOfBirth.toISOString().split('T')[0], // YYYY-MM-DD format
+        // date_of_birth: null, // NULL allowed - date picker temporarily disabled
         gender: onboardingData.gender,
         onboarding_completed_at: new Date().toISOString(),
       };
@@ -244,16 +245,10 @@ const CompletionScreen = ({ navigation }) => {
     // Clear onboarding data from memory
     clearOnboardingData();
     
-    // Since we've saved onboarding completion to AsyncStorage and cleared onboarding data,
-    // the AppNavigator will automatically detect this change and show the appropriate flow:
-    // - If user is authenticated: main app
-    // - If user is not authenticated: auth flow (Welcome Back)
+    console.log('Onboarding completed - AppNavigator periodic check will detect this within 2 seconds');
     
-    // Simply wait a moment for state to update, then the AppNavigator will handle routing
-    setTimeout(() => {
-      // The AppNavigator useEffect will re-run and detect the changes
-      console.log('Onboarding completed - AppNavigator should auto-route to correct flow');
-    }, 100);
+    // The AppNavigator has a periodic check that will detect the AsyncStorage change
+    // and automatically transition to the main app within 2 seconds
   };
 
   return (

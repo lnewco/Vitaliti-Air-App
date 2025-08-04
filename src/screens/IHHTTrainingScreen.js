@@ -68,12 +68,14 @@ const PHASE_TYPES = {
   TERMINATED: 'TERMINATED'
 };
 
-const HYPOXIC_DURATION = 5 * 60; // 5 minutes in seconds
-const HYPEROXIC_DURATION = 2 * 60; // 2 minutes in seconds
-const TOTAL_CYCLES = 5;
-const TOTAL_DURATION = (HYPOXIC_DURATION + HYPEROXIC_DURATION) * TOTAL_CYCLES; // 35 minutes
-
 const IHHTTrainingScreen = ({ navigation, route }) => {
+  // Extract protocol configuration from navigation params
+  const protocolConfig = route?.params?.protocolConfig || {
+    totalCycles: 5,
+    hypoxicDuration: 5,     // in minutes
+    hyperoxicDuration: 2    // in minutes
+  };
+
   const { 
     pulseOximeterData, 
     heartRateData, 
@@ -109,10 +111,10 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
 
   // Reset hypoxia level to default when starting new hypoxic phase
   useEffect(() => {
-    if (sessionInfo.currentPhase === 'HYPOXIC' && sessionInfo.phaseTimeRemaining === HYPOXIC_DURATION) {
+    if (sessionInfo.currentPhase === 'HYPOXIC' && sessionInfo.phaseTimeRemaining === sessionInfo.hypoxicDuration) {
       setHypoxiaLevel(defaultHypoxiaLevel);
     }
-  }, [sessionInfo.currentPhase, sessionInfo.phaseTimeRemaining, defaultHypoxiaLevel]);
+  }, [sessionInfo.currentPhase, sessionInfo.phaseTimeRemaining, sessionInfo.hypoxicDuration, defaultHypoxiaLevel]);
 
   const loadHypoxiaLevel = async () => {
     try {
@@ -249,7 +251,17 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const startSession = async () => {
     try {
       console.log('🔄 Starting IHHT session', existingSessionId ? `with existing sessionId: ${existingSessionId}` : 'with new sessionId');
-      await EnhancedSessionManager.startSession(existingSessionId);
+      
+      // If we have both sessionId and protocolConfig, we need to set the protocol first
+      if (existingSessionId && protocolConfig) {
+        console.log('🔧 Setting protocol config for existing session:', protocolConfig);
+        EnhancedSessionManager.setProtocol(protocolConfig);
+        await EnhancedSessionManager.startSession(existingSessionId);
+      } else {
+        // Support legacy single parameter (either sessionId or protocolConfig)
+        await EnhancedSessionManager.startSession(existingSessionId || protocolConfig);
+      }
+      
       setSessionInfo(EnhancedSessionManager.getSessionInfo());
     } catch (error) {
       console.error('Failed to start enhanced session:', error);
@@ -362,7 +374,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   };
 
   const formatTotalTime = (seconds) => {
-    const totalDuration = (HYPOXIC_DURATION + HYPEROXIC_DURATION) * sessionInfo.totalCycles;
+    const totalDuration = (sessionInfo.hypoxicDuration + sessionInfo.hyperoxicDuration) * sessionInfo.totalCycles;
     const totalMins = Math.floor(totalDuration / 60);
     const currentMins = Math.floor(seconds / 60);
     const currentSecs = seconds % 60;

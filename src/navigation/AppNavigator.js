@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -29,8 +29,35 @@ const AppNavigator = () => {
     }
   }, [isAuthenticated]);
 
+  // Listen for app state changes to re-check onboarding status
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState) => {
+      if (nextAppState === 'active') {
+        console.log('🔄 App became active - re-checking onboarding status');
+        checkOnboardingStatus();
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, []);
+
+  // Periodic check for onboarding completion (useful when onboarding completes)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Only check if we're currently showing onboarding and user is authenticated
+      if (!hasSeenOnboarding && isAuthenticated) {
+        console.log('🔄 Periodic check - looking for onboarding completion');
+        checkOnboardingStatus();
+      }
+    }, 2000); // Check every 2 seconds when in onboarding mode
+
+    return () => clearInterval(interval);
+  }, [hasSeenOnboarding, isAuthenticated]);
+
   const checkOnboardingStatus = async () => {
     try {
+      setIsCheckingOnboarding(true);
       const onboardingStatus = await AsyncStorage.getItem('hasCompletedOnboarding');
       console.log('🔄 AppNavigator: Raw onboarding status from AsyncStorage:', onboardingStatus);
       
