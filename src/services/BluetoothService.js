@@ -291,6 +291,9 @@ class BluetoothService {
         this.onConnectionStatusChanged(deviceType, true);
       }
       
+      // Restart scanning for other device types if we don't have both connected
+      await this.restartScanningForMissingDevices();
+      
       return discoveredDevice;
     } catch (error) {
       console.error('Connection error:', error);
@@ -305,6 +308,10 @@ class BluetoothService {
       if (this.onConnectionStatusChanged) {
         this.onConnectionStatusChanged(deviceType, false);
       }
+      
+      // Restart scanning after failed connection attempt
+      await this.restartScanningForMissingDevices();
+      
       throw error;
     }
   }
@@ -929,6 +936,33 @@ class BluetoothService {
       }
     } catch (error) {
       console.error('Error disconnecting:', error);
+    }
+  }
+
+  async restartScanningForMissingDevices() {
+    // If we have both devices connected, no need to keep scanning
+    if (this.isPulseOxConnected && this.isHRConnected) {
+      console.log('🎯 Both devices connected - stopping scan');
+      return;
+    }
+    
+    // Determine what device type we still need
+    let scanType = 'all';
+    if (this.isPulseOxConnected && !this.isHRConnected) {
+      scanType = 'hr-monitor';
+      console.log('🔍 Pulse ox connected - scanning for heart rate monitor');
+    } else if (!this.isPulseOxConnected && this.isHRConnected) {
+      scanType = 'pulse-ox';
+      console.log('🔍 Heart rate monitor connected - scanning for pulse oximeter');
+    } else {
+      console.log('🔍 No devices connected - scanning for all devices');
+    }
+    
+    try {
+      // Restart scanning for the missing device type
+      await this.startScanning(scanType);
+    } catch (error) {
+      console.error('❌ Failed to restart scanning:', error);
     }
   }
 
