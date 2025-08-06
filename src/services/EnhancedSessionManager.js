@@ -195,6 +195,12 @@ class EnhancedSessionManager {
     if (this.isActive) {
       throw new Error('Session already active');
     }
+    
+    // Clear any leftover readings from previous sessions
+    if (this.readingBuffer.length > 0) {
+      console.log(`🧹 Clearing ${this.readingBuffer.length} leftover readings from buffer`);
+      this.readingBuffer = [];
+    }
 
     try {
       // Handle both protocol config (object) and existing session ID (string)
@@ -462,8 +468,8 @@ class EnhancedSessionManager {
     }
     
     // Prevent any operations after session completion
-    if (this.currentPhase === 'COMPLETED' || this.currentPhase === 'TERMINATED') {
-      console.log('❌ Cannot skip: session already completed');
+    if (this.currentPhase === 'COMPLETED' || this.currentPhase === 'TERMINATED' || !this.currentSession) {
+      console.log('❌ Cannot skip: session already completed or no active session');
       return false;
     }
 
@@ -894,6 +900,14 @@ class EnhancedSessionManager {
       timestamp: Date.now()
     });
     
+    // If disconnected, immediately flush any pending readings
+    if (state === 'disconnected' && this.isActive) {
+      console.log('📤 Device disconnected - flushing pending readings immediately');
+      this.flushReadingBuffer().catch(error => {
+        console.error('❌ Failed to flush readings on disconnect:', error);
+      });
+    }
+    
     // If reconnected, clear any connection warnings
     if (state === 'connected' && previousState !== 'connected') {
       console.log('🎉 Connection restored - session continuing normally');
@@ -918,7 +932,7 @@ class EnhancedSessionManager {
     }
 
     // Don't record readings if session has completed
-    if (this.currentPhase === 'COMPLETED' || this.currentPhase === null) {
+    if (this.currentPhase === 'COMPLETED' || this.currentPhase === 'TERMINATED' || this.currentPhase === null) {
       console.log('⚠️ Reading rejected - session has completed');
       return;
     }

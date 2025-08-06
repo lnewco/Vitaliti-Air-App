@@ -368,6 +368,12 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   };
 
   const handleSkipToNext = async () => {
+    // Prevent skip if session is completed or not started
+    if (!sessionInfo.isActive || sessionCompleted || sessionInfo.currentPhase === 'COMPLETED') {
+      console.log(`❌ Cannot skip - session not active or already completed`);
+      return;
+    }
+    
     const success = await EnhancedSessionManager.skipToNextPhase();
     if (success) {
       Vibration.vibrate(100); // Brief feedback
