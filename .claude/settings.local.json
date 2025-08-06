@@ -9,7 +9,12 @@
       "mcp__supabase__execute_sql",
       "Bash(npm install:*)",
       "Bash(rm:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git stash:*)",
+      "Bash(git push:*)"
     ],
     "deny": []
   }

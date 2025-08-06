@@ -362,6 +362,12 @@ class EnhancedSessionManager {
   startPhaseTimer() {
     this.phaseTimer = setInterval(() => {
       if (!this.isActive || this.isPaused) return;
+      
+      // Prevent timer updates after session completion
+      if (this.currentPhase === 'COMPLETED' || this.currentPhase === 'TERMINATED') {
+        clearInterval(this.phaseTimer);
+        return;
+      }
 
       this.phaseTimeRemaining--;
       
@@ -454,6 +460,12 @@ class EnhancedSessionManager {
       console.log('❌ Cannot skip: session not active or paused');
       return false;
     }
+    
+    // Prevent any operations after session completion
+    if (this.currentPhase === 'COMPLETED' || this.currentPhase === 'TERMINATED') {
+      console.log('❌ Cannot skip: session already completed');
+      return false;
+    }
 
     const previousPhase = this.currentPhase;
     const previousCycle = this.currentCycle;
@@ -515,9 +527,11 @@ class EnhancedSessionManager {
   async completeSession() {
     console.log('🏁 IHHT session completed!');
     
-    // Mark as completed
+    // Mark as completed but preserve the cycle count
+    const finalCycle = this.currentCycle;
     this.currentPhase = 'COMPLETED';
     this.phaseTimeRemaining = 0;
+    this.currentCycle = finalCycle; // Preserve the cycle count
     
     // Update Live Activity
     await this.updateLiveActivity();
@@ -569,6 +583,10 @@ class EnhancedSessionManager {
     }
 
     const sessionId = this.currentSession.id;
+    
+    // Store the final cycle count before resetting
+    const finalCycle = this.currentCycle;
+    
     console.log(`🛑 Starting ROBUST session termination for: ${sessionId}`);
     
     // Helper function to run operations with timeout
@@ -734,8 +752,9 @@ class EnhancedSessionManager {
       endTime: Date.now(),
       stats,
       status: 'completed',
-      currentCycle: this.currentCycle,
-      currentPhase: this.currentPhase
+      currentCycle: finalCycle,  // Use the preserved final cycle
+      currentPhase: 'COMPLETED',  // Always set to COMPLETED
+      finalCycle: finalCycle  // Add this for clarity
     };
 
     // Session summary
