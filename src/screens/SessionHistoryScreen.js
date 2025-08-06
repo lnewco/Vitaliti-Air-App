@@ -17,6 +17,7 @@ import { LineChart } from 'react-native-chart-kit';
 import SessionManager from '../services/SessionManager';
 
 const { width: screenWidth } = Dimensions.get('window');
+const CHART_WIDTH = screenWidth - 60; // Account for container padding
 
 const SessionHistoryScreen = ({ route, navigation }) => {
   const [sessions, setSessions] = useState([]);
@@ -153,10 +154,14 @@ const SessionHistoryScreen = ({ route, navigation }) => {
       // Try to get data from local database first
       let sessionData = await SessionManager.getSessionWithData(sessionId);
       
-              // If local data is missing, incomplete, or has no valid readings, try Supabase
-        const hasValidReadings = sessionData?.readings?.length > 0 && sessionData.total_readings > 0;
-        
-        if (!sessionData || !hasValidReadings) {
+      // Check if we have complete data
+      const hasLocalData = sessionData !== null;
+      const hasReadings = sessionData?.readings?.length > 0;
+      const hasStats = sessionData?.total_readings > 0 || 
+                       sessionData?.stats?.totalReadings > 0;
+      
+      // If local data is incomplete, try to supplement with Supabase
+      if (!hasLocalData || !hasReadings || !hasStats) {
         try {
           const SupabaseService = require('../services/SupabaseService').default;
           const { supabase } = require('../config/supabase');
@@ -195,27 +200,68 @@ const SessionHistoryScreen = ({ route, navigation }) => {
             
             // Format Supabase data to match local format
             const session = supabaseSessionData.data;
-            const readings = supabaseReadings.data || [];
+            const rawReadings = supabaseReadings.data || [];
+            
+            // Convert timestamps from ISO strings to milliseconds
+            const readings = rawReadings.map(r => ({
+              ...r,
+              timestamp: typeof r.timestamp === 'string' 
+                ? new Date(r.timestamp).getTime()
+                : r.timestamp
+            }));
             
             // Calculate stats from readings
             const validSpo2Readings = readings.filter(r => r.spo2 && r.spo2 > 0).map(r => r.spo2);
             const validHRReadings = readings.filter(r => r.heart_rate && r.heart_rate > 0).map(r => r.heart_rate);
             
-
+            // Ensure local readings also have proper timestamp format
+            const localReadings = sessionData?.readings?.map(r => ({
+              ...r,
+              timestamp: typeof r.timestamp === 'string' 
+                ? new Date(r.timestamp).getTime()
+                : r.timestamp
+            })) || [];
+            
+            // Merge local and Supabase data, preferring whichever has more complete information
+            const mergedReadings = readings.length > localReadings.length ? 
+                                   readings : (localReadings.length > 0 ? localReadings : readings);
+            
+            // Use Supabase stats if they're more complete
+            const useSupabaseStats = session.total_readings > (sessionData?.total_readings || 0);
             
             sessionData = {
               id: session.id,
               start_time: session.start_time ? new Date(session.start_time).getTime() : null,
               end_time: session.end_time ? new Date(session.end_time).getTime() : null,
-              status: session.status || 'unknown',
-              total_readings: session.total_readings || readings.length || 0,
-              readings: readings,
-              // Calculate stats from readings if available
-              min_spo2: validSpo2Readings.length > 0 ? Math.min(...validSpo2Readings) : null,
-              max_spo2: validSpo2Readings.length > 0 ? Math.max(...validSpo2Readings) : null,
-              min_heart_rate: validHRReadings.length > 0 ? Math.min(...validHRReadings) : null,
-              max_heart_rate: validHRReadings.length > 0 ? Math.max(...validHRReadings) : null,
-              source: 'supabase'
+              status: session.status || sessionData?.status || 'unknown',
+              total_readings: Math.max(
+                session.total_readings || 0,
+                sessionData?.total_readings || 0,
+                mergedReadings.length || 0
+              ),
+              readings: mergedReadings,
+              // Use stored stats if available, otherwise calculate from readings
+              min_spo2: useSupabaseStats && session.min_spo2 ? session.min_spo2 : 
+                       (validSpo2Readings.length > 0 ? Math.min(...validSpo2Readings) : 
+                        sessionData?.min_spo2 || null),
+              max_spo2: useSupabaseStats && session.max_spo2 ? session.max_spo2 : 
+                       (validSpo2Readings.length > 0 ? Math.max(...validSpo2Readings) : 
+                        sessionData?.max_spo2 || null),
+              avg_spo2: useSupabaseStats && session.avg_spo2 ? session.avg_spo2 :
+                       (validSpo2Readings.length > 0 ? 
+                        validSpo2Readings.reduce((a, b) => a + b, 0) / validSpo2Readings.length :
+                        sessionData?.avg_spo2 || null),
+              min_heart_rate: useSupabaseStats && session.min_heart_rate ? session.min_heart_rate :
+                             (validHRReadings.length > 0 ? Math.min(...validHRReadings) : 
+                              sessionData?.min_heart_rate || null),
+              max_heart_rate: useSupabaseStats && session.max_heart_rate ? session.max_heart_rate :
+                             (validHRReadings.length > 0 ? Math.max(...validHRReadings) : 
+                              sessionData?.max_heart_rate || null),
+              avg_heart_rate: useSupabaseStats && session.avg_heart_rate ? session.avg_heart_rate :
+                             (validHRReadings.length > 0 ? 
+                              validHRReadings.reduce((a, b) => a + b, 0) / validHRReadings.length :
+                              sessionData?.avg_heart_rate || null),
+              source: readings.length > 0 ? 'merged' : 'supabase'
             };
           }
         } catch (supabaseError) {
@@ -224,6 +270,28 @@ const SessionHistoryScreen = ({ route, navigation }) => {
       }
       
       if (sessionData) {
+        // Ensure all readings have proper timestamps before setting data
+        if (sessionData.readings && Array.isArray(sessionData.readings)) {
+          sessionData.readings = sessionData.readings.map(r => ({
+            ...r,
+            timestamp: typeof r.timestamp === 'string' 
+              ? new Date(r.timestamp).getTime()
+              : r.timestamp
+          }));
+          
+          // Debug: Log phase data availability
+          console.log('Debug - Session data loaded:', {
+            sessionId: sessionData.id,
+            totalReadings: sessionData.readings.length,
+            firstReading: sessionData.readings[0] ? {
+              timestamp: sessionData.readings[0].timestamp,
+              phase_type: sessionData.readings[0].phase_type,
+              cycle_number: sessionData.readings[0].cycle_number
+            } : null,
+            hasPhaseData: sessionData.readings.some(r => r.phase_type),
+            phaseTypes: [...new Set(sessionData.readings.map(r => r.phase_type).filter(Boolean))]
+          });
+        }
         setSessionData(sessionData); // Update modal with data
       } else {
         setModalVisible(false); // Hide modal on error
@@ -323,42 +391,253 @@ const SessionHistoryScreen = ({ route, navigation }) => {
     </TouchableOpacity>
   );
 
-  const prepareChartData = (readings, field) => {
+  // Helper function to format time labels based on elapsed time
+  const formatTimeLabel = (elapsedMs, totalDurationMs) => {
+    const seconds = Math.floor(elapsedMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    
+    // Format based on total duration
+    if (totalDurationMs < 60000) { // Less than 1 minute - show seconds
+      return `${seconds}s`;
+    } else if (totalDurationMs < 3600000) { // Less than 1 hour - show mm:ss
+      const displayMinutes = minutes;
+      const displaySeconds = seconds % 60;
+      if (displayMinutes === 0) {
+        return `${displaySeconds}s`;
+      }
+      return `${displayMinutes}:${displaySeconds.toString().padStart(2, '0')}`;
+    } else { // 1 hour or more - show hh:mm
+      const displayHours = hours;
+      const displayMinutes = minutes % 60;
+      return `${displayHours}:${displayMinutes.toString().padStart(2, '0')}`;
+    }
+  };
+
+  // Helper function to sample readings based on time intervals
+  const sampleReadingsByTime = (readings, targetPoints) => {
+    if (readings.length <= targetPoints) return readings;
+    
+    const firstTime = readings[0].timestamp;
+    const lastTime = readings[readings.length - 1].timestamp;
+    const timeRange = lastTime - firstTime;
+    const timeStep = timeRange / (targetPoints - 1);
+    
+    const sampled = [readings[0]]; // Always include first reading
+    let targetTime = firstTime + timeStep;
+    let lastIndex = 0;
+    
+    for (let i = 1; i < targetPoints - 1; i++) {
+      // Find reading closest to target time
+      let closestIndex = lastIndex;
+      let closestDiff = Math.abs(readings[lastIndex].timestamp - targetTime);
+      
+      for (let j = lastIndex + 1; j < readings.length; j++) {
+        const diff = Math.abs(readings[j].timestamp - targetTime);
+        if (diff < closestDiff) {
+          closestDiff = diff;
+          closestIndex = j;
+        } else {
+          break; // Readings are sorted, so we've passed the closest point
+        }
+      }
+      
+      sampled.push(readings[closestIndex]);
+      lastIndex = closestIndex;
+      targetTime += timeStep;
+    }
+    
+    sampled.push(readings[readings.length - 1]); // Always include last reading
+    
+    // Debug: Check if phase data is preserved in sampling
+    console.log('Debug - Sampled readings phase check:', {
+      originalCount: readings.length,
+      sampledCount: sampled.length,
+      firstPhase: sampled[0]?.phase_type,
+      lastPhase: sampled[sampled.length - 1]?.phase_type,
+      hasPhaseData: sampled.some(r => r.phase_type !== null && r.phase_type !== undefined)
+    });
+    
+    return sampled;
+  };
+
+  // Helper function to calculate phase zones for background visualization
+  const calculatePhaseZones = (readings) => {
+    if (!readings || readings.length === 0) return [];
+    
+    // Debug: Check what fields are available
+    if (readings.length > 0) {
+      console.log('Debug - First reading fields:', Object.keys(readings[0]));
+      console.log('Debug - Sample reading data:', {
+        reading1: {
+          phase_type: readings[0].phase_type,
+          phaseType: readings[0].phaseType,
+          cycle_number: readings[0].cycle_number,
+          cycleNumber: readings[0].cycleNumber,
+          timestamp: readings[0].timestamp
+        },
+        reading10: readings[9] ? {
+          phase_type: readings[9].phase_type,
+          phaseType: readings[9].phaseType,
+          cycle_number: readings[9].cycle_number,
+          cycleNumber: readings[9].cycleNumber,
+          timestamp: readings[9].timestamp
+        } : null,
+        totalReadings: readings.length
+      });
+    }
+    
+    const zones = [];
+    let currentPhase = null;
+    let currentCycle = null;
+    let zoneStart = 0;
+    
+    readings.forEach((reading, index) => {
+      // Check both snake_case and camelCase versions
+      const phase = reading.phase_type || reading.phaseType;
+      const cycle = reading.cycle_number || reading.cycleNumber;
+      
+      // Skip readings without phase data or with COMPLETED phase
+      if (!phase || phase === 'COMPLETED') {
+        if (!phase) {
+          console.log(`Debug - Reading ${index} has no phase data:`, {
+            phase_type: reading.phase_type,
+            phaseType: reading.phaseType,
+            timestamp: reading.timestamp
+          });
+        }
+        return; // Skip this reading
+      }
+      
+      // Check if phase changed
+      if (phase !== currentPhase || cycle !== currentCycle) {
+        if (currentPhase !== null && index > 0) {
+          // End current zone
+          zones.push({
+            phase: currentPhase,
+            cycle: currentCycle,
+            startIndex: zoneStart,
+            endIndex: index - 1,
+            startPercent: (zoneStart / readings.length) * 100,
+            widthPercent: ((index - zoneStart) / readings.length) * 100
+          });
+        }
+        // Start new zone
+        currentPhase = phase;
+        currentCycle = cycle;
+        zoneStart = index;
+      }
+    });
+    
+    // Add final zone
+    if (currentPhase !== null) {
+      zones.push({
+        phase: currentPhase,
+        cycle: currentCycle,
+        startIndex: zoneStart,
+        endIndex: readings.length - 1,
+        startPercent: (zoneStart / readings.length) * 100,
+        widthPercent: ((readings.length - zoneStart) / readings.length) * 100
+      });
+    }
+    
+    console.log('Debug - Phase zones calculated:', zones);
+    return zones;
+  };
+
+  const prepareChartData = (readings, field, startTime) => {
     if (!readings || readings.length === 0) return null;
 
-    // Sample data points if we have too many (for performance)
-    const maxPoints = 50;
-    const sampledReadings = readings.length > maxPoints
-      ? readings.filter((_, index) => index % Math.ceil(readings.length / maxPoints) === 0)
-      : readings;
+    // Ensure readings have timestamps and are sorted
+    const validReadings = readings
+      .filter(r => r[field] !== null && r[field] !== undefined && r.timestamp)
+      .sort((a, b) => {
+        const timeA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : a.timestamp;
+        const timeB = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() : b.timestamp;
+        return timeA - timeB;
+      });
 
-    const data = sampledReadings
-      .filter(reading => reading[field] !== null)
-      .map(reading => reading[field]);
+    if (validReadings.length === 0) return null;
 
-    if (data.length === 0) return null;
+    // Sample data points for performance
+    const maxPoints = Math.min(30, validReadings.length);
+    const sampledReadings = sampleReadingsByTime(validReadings, maxPoints);
+
+    // Calculate reference time
+    const firstTimestamp = sampledReadings[0].timestamp;
+    const lastTimestamp = sampledReadings[sampledReadings.length - 1].timestamp;
+    const sessionDuration = lastTimestamp - firstTimestamp;
+    const referenceTime = startTime ? 
+      (typeof startTime === 'string' ? new Date(startTime).getTime() : startTime) : 
+      firstTimestamp;
+
+    // Generate labels
+    const labelCount = 5;
+    const labelInterval = Math.max(1, Math.floor(sampledReadings.length / labelCount));
+    const labels = sampledReadings.map((reading, index) => {
+      if (index === 0 || index === sampledReadings.length - 1 || 
+          (index > 0 && index % labelInterval === 0)) {
+        const elapsedMs = reading.timestamp - referenceTime;
+        return formatTimeLabel(elapsedMs, sessionDuration);
+      }
+      return '';
+    });
+
+    // Extract data values and phase data
+    const data = sampledReadings.map(reading => reading[field]);
+    const phaseData = sampledReadings.map(reading => {
+      const phase = reading.phase_type || reading.phaseType;
+      return phase; // Return the raw phase value for each data point
+    });
+    
+    // Debug: Log phase data
+    const phaseGroups = [];
+    let currentPhase = null;
+    let currentGroup = null;
+    
+    phaseData.forEach((phase, index) => {
+      if (phase !== currentPhase) {
+        if (currentGroup) {
+          phaseGroups.push(currentGroup);
+        }
+        currentPhase = phase;
+        currentGroup = {
+          phase: phase,
+          startIndex: index,
+          endIndex: index,
+          count: 1
+        };
+      } else if (currentGroup) {
+        currentGroup.endIndex = index;
+        currentGroup.count++;
+      }
+    });
+    if (currentGroup) {
+      phaseGroups.push(currentGroup);
+    }
+    
+    console.log('Phase data for chart:', {
+      field: field,
+      totalReadings: sampledReadings.length,
+      phaseGroups: phaseGroups,
+      uniquePhases: [...new Set(phaseData.filter(p => p))],
+      hasPhaseData: phaseData.some(p => p && p !== 'COMPLETED')
+    });
 
     return {
-      labels: sampledReadings
-        .filter(reading => reading[field] !== null)
-        .map((_, index) => {
-          if (index % Math.ceil(data.length / 6) === 0) {
-            const minutes = Math.floor(index * (readings.length / data.length) / 20); // Assuming ~20 readings per minute
-            return `${minutes}m`;
-          }
-          return '';
-        }),
+      labels,
       datasets: [{
         data,
         color: (opacity = 1) => field === 'spo2' ? `rgba(33, 150, 243, ${opacity})` : `rgba(244, 67, 54, ${opacity})`,
         strokeWidth: 2
-      }]
+      }],
+      phaseData // Include phase data for dot coloring
     };
   };
 
   const renderSessionModal = () => {
-    const spo2ChartData = sessionData ? prepareChartData(sessionData.readings, 'spo2') : null;
-    const hrChartData = sessionData ? prepareChartData(sessionData.readings, 'heart_rate') : null;
+    const spo2ChartData = sessionData ? prepareChartData(sessionData.readings, 'spo2', sessionData.start_time) : null;
+    const hrChartData = sessionData ? prepareChartData(sessionData.readings, 'heart_rate', sessionData.start_time) : null;
 
     return (
       <Modal
@@ -430,13 +709,13 @@ const SessionHistoryScreen = ({ route, navigation }) => {
             )}
           </View>
 
-          {/* SpO2 Chart */}
+          {/* Charts with phase-colored dots */}
           {spo2ChartData && (
-            <View style={styles.chartContainer}>
-              <Text style={styles.sectionTitle}>SpO2 Over Time</Text>
+            <View style={styles.chartSection}>
+              <Text style={styles.chartTitle}>SpO2 Over Time</Text>
               <LineChart
                 data={spo2ChartData}
-                width={screenWidth - 40}
+                width={CHART_WIDTH}
                 height={220}
                 chartConfig={{
                   backgroundColor: '#ffffff',
@@ -444,29 +723,55 @@ const SessionHistoryScreen = ({ route, navigation }) => {
                   backgroundGradientTo: '#ffffff',
                   decimalPlaces: 0,
                   color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`,
-                  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(102, 102, 102, ${opacity})`,
                   style: {
-                    borderRadius: 16
+                    borderRadius: 8
                   },
-                  propsForDots: {
-                    r: "3",
-                    strokeWidth: "1",
-                    stroke: "#2196F3"
+                  propsForLabels: {
+                    fontSize: 10
                   }
                 }}
+                getDotColor={(dataPoint, dataPointIndex) => {
+                  // Get the phase for this data point
+                  const phase = spo2ChartData.phaseData?.[dataPointIndex];
+                  if (phase === 'HYPOXIC') return '#FF9800'; // Orange
+                  if (phase === 'HYPEROXIC') return '#4CAF50'; // Green
+                  return '#999999'; // Gray for no phase/completed
+                }}
                 bezier
-                style={styles.chart}
+                style={{
+                  marginVertical: 8,
+                  borderRadius: 8
+                }}
+                withInnerLines={true}
+                withOuterLines={true}
+                withVerticalLines={false}
+                withHorizontalLines={true}
+                withDots={true}
+                dotSize={4}
+                segments={4}
+                formatYLabel={(value) => `${value}%`}
               />
+              {/* Phase legend */}
+              <View style={styles.phaseLegend}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
+                  <Text style={styles.legendText}>Hypoxic</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+                  <Text style={styles.legendText}>Hyperoxic</Text>
+                </View>
+              </View>
             </View>
           )}
 
-          {/* Heart Rate Chart */}
           {hrChartData && (
-            <View style={styles.chartContainer}>
-              <Text style={styles.sectionTitle}>Heart Rate Over Time</Text>
+            <View style={styles.chartSection}>
+              <Text style={styles.chartTitle}>Heart Rate Over Time</Text>
               <LineChart
                 data={hrChartData}
-                width={screenWidth - 40}
+                width={CHART_WIDTH}
                 height={220}
                 chartConfig={{
                   backgroundColor: '#ffffff',
@@ -474,19 +779,46 @@ const SessionHistoryScreen = ({ route, navigation }) => {
                   backgroundGradientTo: '#ffffff',
                   decimalPlaces: 0,
                   color: (opacity = 1) => `rgba(244, 67, 54, ${opacity})`,
-                  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(102, 102, 102, ${opacity})`,
                   style: {
-                    borderRadius: 16
+                    borderRadius: 8
                   },
-                  propsForDots: {
-                    r: "3",
-                    strokeWidth: "1",
-                    stroke: "#F44336"
+                  propsForLabels: {
+                    fontSize: 10
                   }
                 }}
+                getDotColor={(dataPoint, dataPointIndex) => {
+                  // Get the phase for this data point
+                  const phase = hrChartData.phaseData?.[dataPointIndex];
+                  if (phase === 'HYPOXIC') return '#FF9800'; // Orange
+                  if (phase === 'HYPEROXIC') return '#4CAF50'; // Green
+                  return '#999999'; // Gray for no phase/completed
+                }}
                 bezier
-                style={styles.chart}
+                style={{
+                  marginVertical: 8,
+                  borderRadius: 8
+                }}
+                withInnerLines={true}
+                withOuterLines={true}
+                withVerticalLines={false}
+                withHorizontalLines={true}
+                withDots={true}
+                dotSize={4}
+                segments={4}
+                formatYLabel={(value) => `${value}`}
               />
+              {/* Phase legend */}
+              <View style={styles.phaseLegend}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
+                  <Text style={styles.legendText}>Hypoxic</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+                  <Text style={styles.legendText}>Hyperoxic</Text>
+                </View>
+              </View>
             </View>
           )}
 
@@ -681,17 +1013,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333333',
   },
-  chartContainer: {
-    backgroundColor: '#ffffff',
-    margin: 20,
-    marginTop: 0,
-    padding: 20,
-    borderRadius: 12,
-  },
-  chart: {
-    marginVertical: 8,
-    borderRadius: 16,
-  },
   loadingContainer: {
     padding: 40,
     alignItems: 'center',
@@ -701,6 +1022,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666666',
     textAlign: 'center',
+  },
+  chartSection: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 20,
+    marginVertical: 10,
+    padding: 15,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  chartTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333333',
+    marginBottom: 10,
+  },
+  phaseLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 15,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 5,
+  },
+  legendText: {
+    fontSize: 12,
+    color: '#666',
   },
 });
 

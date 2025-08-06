@@ -33,7 +33,7 @@ class EnhancedSessionManager {
     this.listeners = [];
     
     // IHHT Protocol state
-    this.currentPhase = 'HYPOXIC'; // 'HYPOXIC' | 'HYPEROXIC'
+    this.currentPhase = 'HYPOXIC'; // 'HYPOXIC' | 'HYPEROXIC' | 'COMPLETED'
     this.currentCycle = 1;
     this.phaseStartTime = null;
     this.phaseTimeRemaining = 300; // Will be set based on protocol
@@ -56,6 +56,13 @@ class EnhancedSessionManager {
     
     // FiO2 tracking
     this.currentHypoxiaLevel = 5; // Default hypoxia level (0-10 scale)
+    
+    // Session timing tracking
+    this.sessionStartTime = null; // Actual start timestamp for accurate elapsed time
+    this.totalSkippedTime = 0; // Total seconds skipped from phase skips
+    
+    // Connection state tracking for Bluetooth resilience
+    this.connectionState = 'connected';
     
     // Buffer settings
     this.BATCH_SIZE = 50;
@@ -227,6 +234,10 @@ class EnhancedSessionManager {
         console.log('📋 Using existing session - skipping database creation');
       }
 
+      // Set session timing
+      this.sessionStartTime = Date.now();
+      this.totalSkippedTime = 0; // Reset skipped time for new session
+      
       // Set session state
       this.currentSession = {
         id: sessionId,
@@ -353,6 +364,11 @@ class EnhancedSessionManager {
       if (!this.isActive || this.isPaused) return;
 
       this.phaseTimeRemaining--;
+      
+      // Log every 5 seconds to track if timer is working
+      if (this.phaseTimeRemaining % 5 === 0) {
+        console.log(`⏲️ Phase timer: ${this.phaseTimeRemaining}s remaining in ${this.currentPhase} phase`);
+      }
 
       // Check for phase transition
       if (this.phaseTimeRemaining <= 0) {
@@ -364,8 +380,8 @@ class EnhancedSessionManager {
         this.updateLiveActivity();
       }
 
-      // Update background state (if available)
-      if (BackgroundSessionManager) {
+      // Update background state less frequently (every 5 seconds)
+      if (BackgroundSessionManager && this.phaseTimeRemaining % 5 === 0) {
         BackgroundSessionManager.updateBackgroundState({
           currentPhase: this.currentPhase,
           currentCycle: this.currentCycle,
@@ -374,12 +390,16 @@ class EnhancedSessionManager {
         });
       }
 
-      // Notify listeners
-      this.notify('phaseUpdate', {
-        currentPhase: this.currentPhase,
-        currentCycle: this.currentCycle,
-        phaseTimeRemaining: this.phaseTimeRemaining
-      });
+      // Notify phase updates every second for the first 5 seconds after a phase change
+      // or every 10 seconds otherwise to reduce noise
+      const timeSincePhaseStart = Math.floor((Date.now() - this.phaseStartTime) / 1000);
+      if (timeSincePhaseStart <= 5 || this.phaseTimeRemaining % 10 === 0) {
+        this.notify('phaseUpdate', {
+          currentPhase: this.currentPhase,
+          currentCycle: this.currentCycle,
+          phaseTimeRemaining: this.phaseTimeRemaining
+        });
+      }
     }, 1000);
   }
 
@@ -387,8 +407,18 @@ class EnhancedSessionManager {
     if (this.currentPhase === 'HYPOXIC') {
       // Transition to hyperoxic phase
       this.currentPhase = 'HYPEROXIC';
-      this.phaseTimeRemaining = this.protocolConfig.hyperoxicDuration;
       this.phaseStartTime = Date.now();
+      
+      // For the final phase, calculate exact remaining time
+      if (this.isLastPhase()) {
+        const totalDuration = (this.protocolConfig.hypoxicDuration + this.protocolConfig.hyperoxicDuration) * this.protocolConfig.totalCycles;
+        const adjustedTotalDuration = totalDuration - this.totalSkippedTime;
+        const elapsedTime = Math.floor((Date.now() - this.sessionStartTime) / 1000);
+        this.phaseTimeRemaining = Math.max(0, adjustedTotalDuration - elapsedTime);
+        console.log(`🎯 Final phase (auto-advance) - aligned time: ${this.phaseTimeRemaining}s`);
+      } else {
+        this.phaseTimeRemaining = this.protocolConfig.hyperoxicDuration;
+      }
       
       console.log(`🔄 Advanced to HYPEROXIC phase (Cycle ${this.currentCycle})`);
       
@@ -428,11 +458,42 @@ class EnhancedSessionManager {
     const previousPhase = this.currentPhase;
     const previousCycle = this.currentCycle;
     
-    console.log(`⏭️ Manually skipping ${this.currentPhase} phase (Cycle ${this.currentCycle})`);
+    // Calculate how much time we're skipping
+    const timeSkipped = this.phaseTimeRemaining;
+    this.totalSkippedTime += timeSkipped;
     
-    // Reset timer and advance immediately
-    this.phaseTimeRemaining = 0;
+    console.log(`⏭️ Manually skipping ${this.currentPhase} phase (Cycle ${this.currentCycle}) - ${timeSkipped}s skipped`);
+    
+    // Advance phase directly (don't set phaseTimeRemaining to 0 first)
     await this.advancePhase();
+    
+    // Reset the phase start time to NOW after advancing
+    // This ensures the timer starts fresh for the new phase
+    this.phaseStartTime = Date.now();
+    
+    // For the final phase, adjust time remaining to match total session time
+    if (this.isLastPhase()) {
+      const totalDuration = (this.protocolConfig.hypoxicDuration + this.protocolConfig.hyperoxicDuration) * this.protocolConfig.totalCycles;
+      const adjustedTotalDuration = totalDuration - this.totalSkippedTime;
+      const elapsedTime = Math.floor((Date.now() - this.sessionStartTime) / 1000);
+      this.phaseTimeRemaining = Math.max(0, adjustedTotalDuration - elapsedTime);
+      console.log(`🎯 Final phase - aligned time: ${this.phaseTimeRemaining}s (total: ${adjustedTotalDuration}s, elapsed: ${elapsedTime}s)`);
+    }
+    
+    console.log(`⏱️ Phase skipped - new phase time: ${this.phaseTimeRemaining}s, phase: ${this.currentPhase}, total skipped: ${this.totalSkippedTime}s`);
+    
+    // Clear and restart the timer to ensure it starts counting immediately
+    if (this.phaseTimer) {
+      clearInterval(this.phaseTimer);
+      this.startPhaseTimer();
+    }
+    
+    // Force an immediate phase update notification to ensure UI refreshes
+    this.notify('phaseUpdate', {
+      currentPhase: this.currentPhase,
+      currentCycle: this.currentCycle,
+      phaseTimeRemaining: this.phaseTimeRemaining
+    });
     
     // Notify with skip-specific event
     this.notify('phaseSkipped', {
@@ -444,6 +505,11 @@ class EnhancedSessionManager {
     });
 
     return true;
+  }
+
+  isLastPhase() {
+    // Check if this is the last phase (final HYPEROXIC of the last cycle)
+    return this.currentPhase === 'HYPEROXIC' && this.currentCycle >= this.protocolConfig.totalCycles;
   }
 
   async completeSession() {
@@ -548,21 +614,46 @@ class EnhancedSessionManager {
       console.log('✅ Step 3: Live Activity stopped');
     }, 3000, 'Live Activity stop');
 
-    // Step 4: Flush readings (with timeout - this is often the culprit)
-    await withTimeout(async () => {
-      console.log('🔄 Step 4: Flushing remaining readings...');
-      await this.flushReadingBuffer();
-      console.log('✅ Step 4: Readings flushed');
-    }, 5000, 'Flush readings');
+    // Step 4: Flush readings with retry logic and increased timeout
+    let flushSuccess = false;
+    const maxFlushAttempts = 3;
+    
+    for (let attempt = 1; attempt <= maxFlushAttempts; attempt++) {
+      const flushResult = await withTimeout(async () => {
+        console.log(`🔄 Step 4: Flushing remaining readings (attempt ${attempt}/${maxFlushAttempts})...`);
+        await this.flushReadingBuffer();
+        console.log('✅ Step 4: Readings flushed successfully');
+        return true;
+      }, 15000, `Flush readings attempt ${attempt}`);
+      
+      if (flushResult) {
+        flushSuccess = true;
+        break;
+      }
+      
+      if (attempt < maxFlushAttempts) {
+        console.log(`⚠️ Flush attempt ${attempt} failed, retrying...`);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+      }
+    }
+    
+    // If flush failed after all attempts, save to recovery buffer
+    if (!flushSuccess && this.readingBuffer.length > 0) {
+      console.error('❌ Failed to flush readings after all attempts');
+      await this.saveToRecoveryBuffer(this.readingBuffer, sessionId);
+    }
 
     // Step 5: Stop batch processing (immediate)
     console.log('🔄 Step 5: Stopping batch processing...');
     this.stopBatchProcessing();
     console.log('✅ Step 5: Batch processing stopped');
 
-    // Step 6: End session in local database (with timeout and fallback)
+    // Step 6: Wait a moment to ensure all async writes complete
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Step 7: End session in local database (with timeout and fallback)
     const databaseResult = await withTimeout(async () => {
-      console.log('🔄 Step 6: Ending session in local database...');
+      console.log('🔄 Step 7: Ending session in local database...');
       
       // Ensure database is initialized
       if (!DatabaseService.db) {
@@ -570,10 +661,11 @@ class EnhancedSessionManager {
         await DatabaseService.init();
       }
       
+      // Recalculate stats to ensure we have the latest data
       const result = await DatabaseService.endSession(sessionId);
-      console.log('✅ Step 6: Local database updated');
+      console.log('✅ Step 7: Local database updated with final statistics');
       return result;
-    }, 5000, 'Database end');
+    }, 10000, 'Database end');
 
     if (databaseResult) {
       stats = databaseResult;
@@ -698,6 +790,49 @@ class EnhancedSessionManager {
     }
   }
 
+  // Recovery buffer for failed readings
+  async saveToRecoveryBuffer(readings, sessionId) {
+    try {
+      const recoveryKey = `recovery_buffer_${sessionId}`;
+      const existingRecovery = await AsyncStorage.getItem(recoveryKey);
+      const existingReadings = existingRecovery ? JSON.parse(existingRecovery) : [];
+      const allReadings = [...existingReadings, ...readings];
+      
+      await AsyncStorage.setItem(recoveryKey, JSON.stringify(allReadings));
+      console.log(`🔄 Saved ${readings.length} readings to recovery buffer for session ${sessionId}`);
+      
+      // Schedule recovery attempt
+      setTimeout(() => this.attemptRecovery(sessionId), 5000);
+    } catch (error) {
+      console.error('❌ Failed to save to recovery buffer:', error);
+    }
+  }
+
+  async attemptRecovery(sessionId) {
+    try {
+      const recoveryKey = `recovery_buffer_${sessionId}`;
+      const recoveryData = await AsyncStorage.getItem(recoveryKey);
+      
+      if (!recoveryData) return;
+      
+      const readings = JSON.parse(recoveryData);
+      console.log(`🔄 Attempting to recover ${readings.length} readings for session ${sessionId}`);
+      
+      // Try to save recovered readings
+      await DatabaseService.addReadingsBatch(readings);
+      
+      // Clear recovery buffer on success
+      await AsyncStorage.removeItem(recoveryKey);
+      console.log(`✅ Successfully recovered ${readings.length} readings`);
+      
+      // Trigger stats recalculation
+      await DatabaseService.reprocessSessionStats(sessionId);
+    } catch (error) {
+      console.error('❌ Recovery attempt failed:', error);
+      // Will retry on next app launch
+    }
+  }
+
   resetSessionState() {
     this.isActive = false;
     this.isPaused = false;
@@ -705,18 +840,67 @@ class EnhancedSessionManager {
     this.startTime = null;
     this.pauseTime = null;
     this.readingBuffer = [];
-    this.currentPhase = 'HYPOXIC';
+    this.currentPhase = 'COMPLETED';  // Keep as COMPLETED to prevent tagging post-session readings as HYPOXIC
     this.currentCycle = 1;
     this.phaseStartTime = null;
     this.phaseTimeRemaining = 300;
     this.hasActiveLiveActivity = false;
     this.liveActivityId = null;
+    this.sessionStartTime = null;
+    this.totalSkippedTime = 0;
+    this.connectionState = 'connected'; // Reset connection state
+  }
+
+  // Connection state management for Bluetooth resilience
+  setConnectionState(state) {
+    const validStates = ['connected', 'disconnected', 'reconnecting'];
+    if (!validStates.includes(state)) {
+      console.warn(`⚠️ Invalid connection state: ${state}`);
+      return;
+    }
+    
+    const previousState = this.connectionState;
+    this.connectionState = state;
+    console.log(`🔄 Connection state changed: ${previousState} → ${state}`);
+    
+    // Update session data if available
+    if (this.currentSession) {
+      this.currentSession.connectionState = state;
+    }
+    
+    // Notify listeners of connection state change
+    this.notify('connectionStateChanged', {
+      previousState,
+      currentState: state,
+      timestamp: Date.now()
+    });
+    
+    // If reconnected, clear any connection warnings
+    if (state === 'connected' && previousState !== 'connected') {
+      console.log('🎉 Connection restored - session continuing normally');
+      
+      // Update live activity if available
+      if (this.hasActiveLiveActivity) {
+        this.updateLiveActivity();
+      }
+    }
+  }
+
+  // Get current connection state
+  getConnectionState() {
+    return this.connectionState || 'connected';
   }
 
   // Reading management (same as original SessionManager)
   async addReading(reading) {
     if (!this.isActive || !this.currentSession) {
       console.log('❌ Reading rejected - no active session in EnhancedSessionManager');
+      return;
+    }
+
+    // Don't record readings if session has completed
+    if (this.currentPhase === 'COMPLETED' || this.currentPhase === null) {
+      console.log('⚠️ Reading rejected - session has completed');
       return;
     }
 
@@ -731,14 +915,10 @@ class EnhancedSessionManager {
       cycleNumber: this.currentCycle
     };
 
-    // Only log first reading and milestone readings to reduce noise
+    // Only log first reading and major milestones to reduce noise
     if (this.currentSession.readingCount === 0) {
-      console.log('🎉 First reading collected!', {
-        sessionId: timestampedReading.sessionId,
-        spo2: timestampedReading.spo2,
-        heartRate: timestampedReading.heartRate
-      });
-    } else if (this.currentSession.readingCount % 50 === 0) {
+      console.log('🎉 First reading collected!');
+    } else if (this.currentSession.readingCount % 100 === 0) {
       console.log(`📊 Milestone: ${this.currentSession.readingCount} readings collected`);
     }
 
@@ -746,7 +926,8 @@ class EnhancedSessionManager {
     this.currentSession.readingCount++;
     this.currentSession.lastReading = timestampedReading;
 
-    this.notify('readingAdded', timestampedReading);
+    // Commented out to reduce log noise - uncomment if needed for debugging
+    // this.notify('readingAdded', timestampedReading);
 
     if (this.readingBuffer.length >= this.BATCH_SIZE) {
       console.log(`🚀 Buffer full (${this.BATCH_SIZE}) - flushing to database`);
@@ -755,27 +936,53 @@ class EnhancedSessionManager {
   }
 
   async flushReadingBuffer() {
-    if (this.readingBuffer.length === 0) return;
+    if (this.readingBuffer.length === 0) return true;
+
+    const readings = [...this.readingBuffer];
+    let localSuccess = false;
+    let cloudSuccess = false;
 
     try {
-      const readings = [...this.readingBuffer];
+      // Clear buffer optimistically
       this.readingBuffer = [];
 
-      // Always flush to local database
-      await DatabaseService.addReadingsBatch(readings);
+      // Always flush to local database first (most critical)
+      try {
+        await DatabaseService.addReadingsBatch(readings);
+        localSuccess = true;
+        console.log(`💾 Saved ${readings.length} readings to local database`);
+      } catch (localError) {
+        console.error('❌ Failed to save to local database:', localError);
+        // Re-add readings to buffer for retry
+        this.readingBuffer.unshift(...readings);
+        throw localError; // Re-throw to trigger retry logic
+      }
 
-      // Only flush to Supabase if there's an active session to prevent RLS policy violations
+      // Try to flush to Supabase if we have an active session
       if (this.isActive && this.currentSession) {
-        await SupabaseService.addReadingsBatch(readings);
-        console.log(`💾 Flushed ${readings.length} readings (Local + Cloud)`);
+        try {
+          await SupabaseService.addReadingsBatch(readings);
+          cloudSuccess = true;
+          console.log(`☁️ Synced ${readings.length} readings to cloud`);
+        } catch (cloudError) {
+          console.warn('⚠️ Failed to sync to cloud (will retry later):', cloudError.message);
+          // Queue for later sync - don't fail the whole operation
+          SupabaseService.queueForSync('addReadingsBatch', readings);
+        }
       } else {
         // Queue for later sync when session becomes active
-        console.log(`💾 Flushed ${readings.length} readings (Local only - no active session)`);
+        console.log(`📦 Queued ${readings.length} readings for later cloud sync`);
         SupabaseService.queueForSync('addReadingsBatch', readings);
       }
+
+      return localSuccess; // Return true if at least local save succeeded
     } catch (error) {
-      console.error('❌ Failed to flush readings:', error);
-      this.readingBuffer.unshift(...readings);
+      console.error('❌ Critical flush failure:', error);
+      // Ensure readings are back in buffer for retry
+      if (this.readingBuffer.length === 0) {
+        this.readingBuffer.unshift(...readings);
+      }
+      return false;
     }
   }
 
@@ -806,7 +1013,9 @@ class EnhancedSessionManager {
       phaseTimeRemaining: this.phaseTimeRemaining,
       hasActiveLiveActivity: this.hasActiveLiveActivity,
       startTime: this.startTime,
-      pauseTime: this.pauseTime
+      pauseTime: this.pauseTime,
+      sessionStartTime: this.sessionStartTime,
+      totalSkippedTime: this.totalSkippedTime
     };
   }
 
@@ -921,11 +1130,23 @@ class EnhancedSessionManager {
     return Math.max(fio2Percentage, 10); // Minimum 10% FiO2 for safety
   }
 
-  // Startup recovery - clean up stuck sessions on app start
+  // Startup recovery - clean up stuck sessions and recover lost data
   async performStartupRecovery() {
     console.log('🔄 Performing startup recovery cleanup...');
     
     try {
+      // Check for recovery buffers first
+      const allKeys = await AsyncStorage.getAllKeys();
+      const recoveryKeys = allKeys.filter(key => key.startsWith('recovery_buffer_'));
+      
+      if (recoveryKeys.length > 0) {
+        console.log(`🔄 Found ${recoveryKeys.length} recovery buffers to process`);
+        for (const key of recoveryKeys) {
+          const sessionId = key.replace('recovery_buffer_', '');
+          await this.attemptRecovery(sessionId);
+        }
+      }
+      
       // Check for any locally stored active session
       const storedSession = await AsyncStorage.getItem('activeSession');
       
