@@ -70,6 +70,10 @@ class BluetoothService {
     this.isPulseOxConnected = false;
     this.isHRConnected = false;
     this.currentScanType = 'pulse-ox'; // 'pulse-ox' or 'hr-monitor'
+    
+    // Connection resilience properties
+    this.connectionRecoveryTimer = null;
+    this.lastDisconnectTime = null;
 
     // BCI Protocol specific UUIDs (Pulse Oximeter)
     this.BCI_SERVICE_UUID = '49535343-FE7D-4AE5-8FA9-9FAFD205E455';
@@ -1026,28 +1030,64 @@ class BluetoothService {
   }
 
   async handleDeviceDisconnected() {
-    console.log('🔌 Device disconnected - checking for active sessions to cleanup');
+    console.log('🔌 Device disconnected - implementing resilient recovery');
+    
+    // Mark disconnection timestamp for recovery tracking
+    this.lastDisconnectTime = Date.now();
     
     // Import EnhancedSessionManager here to avoid circular dependencies
     const { default: EnhancedSessionManager } = await import('./EnhancedSessionManager.js');
     
-    // Check if there's an active session and end it
+    // If there's an active session, try recovery instead of immediate termination
     if (EnhancedSessionManager.isActive) {
+      console.log('🔄 Active session detected - attempting connection recovery');
+      
+      // Set session to connection lost state instead of terminating
       try {
-        console.log('🛑 Ending active session due to device disconnect');
-        await EnhancedSessionManager.stopSession();
-        console.log('✅ Session ended successfully after device disconnect');
+        // Mark session as having connection issues but continue
+        EnhancedSessionManager.setConnectionState('disconnected');
+        console.log('⚠️ Session marked as disconnected - will continue with cached data');
+        
+        // Start recovery timer (30 seconds before considering termination)
+        this.startConnectionRecoveryTimer(EnhancedSessionManager);
+        
       } catch (error) {
-        console.error('❌ Failed to end session after device disconnect:', error);
-        // Even if ending fails, try to reset state
-        try {
-          EnhancedSessionManager.resetSessionState();
-          console.log('🔄 Session state reset after disconnect cleanup failure');
-        } catch (resetError) {
-          console.error('❌ Failed to reset session state:', resetError);
-        }
+        console.error('❌ Failed to set session connection state:', error);
       }
     }
+  }
+  
+  startConnectionRecoveryTimer(EnhancedSessionManager) {
+    // Clear any existing recovery timer
+    if (this.connectionRecoveryTimer) {
+      clearTimeout(this.connectionRecoveryTimer);
+    }
+    
+    console.log('⏱️ Starting connection recovery timer (30 seconds)');
+    
+    this.connectionRecoveryTimer = setTimeout(async () => {
+      console.log('⏰ Connection recovery timeout reached');
+      
+      // Check if we're still disconnected and session is still active
+      if (!this.isAnyDeviceConnected && EnhancedSessionManager.isActive) {
+        console.log('🛑 No recovery achieved - terminating session');
+        try {
+          await EnhancedSessionManager.stopSession();
+          console.log('✅ Session terminated after recovery timeout');
+        } catch (error) {
+          console.error('❌ Failed to terminate session after recovery timeout:', error);
+          try {
+            EnhancedSessionManager.resetSessionState();
+            console.log('🔄 Session state reset after termination failure');
+          } catch (resetError) {
+            console.error('❌ Failed to reset session state:', resetError);
+          }
+        }
+      } else if (this.isAnyDeviceConnected) {
+        console.log('🎉 Connection recovered - session continuing normally');
+        EnhancedSessionManager.setConnectionState('connected');
+      }
+    }, 30000); // 30 second recovery window
   }
 }
 

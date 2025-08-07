@@ -16,6 +16,7 @@ import {
 
 const PreSessionSurveyScreen = ({ navigation, route }) => {
   const sessionId = route?.params?.sessionId;
+  const protocolConfig = route?.params?.protocolConfig;
   const [surveyData, setSurveyData] = useState(createDefaultPreSessionSurvey());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
@@ -64,16 +65,25 @@ const PreSessionSurveyScreen = ({ navigation, route }) => {
       // Complete immediately - don't wait for Supabase sync
       console.log('🎉 Pre-session survey completed successfully');
 
+      // Calculate session details from protocol config
+      const totalDuration = protocolConfig ? 
+        (protocolConfig.totalCycles * (protocolConfig.hypoxicDuration + protocolConfig.hyperoxicDuration)) : 
+        35; // fallback default
+      const cycles = protocolConfig?.totalCycles || 5; // fallback default
+
       // Show confirmation popup and navigate
       Alert.alert(
         '🎯 Starting Your IHHT Session',
-        `Great! Your pre-session survey is complete.\n\n• 5 cycles of hypoxic-hyperoxic training\n• Approximately 35 minutes duration\n• Real-time safety monitoring\n\nGet comfortable and prepare to begin!`,
+        `Great! Your pre-session survey is complete.\n\n• ${cycles} cycles of hypoxic-hyperoxic training\n• Approximately ${totalDuration} minutes duration\n• Real-time safety monitoring\n\nGet comfortable and prepare to begin!`,
         [
           {
             text: 'Start Training',
             onPress: () => {
               console.log('🚀 Starting IHHT session directly after survey completion with sessionId:', sessionId);
-              navigation.navigate('AirSession', { sessionId: sessionId });
+              navigation.navigate('AirSession', { 
+                sessionId: sessionId,
+                protocolConfig: protocolConfig 
+              });
             }
           }
         ]
