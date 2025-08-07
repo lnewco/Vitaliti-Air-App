@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AuthService } from './AuthService';
+import logger from '../utils/logger';
+
+const log = logger.createModuleLogger('AuthContext');
 
 // Create Auth Context
 const AuthContext = createContext({
@@ -24,17 +27,17 @@ export const AuthProvider = ({ children }) => {
 
   // Initialize auth service and check for existing session
   useEffect(() => {
-    console.log('🔐 AuthContext: useEffect triggered');
-    console.log('🔐 AuthContext: authService instance:', authService);
-    console.log('🔐 AuthContext: authService type:', typeof authService);
-    console.log('🔐 AuthContext: authService methods:', authService ? Object.getOwnPropertyNames(Object.getPrototypeOf(authService)) : 'N/A');
+    log.info('AuthContext: useEffect triggered');
+    log.info('AuthContext: authService instance:' authService);
+    log.info('AuthContext: authService type:' typeof authService);
+    log.info('AuthContext: authService methods:' authService ? Object.getOwnPropertyNames(Object.getPrototypeOf(authService)) : 'N/A');
     initializeAuth();
   }, []);
 
   const initializeAuth = async () => {
     try {
-      console.log('🔐 AuthContext: Initializing authentication...');
-      console.log('🔐 AuthContext: authService in initializeAuth:', authService);
+      log.info('AuthContext: Initializing authentication...');
+      log.info('AuthContext: authService in initializeAuth:' authService);
       setIsLoading(true);
 
       if (!authService) {
@@ -49,11 +52,11 @@ export const AuthProvider = ({ children }) => {
       setUser(currentUser);
       setIsAuthenticated(!!currentUser);
 
-      console.log('🔐 AuthContext: Auth initialized', currentUser ? 'with user' : 'without user');
+      log.info('AuthContext: Auth initialized' currentUser ? 'with user' : 'without user');
 
       // Set up auth state change listener
       const unsubscribe = authService.onAuthStateChange((event, user) => {
-        console.log('🔐 AuthContext: Auth state changed:', event, user?.id);
+        log.info('AuthContext: Auth state changed:' event, user?.id);
         setUser(user);
         setIsAuthenticated(!!user);
       });
@@ -61,7 +64,7 @@ export const AuthProvider = ({ children }) => {
       // Store unsubscribe function for cleanup
       return unsubscribe;
     } catch (error) {
-      console.error('❌ AuthContext: Auth initialization failed:', error.message);
+      log.error('❌ AuthContext: Auth initialization failed:', error.message);
     } finally {
       setIsLoading(false);
     }
@@ -70,9 +73,9 @@ export const AuthProvider = ({ children }) => {
   // Send OTP to phone number
   const sendOTP = async (phoneNumber) => {
     try {
-      console.log('📱 AuthContext: Sending OTP to:', phoneNumber);
-      console.log('📱 AuthContext: authService available:', !!authService);
-      console.log('📱 AuthContext: authService methods:', authService ? Object.getOwnPropertyNames(Object.getPrototypeOf(authService)) : 'N/A');
+      log.info('AuthContext: Sending OTP to:' phoneNumber);
+      log.info('AuthContext: authService available:' !!authService);
+      log.info('AuthContext: authService methods:' authService ? Object.getOwnPropertyNames(Object.getPrototypeOf(authService)) : 'N/A');
       
       if (!authService) {
         throw new Error('AuthService not available');
@@ -85,7 +88,7 @@ export const AuthProvider = ({ children }) => {
       const result = await authService.sendOTP(phoneNumber);
       return result;
     } catch (error) {
-      console.error('❌ AuthContext: Send OTP failed:', error.message);
+      log.error('❌ AuthContext: Send OTP failed:', error.message);
       throw error;
     }
   };
@@ -93,14 +96,14 @@ export const AuthProvider = ({ children }) => {
   // Verify OTP and sign in
   const verifyOTP = async (phoneNumber, otpCode) => {
     try {
-      console.log('🔑 AuthContext: Verifying OTP...');
+      log.info('� AuthContext: Verifying OTP...');
       const result = await authService.verifyOTP(phoneNumber, otpCode);
       
       // Auth state will be updated automatically via onAuthStateChange listener
-      console.log('✅ AuthContext: OTP verification successful');
+      log.info('AuthContext: OTP verification successful');
       return result;
     } catch (error) {
-      console.error('❌ AuthContext: OTP verification failed:', error.message);
+      log.error('❌ AuthContext: OTP verification failed:', error.message);
       throw error;
     }
   };
@@ -108,13 +111,13 @@ export const AuthProvider = ({ children }) => {
   // Sign out user
   const signOut = async () => {
     try {
-      console.log('🔐 AuthContext: Signing out...');
+      log.info('AuthContext: Signing out...');
       await authService.signOut();
       
       // Auth state will be updated automatically via onAuthStateChange listener
-      console.log('✅ AuthContext: Sign out successful');
+      log.info('AuthContext: Sign out successful');
     } catch (error) {
-      console.error('❌ AuthContext: Sign out failed:', error.message);
+      log.error('❌ AuthContext: Sign out failed:', error.message);
       throw error;
     }
   };
@@ -125,7 +128,7 @@ export const AuthProvider = ({ children }) => {
       const profile = await authService.getUserProfile();
       return profile;
     } catch (error) {
-      console.error('❌ AuthContext: Get user profile failed:', error.message);
+      log.error('❌ AuthContext: Get user profile failed:', error.message);
       throw error;
     }
   };

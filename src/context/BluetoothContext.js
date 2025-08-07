@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import BluetoothService from '../services/BluetoothService';
+import logger from './utils/logger';
+
+const log = logger.createModuleLogger('BluetoothContext');
 
 // Split into two contexts for performance
 const BluetoothConnectionContext = createContext();
@@ -61,31 +64,31 @@ export const BluetoothProvider = ({ children }) => {
   useEffect(() => {
     // Set up event handlers for dual device support
     BluetoothService.setOnDeviceFound((device) => {
-      console.log('🎯 Context: Device found callback triggered:', device.name || device.localName, 'Type:', device.deviceType);
+      log.info('Context: Device found callback triggered:' device.name || device.localName, 'Type:', device.deviceType);
       setDiscoveredDevices(prev => {
         // Avoid duplicates
         const exists = prev.find(d => d.id === device.id);
         if (!exists) {
-          console.log('📱 Context: Adding new device to list:', device.name || device.localName, 'Type:', device.deviceType);
+          log.info('Context: Adding new device to list:' device.name || device.localName, 'Type:', device.deviceType);
           const newDevices = [...prev, device];
-          console.log('📋 Context: Total devices in list:', newDevices.length);
-          console.log('📋 Context: All devices:', newDevices.map(d => ({ name: d.name || d.localName, type: d.deviceType })));
+          log.info('� Context: Total devices in list:' newDevices.length);
+          log.info('� Context: All devices:' newDevices.map(d => ({ name: d.name || d.localName, type: d.deviceType })));
           return newDevices;
         } else {
-          console.log('📋 Context: Device already in list, skipping:', device.name || device.localName);
+          log.info('� Context: Device already in list, skipping:' device.name || device.localName);
           return prev;
         }
       });
     });
 
     BluetoothService.setOnPulseOxDataReceived((data) => {
-      // console.log('Context received pulse ox data:', data); // Disabled: high frequency logging
+      // log.info('Context received pulse ox data:' data); // Disabled: high frequency logging
       pulseOximeterDataRef.current = data;
       throttledUIUpdate(); // Use throttled update instead of immediate setState
     });
 
     BluetoothService.setOnHRDataReceived((data) => {
-      // console.log('Context received HR data:', data); // Disabled: high frequency logging
+      // log.info('Context received HR data:' data); // Disabled: high frequency logging
       
       // Handle dual-timeframe HRV processing
       let processedData = { ...data };
@@ -97,7 +100,7 @@ export const BluetoothProvider = ({ children }) => {
           ...data.quickHRV,
           rmssd: Math.round((data.quickHRV.rmssd * smoothingFactor + persistentHRV.quickHRV.rmssd * (1 - smoothingFactor)) * 10) / 10
         };
-        console.log(`📊 Quick HRV smoothed: ${persistentHRV.quickHRV.rmssd}ms → ${processedData.quickHRV.rmssd}ms`);
+        log.info('Quick HRV smoothed: ${persistentHRV.quickHRV.rmssd}ms → ${processedData.quickHRV.rmssd}ms');
       }
       
       // Real HRV gets minimal smoothing since it's already stable
@@ -107,7 +110,7 @@ export const BluetoothProvider = ({ children }) => {
           ...data.realHRV,
           rmssd: Math.round((data.realHRV.rmssd * smoothingFactor + persistentHRV.realHRV.rmssd * (1 - smoothingFactor)) * 10) / 10
         };
-        console.log(`📊 Real HRV smoothed: ${persistentHRV.realHRV.rmssd}ms → ${processedData.realHRV.rmssd}ms`);
+        log.info('Real HRV smoothed: ${persistentHRV.realHRV.rmssd}ms → ${processedData.realHRV.rmssd}ms');
       }
       
       // Update persistent state if we have new HRV data
@@ -134,7 +137,7 @@ export const BluetoothProvider = ({ children }) => {
     });
 
     BluetoothService.setOnConnectionStatusChanged((deviceType, connected) => {
-      console.log(`${deviceType} connection status changed:`, connected);
+      log.info('${deviceType} connection status changed:' connected);
       if (deviceType === 'pulse-ox') {
         setIsPulseOxConnected(connected);
         if (!connected) {
@@ -155,7 +158,7 @@ export const BluetoothProvider = ({ children }) => {
 
   // ===== MEMOIZED CONNECTION FUNCTIONS =====
   const startScanning = useCallback(async (type = 'pulse-ox') => {
-    console.log(`🔍 Context: Starting scan for ${type}`);
+    log.info('Context: Starting scan for ${type}');
     setScanType(type);
     setIsScanning(true);
     setDiscoveredDevices([]);
@@ -163,24 +166,24 @@ export const BluetoothProvider = ({ children }) => {
     try {
       await BluetoothService.startScanning(type);
     } catch (error) {
-      console.error('❌ Context: Scan failed:', error);
+      log.error('❌ Context: Scan failed:', error);
       setIsScanning(false);
     }
   }, []);
 
   const stopScanning = useCallback(async () => {
-    console.log('⏹️ Context: Stopping scan');
+    log.info('⏹️ Context: Stopping scan');
     setIsScanning(false);
     try {
       await BluetoothService.stopScanning();
     } catch (error) {
-      console.error('❌ Context: Stop scan failed:', error);
+      log.error('❌ Context: Stop scan failed:', error);
     }
   }, []);
 
   const connectToDevice = useCallback(async (device) => {
     const deviceType = device.deviceType || 'pulse-ox';
-    console.log(`🔗 Context: Connecting to ${deviceType}:`, device.name || device.localName);
+    log.info('� Context: Connecting to ${deviceType}:' device.name || device.localName);
     
     try {
       const success = await BluetoothService.connectToDevice(device, deviceType);
@@ -192,17 +195,17 @@ export const BluetoothProvider = ({ children }) => {
           setIsHRConnected(true);
           setConnectedHRDevice(device);
         }
-        console.log(`✅ Context: Connected to ${deviceType}:`, device.name || device.localName);
+        log.info('Context: Connected to ${deviceType}:' device.name || device.localName);
       }
       return success;
     } catch (error) {
-      console.error(`❌ Context: Failed to connect to ${deviceType}:`, error);
+      log.error(`❌ Context: Failed to connect to ${deviceType}:`, error);
       return false;
     }
   }, []);
 
   const disconnect = useCallback(async (deviceType = 'all') => {
-    console.log(`❌ Context: Disconnecting ${deviceType}`);
+    log.info('Context: Disconnecting ${deviceType}');
     
     try {
       await BluetoothService.disconnect(deviceType);
@@ -242,7 +245,7 @@ export const BluetoothProvider = ({ children }) => {
         setLastHRVUpdate(null);
       }
     } catch (error) {
-      console.error(`❌ Context: Disconnect failed for ${deviceType}:`, error);
+      log.error(`❌ Context: Disconnect failed for ${deviceType}:`, error);
       
       if (deviceType === 'pulse-ox' || deviceType === 'all') {
         setIsPulseOxConnected(false);

@@ -3,6 +3,9 @@ import { Platform, PermissionsAndroid } from 'react-native';
 import { Buffer } from 'buffer';
 import EnhancedSessionManager from './EnhancedSessionManager';
 import HRV_CONFIG, { HRV_HELPERS } from '../config/hrvConfig';
+import logger from '../utils/logger';
+
+const log = logger.createModuleLogger('BluetoothService');
 
 // Sliding Window class for managing RR intervals
 class SlidingWindow {
@@ -15,7 +18,7 @@ class SlidingWindow {
   add(interval, timestamp = Date.now()) {
     // Validate interval before adding
     if (!HRV_HELPERS.isValidRRInterval(interval)) {
-      console.log(`⚠️ Invalid RR interval rejected: ${interval}ms`);
+      log.debug(`Invalid RR interval rejected: ${interval}ms`);
       return false;
     }
 
@@ -115,7 +118,7 @@ class BluetoothService {
         return true; // iOS handles Bluetooth permissions automatically
       }
     } catch (error) {
-      console.error('Permission request failed:', error);
+      log.error('Permission request failed:', error);
       return false;
     }
   }
@@ -125,14 +128,14 @@ class BluetoothService {
       const state = await this.manager.state();
       return state === 'PoweredOn';
     } catch (error) {
-      console.error('Error checking Bluetooth state:', error);
+      log.error('Error checking Bluetooth state:', error);
       return false;
     }
   }
 
   async startScanning(deviceType = 'pulse-ox') {
     try {
-      console.log(`Starting ${deviceType} device scan...`);
+      log.info('Starting ${deviceType} device scan...');
       this.currentScanType = deviceType;
       this.isScanning = true;
       
@@ -150,12 +153,12 @@ class BluetoothService {
         serviceUUIDs = null;
       }
       
-      console.log(`🔍 Starting ${deviceType} scan with service filter:`, serviceUUIDs);
+      log.info('Starting ${deviceType} scan with service filter:' serviceUUIDs);
       
       // Scan for devices
       this.manager.startDeviceScan(serviceUUIDs, null, (error, device) => {
         if (error) {
-          console.error('Scan error:', error);
+          log.error('Scan error:', error);
           return;
         }
         
@@ -164,23 +167,23 @@ class BluetoothService {
         }
       });
     } catch (error) {
-      console.error('Error starting scan:', error);
+      log.error('Error starting scan:', error);
       this.isScanning = false;
     }
   }
 
   async stopScanning() {
     try {
-      console.log('Stopping device scan...');
+      log.info('Stopping device scan...');
       this.manager.stopDeviceScan();
       this.isScanning = false;
     } catch (error) {
-      console.error('Error stopping scan:', error);
+      log.error('Error stopping scan:', error);
     }
   }
 
   handleDeviceDiscovered(device) {
-    console.log('Device discovered:', {
+    log.info('Device discovered:' {
       name: device.name,
       localName: device.localName,
       id: device.id,
@@ -190,17 +193,17 @@ class BluetoothService {
     
     // Debug WHOOP detection specifically
     if (device.name && device.name.toLowerCase().includes('whoop')) {
-      console.log('🎯 WHOOP device detected by name!', device.name);
+      log.info('WHOOP device detected by name!' device.name);
     }
 
     // Determine device type and log appropriate message
     const deviceType = this.getDeviceType(device);
     if (deviceType === 'pulse-ox') {
-      console.log('✅ Pulse Oximeter device found:', device.name || device.localName || 'Unknown');
+      log.info('Pulse Oximeter device found:' device.name || device.localName || 'Unknown');
     } else if (deviceType === 'hr-monitor') {
-      console.log('✅ Heart Rate Monitor device found:', device.name || device.localName || 'Unknown');
+      log.info('Heart Rate Monitor device found:' device.name || device.localName || 'Unknown');
     } else {
-      console.log('🔍 Unknown device found:', device.name || device.localName || 'Unknown', 'Services:', device.serviceUUIDs);
+      log.info('Unknown device found:' device.name || device.localName || 'Unknown', 'Services:', device.serviceUUIDs);
     }
 
     // Only report devices that match the current scan type (or if scanning for 'all')
@@ -209,12 +212,12 @@ class BluetoothService {
                         (this.currentScanType === 'both' && (deviceType === 'pulse-ox' || deviceType === 'hr-monitor'));
 
     if (shouldReport && this.onDeviceFound) {
-      console.log(`📋 Reporting ${deviceType} device (scan type: ${this.currentScanType})`);
+      log.info('� Reporting ${deviceType} device (scan type: ${this.currentScanType})');
       // Add deviceType property while preserving device methods
       device.deviceType = deviceType;
       this.onDeviceFound(device);
     } else if (deviceType !== 'unknown') {
-      console.log(`⏭️ Skipping ${deviceType} device (looking for ${this.currentScanType})`);
+      log.info('⏭️ Skipping ${deviceType} device (looking for ${this.currentScanType})');
     }
   }
 
@@ -266,14 +269,14 @@ class BluetoothService {
   async connectToDevice(device) {
     try {
       const deviceType = device.deviceType || this.getDeviceType(device);
-      console.log(`Connecting to ${deviceType} device:`, device.id);
+      log.info('Connecting to ${deviceType} device:' device.id);
       
       // Stop scanning before connecting
       await this.stopScanning();
       
       // Connect to device
       const connectedDevice = await device.connect();
-      console.log('✅ Connected to device');
+      log.info('Connected to device');
       
       // Discover services and characteristics
       const discoveredDevice = await connectedDevice.discoverAllServicesAndCharacteristics();
@@ -282,12 +285,12 @@ class BluetoothService {
       if (deviceType === 'pulse-ox') {
         this.pulseOxDevice = discoveredDevice;
         this.isPulseOxConnected = true;
-        console.log('✅ Pulse Oximeter services discovered');
+        log.info('Pulse Oximeter services discovered');
         await this.setupBCINotifications(discoveredDevice);
       } else if (deviceType === 'hr-monitor') {
         this.hrDevice = discoveredDevice;
         this.isHRConnected = true;
-        console.log('✅ Heart Rate Monitor services discovered');
+        log.info('Heart Rate Monitor services discovered');
         await this.setupHRNotifications(discoveredDevice);
       }
       
@@ -300,7 +303,7 @@ class BluetoothService {
       
       return discoveredDevice;
     } catch (error) {
-      console.error('Connection error:', error);
+      log.error('Connection error:', error);
       const deviceType = device.deviceType || this.getDeviceType(device);
       
       if (deviceType === 'pulse-ox') {
@@ -322,27 +325,27 @@ class BluetoothService {
 
   async setupBCINotifications(device) {
     try {
-      console.log('Setting up BCI notifications...');
+      log.info('Setting up BCI notifications...');
       
       // Get the BCI service
       const services = await device.services();
-      console.log('Available services:', services.map(s => s.uuid));
+      log.info('Available services:' services.map(s => s.uuid));
       
       const bciService = services.find(service => 
         service.uuid.toUpperCase() === this.BCI_SERVICE_UUID.toUpperCase()
       );
       
       if (!bciService) {
-        console.error('❌ BCI service not found!');
-        console.log('Available services:', services.map(s => s.uuid));
+        log.error('❌ BCI service not found!');
+        log.info('Available services:' services.map(s => s.uuid));
         return;
       }
       
-      console.log('✅ Found BCI service:', bciService.uuid);
+      log.info('Found BCI service:' bciService.uuid);
       
       // Get characteristics
       const characteristics = await bciService.characteristics();
-      console.log('BCI service characteristics:', characteristics.map(c => ({
+      log.info('BCI service characteristics:' characteristics.map(c => ({
         uuid: c.uuid,
         isNotifiable: c.isNotifiable,
         isReadable: c.isReadable,
@@ -356,12 +359,12 @@ class BluetoothService {
       );
       
       if (!dataCharacteristic) {
-        console.error('❌ BCI data characteristic not found!');
+        log.error('❌ BCI data characteristic not found!');
         return;
       }
       
-      console.log('✅ Found BCI data characteristic:', dataCharacteristic.uuid);
-      console.log('📋 Characteristic properties:', {
+      log.info('Found BCI data characteristic:' dataCharacteristic.uuid);
+      log.info('� Characteristic properties:' {
         isNotifiable: dataCharacteristic.isNotifiable,
         isReadable: dataCharacteristic.isReadable,
         isWritable: dataCharacteristic.isWritable
@@ -369,50 +372,50 @@ class BluetoothService {
       
       // Enable notifications
       if (dataCharacteristic.isNotifiable) {
-        console.log('📡 Enabling BCI data notifications...');
+        log.info('� Enabling BCI data notifications...');
         
         dataCharacteristic.monitor((error, characteristic) => {
           if (error) {
             // Handle cancellation errors gracefully (happens when disconnecting or removing finger)
             if (error.message && error.message.includes('cancelled')) {
-              console.log('📡 BCI data monitoring stopped (connection cancelled)');
+              log.info('� BCI data monitoring stopped (connection cancelled)');
               this.handleDeviceDisconnected();
             } else {
-              console.error('Notification error:', error);
+              log.error('Notification error:', error);
               this.handleDeviceDisconnected();
             }
             return;
           }
           
           if (characteristic && characteristic.value) {
-            // console.log('📦 Raw BCI data received:', characteristic.value); // Disabled: high frequency logging
+            // log.info('� Raw BCI data received:' characteristic.value); // Disabled: high frequency logging
             this.handleBCIDataReceived(characteristic.value);
           }
         });
         
-        console.log('✅ BCI notifications enabled');
+        log.info('BCI notifications enabled');
       } else {
-        console.error('❌ BCI data characteristic is not notifiable');
+        log.error('❌ BCI data characteristic is not notifiable');
       }
       
     } catch (error) {
-      console.error('Error setting up BCI notifications:', error);
+      log.error('Error setting up BCI notifications:', error);
     }
   }
 
   async setupHRNotifications(device) {
     try {
-      console.log('Setting up HR notifications...');
+      log.info('Setting up HR notifications...');
       
       // Get the HR service
       const services = await device.services();
-      console.log('Available services:', services.map(s => s.uuid));
+      log.info('Available services:' services.map(s => s.uuid));
       
       const hrService = services.find(service => {
         const serviceUUID = service.uuid.toUpperCase();
         const targetUUID = this.HR_SERVICE_UUID.toUpperCase();
         
-        console.log(`🔍 UUID Comparison: Service="${serviceUUID}" vs Target="${targetUUID}"`);
+        log.debug(`UUID Comparison: Service="${serviceUUID}" vs Target="${targetUUID}"`);
         
         // Handle both short (180D) and full (0000180D-0000-1000-8000-00805F9B34FB) UUID formats
         const matches = serviceUUID === targetUUID || 
@@ -420,23 +423,23 @@ class BluetoothService {
                        serviceUUID.includes(targetUUID);
         
         if (matches) {
-          console.log(`✅ Found matching HR service: ${serviceUUID}`);
+          log.info('Found matching HR service: ${serviceUUID}');
         }
         
         return matches;
       });
       
       if (!hrService) {
-        console.error('❌ HR service not found!');
-        console.log('Available services:', services.map(s => s.uuid));
+        log.error('❌ HR service not found!');
+        log.info('Available services:' services.map(s => s.uuid));
         return;
       }
       
-      console.log('✅ Found HR service:', hrService.uuid);
+      log.info('Found HR service:' hrService.uuid);
       
       // Get characteristics
       const characteristics = await hrService.characteristics();
-      console.log('HR service characteristics:', characteristics.map(c => ({
+      log.info('HR service characteristics:' characteristics.map(c => ({
         uuid: c.uuid,
         isNotifiable: c.isNotifiable,
         isReadable: c.isReadable,
@@ -455,12 +458,12 @@ class BluetoothService {
       });
       
       if (!hrMeasurementCharacteristic) {
-        console.error('❌ HR measurement characteristic not found!');
+        log.error('❌ HR measurement characteristic not found!');
         return;
       }
       
-      console.log('✅ Found HR measurement characteristic:', hrMeasurementCharacteristic.uuid);
-      console.log('📋 Characteristic properties:', {
+      log.info('Found HR measurement characteristic:' hrMeasurementCharacteristic.uuid);
+      log.info('� Characteristic properties:' {
         isNotifiable: hrMeasurementCharacteristic.isNotifiable,
         isReadable: hrMeasurementCharacteristic.isReadable,
         isWritable: hrMeasurementCharacteristic.isWritable
@@ -468,31 +471,31 @@ class BluetoothService {
       
       // Enable notifications for HR data
       if (hrMeasurementCharacteristic.isNotifiable) {
-        console.log('📡 Enabling HR data notifications...');
+        log.info('� Enabling HR data notifications...');
         
         hrMeasurementCharacteristic.monitor((error, characteristic) => {
           if (error) {
             if (error.message && error.message.includes('cancelled')) {
-              console.log('📡 HR data monitoring stopped (connection cancelled)');
+              log.info('� HR data monitoring stopped (connection cancelled)');
             } else {
-              console.error('HR notification error:', error);
+              log.error('HR notification error:', error);
             }
             return;
           }
           
           if (characteristic && characteristic.value) {
-            // console.log('📦 Raw HR data received:', characteristic.value); // Disabled: high frequency logging
+            // log.info('� Raw HR data received:' characteristic.value); // Disabled: high frequency logging
             this.handleHRDataReceived(characteristic.value);
           }
         });
         
-        console.log('✅ HR notifications enabled');
+        log.info('HR notifications enabled');
       } else {
-        console.error('❌ HR measurement characteristic is not notifiable');
+        log.error('❌ HR measurement characteristic is not notifiable');
       }
       
     } catch (error) {
-      console.error('Error setting up HR notifications:', error);
+      log.error('Error setting up HR notifications:', error);
     }
   }
 
@@ -511,7 +514,7 @@ class BluetoothService {
         }
       }
     } catch (error) {
-      console.error('Error handling BCI data:', error);
+      log.error('Error handling BCI data:', error);
     }
   }
 
@@ -530,18 +533,18 @@ class BluetoothService {
         }
       }
     } catch (error) {
-      console.error('Error handling HR data:', error);
+      log.error('Error handling HR data:', error);
     }
   }
 
   parseBCIData(base64Data) {
     try {
-      // console.log('🔍 Parsing BCI data:', base64Data); // Disabled: high frequency logging
+      // log.info('Parsing BCI data:' base64Data); // Disabled: high frequency logging
       
       // Decode base64 to buffer
       const buffer = Buffer.from(base64Data, 'base64');
-      // console.log('📊 Buffer length:', buffer.length); // Disabled: high frequency logging
-      // console.log('📊 Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
+      // log.info('Buffer length:' buffer.length); // Disabled: high frequency logging
+      // log.info('Raw bytes (hex):' Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
       
       // Handle different packet sizes
       let packets = [];
@@ -551,31 +554,31 @@ class BluetoothService {
         packets = [buffer];
       } else if (buffer.length === 20) {
         // Four 5-byte packets concatenated
-        // console.log('📦 Processing 20-byte packet as 4x5-byte packets'); // Disabled: high frequency logging
+        // log.info('� Processing 20-byte packet as 4x5-byte packets'); // Disabled: high frequency logging
         for (let i = 0; i < 4; i++) {
           const packetStart = i * 5;
           const packet = buffer.slice(packetStart, packetStart + 5);
           packets.push(packet);
         }
       } else {
-        console.log('⚠️ Unexpected buffer length:', buffer.length, 'bytes. Processing as best effort...');
+        log.info('Unexpected buffer length:' buffer.length, 'bytes. Processing as best effort...');
         // Try to process first 5 bytes if available
         if (buffer.length >= 5) {
           packets = [buffer.slice(0, 5)];
         } else {
-          console.log('❌ Buffer too short for BCI parsing');
+          log.info('Buffer too short for BCI parsing');
           return null;
         }
       }
       
       // Process the latest (most recent) packet
       const latestPacket = packets[packets.length - 1];
-      // console.log('🎯 Processing latest packet:', Array.from(latestPacket).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
+      // log.info('Processing latest packet:' Array.from(latestPacket).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
       
       return this.parseSingle5BytePacket(latestPacket, base64Data);
       
     } catch (error) {
-      console.error('❌ Error parsing BCI data:', error);
+      log.error('❌ Error parsing BCI data:', error);
       return null;
     }
   }
@@ -589,7 +592,7 @@ class BluetoothService {
       const byte4 = buffer[3]; // Pulse rate bits 0-6, sync bit
       const byte5 = buffer[4]; // SpO2 bits 0-6, sync bit
       
-      // console.log('📊 BCI Bytes:', { // Disabled: high frequency logging
+      // log.info('BCI Bytes:' { // Disabled: high frequency logging
       //   byte1: '0x' + byte1.toString(16).padStart(2, '0').toUpperCase(),
       //   byte2: '0x' + byte2.toString(16).padStart(2, '0').toUpperCase(), 
       //   byte3: '0x' + byte3.toString(16).padStart(2, '0').toUpperCase(),
@@ -626,7 +629,7 @@ class BluetoothService {
       const pleth = byte2 & 0x7F;
       const isPlethValid = pleth !== 0;
       
-      // console.log('🔬 BCI Parsed Values:', { // Disabled: high frequency logging
+      // log.info('� BCI Parsed Values:' { // Disabled: high frequency logging
       //   signalStrength,
       //   isSignalValid,
       //   isProbePlugged,
@@ -653,30 +656,30 @@ class BluetoothService {
       };
       
       if (spo2 !== null || pulseRate !== null) {
-        // console.log('✅ Valid BCI data:', result); // Disabled: high frequency logging
+        // log.info('Valid BCI data:' result); // Disabled: high frequency logging
       } else {
-        // console.log('⚠️ BCI status data (no valid measurements):', result); // Disabled: high frequency logging
+        // log.info('BCI status data (no valid measurements):' result); // Disabled: high frequency logging
       }
       
       return result;
       
     } catch (error) {
-      console.error('Error parsing individual BCI packet:', error);
+      log.error('Error parsing individual BCI packet:', error);
       return null;
     }
   }
 
   parseHRData(base64Data) {
     try {
-      // console.log('🔍 Parsing HR data:', base64Data); // Disabled: high frequency logging
+      // log.info('Parsing HR data:' base64Data); // Disabled: high frequency logging
       
       // Decode base64 to buffer
       const buffer = Buffer.from(base64Data, 'base64');
-      // console.log('📊 HR Buffer length:', buffer.length); // Disabled: high frequency logging
-      // console.log('📊 HR Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
+      // log.info('HR Buffer length:' buffer.length); // Disabled: high frequency logging
+      // log.info('HR Raw bytes (hex):' Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
       
       if (buffer.length < 2) {
-        console.log('❌ HR buffer too short');
+        log.info('HR buffer too short');
         return null;
       }
 
@@ -697,7 +700,7 @@ class BluetoothService {
       // Parse heart rate value
       if (hrFormat16Bit) {
         if (buffer.length < offset + 2) {
-          console.log('❌ Insufficient data for 16-bit HR');
+          log.info('Insufficient data for 16-bit HR');
           return null;
         }
         heartRate = buffer.readUInt16LE(offset);
@@ -710,7 +713,7 @@ class BluetoothService {
       // Skip energy expended if present
       if (energyExpendedPresent) {
         if (buffer.length < offset + 2) {
-          console.log('⚠️ Energy expended flag set but no data');
+          log.info('Energy expended flag set but no data');
         } else {
           offset += 2; // Skip 2 bytes for energy expended
         }
@@ -733,7 +736,7 @@ class BluetoothService {
         }
       }
 
-      // console.log('🔬 HR Parsed Values:', { // Disabled: high frequency logging
+      // log.info('� HR Parsed Values:' { // Disabled: high frequency logging
       //   flags: '0x' + flags.toString(16).padStart(2, '0'),
       //   hrFormat16Bit,
       //   sensorContactSupported,
@@ -754,13 +757,13 @@ class BluetoothService {
           this.realHRVWindow.add(interval, now);
         });
         
-        // console.log(`📈 Quick HRV: ${this.quickHRVWindow.getSize()} intervals, Real HRV: ${this.realHRVWindow.getSize()} intervals`); // Disabled: frequent logging
+        // log.info('Quick HRV: ${this.quickHRVWindow.getSize()} intervals, Real HRV: ${this.realHRVWindow.getSize()} intervals'); // Disabled: frequent logging
         
         // Calculate dual-timeframe HRV
         const hrvResults = this.calculateDualHRV(now);
         
         if (hrvResults) {
-          // console.log(`✅ HRV Results:`, hrvResults); // Disabled: frequent logging
+          // log.info('HRV Results:' hrvResults); // Disabled: frequent logging
         }
       }
 
@@ -804,15 +807,15 @@ class BluetoothService {
       };
 
       if (heartRate > 0) {
-        // console.log('✅ Valid HR data:', result); // Disabled: high frequency logging
+        // log.info('Valid HR data:' result); // Disabled: high frequency logging
       } else {
-        // console.log('⚠️ HR status data (no valid measurement):', result); // Disabled: high frequency logging
+        // log.info('HR status data (no valid measurement):' result); // Disabled: high frequency logging
       }
 
       return result;
 
     } catch (error) {
-      console.error('❌ Error parsing HR data:', error);
+      log.error('❌ Error parsing HR data:', error);
       return null;
     }
   }
@@ -881,12 +884,12 @@ class BluetoothService {
    */
   calculateRMSSD(intervals, type = 'Unknown') {
     if (intervals.length < 2) {
-      console.log(`❌ ${type} HRV: Not enough intervals (${intervals.length} < 2)`);
+      log.info('${type} HRV: Not enough intervals (${intervals.length} < 2)');
       return null;
     }
 
     try {
-      console.log(`🧠 ${type} HRV calculation: ${intervals.length} intervals`);
+      log.info('🧠 ${type} HRV calculation: ${intervals.length} intervals');
       
       // Calculate RMSSD (Root Mean Square of Successive Differences)
       const successiveDifferences = [];
@@ -896,7 +899,7 @@ class BluetoothService {
       }
 
       if (successiveDifferences.length === 0) {
-        console.log(`❌ ${type} HRV: No successive differences calculated`);
+        log.info('${type} HRV: No successive differences calculated');
         return null;
       }
 
@@ -913,10 +916,10 @@ class BluetoothService {
         timestamp: Date.now()
       };
 
-      console.log(`✅ ${type} HRV calculated: RMSSD=${result.rmssd}ms (${result.dataQuality} quality)`);
+      log.info('${type} HRV calculated: RMSSD=${result.rmssd}ms (${result.dataQuality} quality)');
       return result;
     } catch (error) {
-      console.error(`❌ Error calculating ${type} HRV:`, error);
+      log.error(`❌ Error calculating ${type} HRV:`, error);
       return null;
     }
   }
@@ -925,7 +928,7 @@ class BluetoothService {
     try {
       if (deviceType === 'all' || deviceType === 'pulse-ox') {
         if (this.pulseOxDevice) {
-          console.log('Disconnecting from pulse oximeter...');
+          log.info('Disconnecting from pulse oximeter...');
           await this.pulseOxDevice.cancelConnection();
           this.pulseOxDevice = null;
           this.isPulseOxConnected = false;
@@ -934,13 +937,13 @@ class BluetoothService {
             this.onConnectionStatusChanged('pulse-ox', false);
           }
           
-          console.log('✅ Pulse oximeter disconnected');
+          log.info('Pulse oximeter disconnected');
         }
       }
 
       if (deviceType === 'all' || deviceType === 'hr-monitor') {
         if (this.hrDevice) {
-          console.log('Disconnecting from heart rate monitor...');
+          log.info('Disconnecting from heart rate monitor...');
           await this.hrDevice.cancelConnection();
           this.hrDevice = null;
           this.isHRConnected = false;
@@ -958,18 +961,18 @@ class BluetoothService {
             this.onConnectionStatusChanged('hr-monitor', false);
           }
           
-          console.log('✅ Heart rate monitor disconnected');
+          log.info('Heart rate monitor disconnected');
         }
       }
     } catch (error) {
-      console.error('Error disconnecting:', error);
+      log.error('Error disconnecting:', error);
     }
   }
 
   async restartScanningForMissingDevices() {
     // If we have both devices connected, no need to keep scanning
     if (this.isPulseOxConnected && this.isHRConnected) {
-      console.log('🎯 Both devices connected - stopping scan');
+      log.info('Both devices connected - stopping scan');
       return;
     }
     
@@ -977,19 +980,19 @@ class BluetoothService {
     let scanType = 'all';
     if (this.isPulseOxConnected && !this.isHRConnected) {
       scanType = 'hr-monitor';
-      console.log('🔍 Pulse ox connected - scanning for heart rate monitor');
+      log.info('Pulse ox connected - scanning for heart rate monitor');
     } else if (!this.isPulseOxConnected && this.isHRConnected) {
       scanType = 'pulse-ox';
-      console.log('🔍 Heart rate monitor connected - scanning for pulse oximeter');
+      log.info('Heart rate monitor connected - scanning for pulse oximeter');
     } else {
-      console.log('🔍 No devices connected - scanning for all devices');
+      log.info('No devices connected - scanning for all devices');
     }
     
     try {
       // Restart scanning for the missing device type
       await this.startScanning(scanType);
     } catch (error) {
-      console.error('❌ Failed to restart scanning:', error);
+      log.error('❌ Failed to restart scanning:', error);
     }
   }
 
@@ -1030,7 +1033,7 @@ class BluetoothService {
   }
 
   async handleDeviceDisconnected() {
-    console.log('🔌 Device disconnected - implementing resilient recovery');
+    log.info('� Device disconnected - implementing resilient recovery');
     
     // Mark disconnection timestamp for recovery tracking
     this.lastDisconnectTime = Date.now();
@@ -1040,19 +1043,19 @@ class BluetoothService {
     
     // If there's an active session, try recovery instead of immediate termination
     if (EnhancedSessionManager.isActive) {
-      console.log('🔄 Active session detected - attempting connection recovery');
+      log.info('Active session detected - attempting connection recovery');
       
       // Set session to connection lost state instead of terminating
       try {
         // Mark session as having connection issues but continue
         EnhancedSessionManager.setConnectionState('disconnected');
-        console.log('⚠️ Session marked as disconnected - will continue with cached data');
+        log.info('Session marked as disconnected - will continue with cached data');
         
         // Start recovery timer (30 seconds before considering termination)
         this.startConnectionRecoveryTimer(EnhancedSessionManager);
         
       } catch (error) {
-        console.error('❌ Failed to set session connection state:', error);
+        log.error('❌ Failed to set session connection state:', error);
       }
     }
   }
@@ -1063,28 +1066,28 @@ class BluetoothService {
       clearTimeout(this.connectionRecoveryTimer);
     }
     
-    console.log('⏱️ Starting connection recovery timer (30 seconds)');
+    log.info('⏱️ Starting connection recovery timer (30 seconds)');
     
     this.connectionRecoveryTimer = setTimeout(async () => {
-      console.log('⏰ Connection recovery timeout reached');
+      log.info('⏰ Connection recovery timeout reached');
       
       // Check if we're still disconnected and session is still active
       if (!this.isAnyDeviceConnected && EnhancedSessionManager.isActive) {
-        console.log('🛑 No recovery achieved - terminating session');
+        log.info('� No recovery achieved - terminating session');
         try {
           await EnhancedSessionManager.stopSession();
-          console.log('✅ Session terminated after recovery timeout');
+          log.info('Session terminated after recovery timeout');
         } catch (error) {
-          console.error('❌ Failed to terminate session after recovery timeout:', error);
+          log.error('❌ Failed to terminate session after recovery timeout:', error);
           try {
             EnhancedSessionManager.resetSessionState();
-            console.log('🔄 Session state reset after termination failure');
+            log.info('Session state reset after termination failure');
           } catch (resetError) {
-            console.error('❌ Failed to reset session state:', resetError);
+            log.error('❌ Failed to reset session state:', resetError);
           }
         }
       } else if (this.isAnyDeviceConnected) {
-        console.log('🎉 Connection recovered - session continuing normally');
+        log.info('� Connection recovered - session continuing normally');
         EnhancedSessionManager.setConnectionState('connected');
       }
     }, 30000); // 30 second recovery window
