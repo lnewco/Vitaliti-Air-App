@@ -18,6 +18,8 @@
       "Bash(gh auth:*)",
       "Bash(git merge:*)",
       "Bash(grep:*)",
+      "Bash(git stash show:*)",
+      "Bash(git log:*)",
       "Bash(git branch:*)",
       "Bash(node:*)",
       "Bash(mkdir:*)",

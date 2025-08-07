@@ -2,27 +2,28 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, AppState } from 'react-native';
 import DatabaseService from './DatabaseService';
 import SupabaseService from './SupabaseService';
+import BackgroundService from './BackgroundService';
 import logger from '../utils/logger';
 
 const log = logger.createModuleLogger('EnhancedSessionManager');
 
-// Import Background Session Manager conditionally - available in development builds
-let BackgroundSessionManager = null;
-try {
-  BackgroundSessionManager = require('./BackgroundSessionManager').BackgroundSessionManager;
-  log.info('Background session management enabled');
-} catch (error) {
-  log.info('Background session management not available:', error.message);
-}
-
 // Import the Live Activity module for iOS - available in development builds
 let LiveActivityModule = null;
-try {
-  LiveActivityModule = require('../../modules/live-activity/src/LiveActivityModule').default;
-  log.info('Live Activities enabled');
-} catch (error) {
-  log.info('Live Activities not available:', error.message);
-}
+// Delay the module loading to prevent crashes during initial app load
+const loadLiveActivityModule = () => {
+  if (LiveActivityModule === null) {
+    try {
+      const module = require('../../modules/live-activity/src/LiveActivityModule');
+      LiveActivityModule = module.default || module;
+      log.info('✅ Live Activities enabled');
+    } catch (error) {
+      log.info('⚠️ Live Activities not available - using standard notifications');
+      // Set to false to prevent future attempts
+      LiveActivityModule = false;
+    }
+  }
+  return LiveActivityModule && LiveActivityModule !== false ? LiveActivityModule : null;
+};
 
 class EnhancedSessionManager {
   constructor() {
@@ -83,11 +84,15 @@ class EnhancedSessionManager {
       await SupabaseService.initialize();
       log.info('Supabase service initialized');
       
-      // Check Live Activity support
-      if (LiveActivityModule) {
-        const isSupported = await LiveActivityModule.isSupported();
-        log.info('Live Activity support:', isSupported);
-      }
+      // Delay Live Activity check to prevent crashes during app startup
+      setTimeout(() => {
+        const liveActivityModule = loadLiveActivityModule();
+        if (liveActivityModule) {
+          liveActivityModule.isSupported()
+            .then(isSupported => log.info('📱 Live Activity support:', isSupported))
+            .catch(error => log.info('📱 Live Activity check failed:', error.message));
+        }
+      }, 2000);
 
       // Perform startup recovery cleanup
       setTimeout(() => this.performStartupRecovery(), 1000);
@@ -103,65 +108,34 @@ class EnhancedSessionManager {
   async handleAppStateChange(nextAppState) {
     if (this.isActive) {
       if (nextAppState === 'background') {
-        log.info('App backgrounded - starting background monitoring and session timeout');
-        await this.startBackgroundMonitoring();
+        log.info('📱 App backgrounded - starting background monitoring and session timeout');
+        // Use the new BackgroundService for iOS background handling
+        if (this.currentSession) {
+          await BackgroundService.startSession(this.currentSession.id);
+          await BackgroundService.updateSessionState(
+            this.currentPhase,
+            this.currentCycle,
+            this.phaseTimeRemaining
+          );
+        }
         this.startBackgroundTimeout();
       } else if (nextAppState === 'active') {
         log.info('App foregrounded - syncing with background state');
         this.clearBackgroundTimeout();
-        await this.syncWithBackgroundState();
+        // Background service handles foreground transition
       }
     }
   }
 
   async startBackgroundMonitoring() {
-    if (!this.currentSession) return;
-
-    if (!BackgroundSessionManager) {
-      log.info('Background monitoring not available in Expo Go');
-      return;
-    }
-
-    try {
-      // Start background task monitoring
-      const backgroundStarted = await BackgroundSessionManager.startBackgroundMonitoring({
-        id: this.currentSession.id,
-        startTime: this.startTime
-      });
-
-      if (backgroundStarted) {
-        log.info('Background monitoring started');
-      }
-    } catch (error) {
-      log.error('❌ Failed to start background monitoring:', error);
-    }
+    // This method is now handled by BackgroundService in handleAppStateChange
+    log.info('📱 Background monitoring handled by BackgroundService');
   }
 
   async syncWithBackgroundState() {
-    if (!BackgroundSessionManager) {
-      return null;
-    }
-    
-    try {
-      const backgroundState = await BackgroundSessionManager.syncWithBackgroundState();
-      
-      if (backgroundState && backgroundState.isActive) {
-        // Update local state with background changes
-        this.currentPhase = backgroundState.currentPhase;
-        this.currentCycle = backgroundState.currentCycle;
-        this.phaseTimeRemaining = backgroundState.phaseTimeRemaining;
-        
-        // Update Live Activity if active
-        if (this.hasActiveLiveActivity) {
-          await this.updateLiveActivity();
-        }
-        
-        log.info('Synced with background state:', backgroundState);
-        this.notify('sessionSynced', backgroundState);
-      }
-    } catch (error) {
-      log.error('❌ Failed to sync with background state:', error);
-    }
+    // Background state is now maintained by native iOS code
+    // No need to sync as the state is preserved
+    log.info('📱 Background state maintained natively');
   }
 
   // Event system for UI updates
@@ -306,13 +280,14 @@ class EnhancedSessionManager {
   }
 
   async checkLiveActivitySupport() {
-    if (!LiveActivityModule) {
+    const liveActivityModule = loadLiveActivityModule();
+    if (!liveActivityModule) {
       log.info('Live Activities not available in Expo Go');
       return false;
     }
     
     try {
-      const isSupported = await LiveActivityModule.isSupported();
+      const isSupported = await liveActivityModule.isSupported();
       return isSupported;
     } catch (error) {
       log.error('❌ Error checking Live Activity support:', error);
@@ -321,14 +296,15 @@ class EnhancedSessionManager {
   }
 
   async startLiveActivity() {
-    if (!LiveActivityModule || !this.currentSession) {
+    const liveActivityModule = loadLiveActivityModule();
+    if (!liveActivityModule || !this.currentSession) {
       return false;
     }
 
     try {
       log.info('Starting Live Activity for session:', this.currentSession.id);
       
-      const result = await LiveActivityModule.startActivity({
+      const result = await liveActivityModule.startActivity({
         sessionId: this.currentSession.id,
         sessionType: this.currentSession.sessionType,
         currentPhase: this.currentPhase,
@@ -352,12 +328,13 @@ class EnhancedSessionManager {
   }
 
   async updateLiveActivity() {
-    if (!this.hasActiveLiveActivity || !LiveActivityModule || !this.currentSession) {
+    const liveActivityModule = loadLiveActivityModule();
+    if (!this.hasActiveLiveActivity || !liveActivityModule || !this.currentSession) {
       return;
     }
 
     try {
-      await LiveActivityModule.updateActivity({
+      await liveActivityModule.updateActivity({
         sessionId: this.currentSession.id,
         currentPhase: this.currentPhase,
         currentCycle: this.currentCycle,
@@ -397,13 +374,12 @@ class EnhancedSessionManager {
       }
 
       // Update background state less frequently (every 5 seconds)
-      if (BackgroundSessionManager && this.phaseTimeRemaining % 5 === 0) {
-        BackgroundSessionManager.updateBackgroundState({
-          currentPhase: this.currentPhase,
-          currentCycle: this.currentCycle,
-          phaseTimeRemaining: this.phaseTimeRemaining,
-          phaseStartTime: this.phaseStartTime
-        });
+      if (this.phaseTimeRemaining % 5 === 0) {
+        BackgroundService.updateSessionState(
+          this.currentPhase,
+          this.currentCycle,
+          this.phaseTimeRemaining
+        );
       }
 
       // Notify phase updates every second for the first 5 seconds after a phase change
@@ -643,11 +619,9 @@ class EnhancedSessionManager {
 
     // Step 2: Stop background monitoring (with timeout)
     await withTimeout(async () => {
-      log.info('Step 2: Stopping background monitoring...');
-      if (BackgroundSessionManager) {
-        await BackgroundSessionManager.stopBackgroundMonitoring();
-      }
-      log.info('Step 2: Background monitoring stopped');
+      log.info('🔄 Step 2: Stopping background monitoring...');
+      await BackgroundService.endSession();
+      log.info('✅ Step 2: Background monitoring stopped');
     }, 2000, 'Background stop');
 
     // Step 3: Stop Live Activity (with timeout)
@@ -822,12 +796,13 @@ class EnhancedSessionManager {
   }
 
   async stopLiveActivity() {
-    if (!this.hasActiveLiveActivity || !LiveActivityModule) {
+    const liveActivityModule = loadLiveActivityModule();
+    if (!this.hasActiveLiveActivity || !liveActivityModule) {
       return;
     }
 
     try {
-      await LiveActivityModule.stopActivity();
+      await liveActivityModule.stopActivity();
       this.hasActiveLiveActivity = false;
       this.liveActivityId = null;
       log.info('� Live Activity stopped');
