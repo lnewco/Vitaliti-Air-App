@@ -1,6 +1,9 @@
 import supabase from '../config/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import authService from '../auth/AuthService';
+import logger from '../utils/logger';
+
+const log = logger.createModuleLogger('SupabaseService');
 
 class SupabaseService {
   constructor() {
@@ -19,9 +22,9 @@ class SupabaseService {
         await AsyncStorage.setItem('deviceId', deviceId);
       }
       this.deviceId = deviceId;
-      console.log('📱 Device ID initialized:', deviceId);
+      log.info('Device ID initialized:' deviceId);
     } catch (error) {
-      console.error('❌ Failed to initialize device ID:', error);
+      log.error('❌ Failed to initialize device ID:', error);
     }
   }
 
@@ -31,9 +34,9 @@ class SupabaseService {
       const mappingData = Array.from(this.sessionMapping.entries());
       // Use 'sessionMapping' key for backward compatibility
       await AsyncStorage.setItem('sessionMapping', JSON.stringify(Object.fromEntries(this.sessionMapping)));
-      console.log('💾 Persisted session mapping with', mappingData.length, 'entries');
+      log.info('Persisted session mapping with' mappingData.length, 'entries');
     } catch (error) {
-      console.error('❌ Failed to persist session mapping:', error);
+      log.error('❌ Failed to persist session mapping:', error);
     }
   }
 
@@ -45,7 +48,7 @@ class SupabaseService {
       if (mappingJson) {
         const mappingObj = JSON.parse(mappingJson);
         this.sessionMapping = new Map(Object.entries(mappingObj));
-        console.log('🔄 Restored session mapping with', this.sessionMapping.size, 'entries');
+        log.info('Restored session mapping with' this.sessionMapping.size, 'entries');
         
         // Clean up old mappings (older than 24 hours)
         const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
@@ -59,13 +62,13 @@ class SupabaseService {
         if (cleanedEntries.length < entries.length) {
           this.sessionMapping = new Map(cleanedEntries);
           await this.persistSessionMapping();
-          console.log('🧹 Cleaned up', entries.length - cleanedEntries.length, 'old session mappings');
+          log.info('🧹 Cleaned up' entries.length - cleanedEntries.length, 'old session mappings');
         }
       } else {
-        console.log('📥 No stored session mappings found');
+        log.info('� No stored session mappings found');
       }
     } catch (error) {
-      console.error('❌ Failed to restore session mapping:', error);
+      log.error('❌ Failed to restore session mapping:', error);
       this.sessionMapping = new Map();
     }
   }
@@ -89,13 +92,13 @@ class SupabaseService {
         .single();
       
       if (error) {
-        console.error('❌ Failed to fetch session data:', error);
+        log.error('❌ Failed to fetch session data:', error);
         return null;
       }
       
       return data;
     } catch (error) {
-      console.error('❌ Error fetching session data:', error);
+      log.error('❌ Error fetching session data:', error);
       return null;
     }
   }
@@ -104,12 +107,12 @@ class SupabaseService {
     // Simplified: assume we're always online
     // If Supabase calls fail, they'll be queued automatically
     this.isOnline = true;
-    console.log('🌐 Network monitoring: Simplified mode (assuming online)');
+    log.info('Network monitoring: Simplified mode (assuming online)');
     
     // Try to process any existing sync queue every 10 seconds
     setInterval(() => {
       if (this.syncQueue.length > 0) {
-        console.log('🔄 Attempting to process sync queue...');
+        log.info('Attempting to process sync queue...');
         this.processSyncQueue();
       }
     }, 10000); // Check every 10 seconds (more frequent)
@@ -120,15 +123,15 @@ class SupabaseService {
     try {
       // Get current authenticated user (fall back to anonymous)
       const currentUser = authService.getCurrentUser();
-      console.log('🔍 AuthService getCurrentUser():', currentUser);
+      log.info('AuthService getCurrentUser():' currentUser);
       
       // Check actual Supabase auth state
       const { data: authUser, error: authError } = await supabase.auth.getUser();
-      console.log('🔍 Supabase auth.getUser():', authUser, authError);
+      log.info('Supabase auth.getUser():' authUser, authError);
       
       // Check auth session
       const { data: authSession, error: sessionError } = await supabase.auth.getSession();
-      console.log('🔍 Supabase auth.getSession():', authSession, sessionError);
+      log.info('Supabase auth.getSession():' authSession, sessionError);
       
       const session = {
         device_id: this.deviceId,
@@ -152,18 +155,18 @@ class SupabaseService {
         local_session_id: sessionData.id
       };
 
-      console.log('💾 Creating session with device_id:', this.deviceId, 'user_id:', currentUser?.id || 'null');
+      log.info('Creating session with device_id:' this.deviceId, 'user_id:', currentUser?.id || 'null');
       
       // Ensure device ID is set
       if (!this.deviceId) {
-        console.error('🚨 CRITICAL: deviceId is null! Initializing now...');
+        log.error('🚨 CRITICAL: deviceId is null! Initializing now...');
         await this.initializeDeviceId();
-        console.log('🔧 Initialized deviceId:', this.deviceId);
+        log.info('� Initialized deviceId:' this.deviceId);
         session.device_id = this.deviceId;
       }
 
       // RLS policy now fixed - device_id check works directly without session variables
-      console.log('✅ RLS policy allows device_id-based sessions');
+      log.info('RLS policy allows device_id-based sessions');
 
       const { data, error } = await supabase
         .from('sessions')
@@ -171,24 +174,24 @@ class SupabaseService {
         .select();
 
       if (error) {
-        console.error('❌ Supabase session creation failed, queuing for sync:', error.message);
+        log.error('❌ Supabase session creation failed, queuing for sync:', error.message);
         this.queueForSync('createSession', sessionData);
         return null;
       }
 
-      console.log('☁️ Session created in Supabase:', data[0].id);
+      log.info('Session created in Supabase:' data[0].id);
       
       // Store the mapping between local and Supabase session IDs
       this.sessionMapping.set(sessionData.id, data[0].id);
-      console.log('🔗 Added session mapping:', sessionData.id, '→', data[0].id);
-      console.log('🔗 Total mappings now:', this.sessionMapping.size);
+      log.info('� Added session mapping:' sessionData.id, '→', data[0].id);
+      log.info('� Total mappings now:' this.sessionMapping.size);
       
       // Persist the mapping to AsyncStorage for recovery after app restart
       await this.persistSessionMapping();
       
       return data[0];
     } catch (error) {
-      console.error('❌ Error creating session, queuing for sync:', error.message);
+      log.error('❌ Error creating session, queuing for sync:', error.message);
       this.queueForSync('createSession', sessionData);
       return null;
     }
@@ -201,14 +204,14 @@ class SupabaseService {
       
       // If mapping is lost (app restart), try to recover it
       if (!supabaseSessionId) {
-        console.log('🔍 Session mapping not in memory, checking persistent storage...');
+        log.info('Session mapping not in memory, checking persistent storage...');
         await this.restoreSessionMapping();
         supabaseSessionId = this.sessionMapping.get(sessionId);
       }
       
       // If still not found, look it up from database
       if (!supabaseSessionId) {
-        console.log('🔍 Session mapping lost, looking up Supabase session ID...');
+        log.info('Session mapping lost, looking up Supabase session ID...');
         
         try {
           const { data, error } = await supabase
@@ -224,15 +227,15 @@ class SupabaseService {
             // Restore the mapping and persist it
             this.sessionMapping.set(sessionId, supabaseSessionId);
             await this.persistSessionMapping();
-            console.log('✅ Found and restored Supabase session:', supabaseSessionId);
+            log.info('Found and restored Supabase session:' supabaseSessionId);
           }
         } catch (lookupError) {
-          console.error('❌ Failed to lookup session:', lookupError);
+          log.error('❌ Failed to lookup session:', lookupError);
         }
       }
       
       if (!supabaseSessionId) {
-        console.warn('⚠️ No Supabase session found for ending session:', sessionId);
+        log.warn('⚠️ No Supabase session found for ending session:', sessionId);
         this.queueForSync('endSession', { sessionId, stats });
         return null;
       }
@@ -264,17 +267,17 @@ class SupabaseService {
         .select();
 
       if (error) {
-        console.error('❌ Supabase session update failed:', error);
+        log.error('❌ Supabase session update failed:', error);
         this.queueForSync('endSession', { sessionId, stats });
         return null;
       }
 
-      console.log('☁️ Session ended in Supabase:', sessionId);
+      log.info('Session ended in Supabase:' sessionId);
       return data[0];
     } catch (error) {
-      console.error('❌ Error ending session in Supabase:', error);
-      console.error('❌ Supabase error details:', error.message, error.stack);
-      console.error('❌ Session ID:', sessionId, 'Stats:', stats);
+      log.error('❌ Error ending session in Supabase:', error);
+      log.error('❌ Supabase error details:', error.message, error.stack);
+      log.error('❌ Session ID:', sessionId, 'Stats:', stats);
       this.queueForSync('endSession', { sessionId, stats });
       return null;
     }
@@ -286,7 +289,7 @@ class SupabaseService {
       let supabaseSessionId = this.sessionMapping.get(sessionId);
       
       if (!supabaseSessionId) {
-        console.warn('⚠️ No Supabase session mapping found for cycle update:', sessionId);
+        log.warn('⚠️ No Supabase session mapping found for cycle update:', sessionId);
         this.queueForSync('updateSessionCycle', { sessionId, currentCycle });
         return null;
       }
@@ -301,15 +304,15 @@ class SupabaseService {
         .select();
 
       if (error) {
-        console.error('❌ Supabase cycle update failed:', error);
+        log.error('❌ Supabase cycle update failed:', error);
         this.queueForSync('updateSessionCycle', { sessionId, currentCycle });
         return null;
       }
 
-      console.log(`☁️ Updated session ${sessionId} to cycle ${currentCycle} in Supabase`);
+      log.info('Updated session ${sessionId} to cycle ${currentCycle} in Supabase');
       return data[0];
     } catch (error) {
-      console.error('❌ Error updating session cycle in Supabase:', error);
+      log.error('❌ Error updating session cycle in Supabase:', error);
       this.queueForSync('updateSessionCycle', { sessionId, currentCycle });
       return null;
     }
@@ -325,7 +328,7 @@ class SupabaseService {
       if (!supabaseSessionId) {
         supabaseSessionId = await this.recoverSessionMapping(reading.sessionId);
         if (!supabaseSessionId) {
-          console.error('❌ Failed to recover session mapping for:', reading.sessionId);
+          log.error('❌ Failed to recover session mapping for:', reading.sessionId);
           this.queueForSync('addReading', reading);
           return null;
         }
@@ -361,14 +364,14 @@ class SupabaseService {
       });
 
       if (error) {
-        console.error('❌ Single reading insert failed:', error);
+        log.error('❌ Single reading insert failed:', error);
         this.queueForSync('addReading', reading);
         return null;
       }
 
       return data[0];
     } catch (error) {
-      console.error('❌ Error adding reading:', error.message);
+      log.error('❌ Error adding reading:', error.message);
       this.queueForSync('addReading', reading);
       return null;
     }
@@ -386,7 +389,7 @@ class SupabaseService {
       if (!supabaseSessionId) {
         supabaseSessionId = await this.recoverSessionMapping(firstReading.sessionId);
         if (!supabaseSessionId) {
-          console.error('❌ Failed to recover session mapping for batch:', firstReading.sessionId);
+          log.error('❌ Failed to recover session mapping for batch:', firstReading.sessionId);
           this.queueForSync('addReadingsBatch', readings);
           return null;
         }
@@ -427,15 +430,15 @@ class SupabaseService {
       });
 
       if (error) {
-        console.error('❌ Batch insert failed:', error);
+        log.error('❌ Batch insert failed:', error);
         this.queueForSync('addReadingsBatch', readings);
         return null;
       }
 
-      console.log(`☁️ Successfully inserted ${data.length} readings to Supabase`);
+      log.info('Successfully inserted ${data.length} readings to Supabase');
       return data;
     } catch (error) {
-      console.error('❌ Error batch inserting readings:', error);
+      log.error('❌ Error batch inserting readings:', error);
       this.queueForSync('addReadingsBatch', readings);
       return null;
     }
@@ -445,7 +448,7 @@ class SupabaseService {
   async getAllSessions() {
     try {
       if (!this.isOnline) {
-        console.log('📱 Offline: Cannot fetch sessions from Supabase');
+        log.info('Offline: Cannot fetch sessions from Supabase');
         return [];
       }
 
@@ -467,13 +470,13 @@ class SupabaseService {
         .limit(20);
 
       if (error) {
-        console.error('❌ Error fetching sessions:', error);
+        log.error('❌ Error fetching sessions:', error);
         return [];
       }
 
       return data || [];
     } catch (error) {
-      console.error('❌ Error getting sessions:', error);
+      log.error('❌ Error getting sessions:', error);
       return [];
     }
   }
@@ -481,7 +484,7 @@ class SupabaseService {
   async getSessionReadings(sessionId, validOnly = false) {
     try {
       if (!this.isOnline) {
-        console.log('📱 Offline: Cannot fetch readings from Supabase');
+        log.info('Offline: Cannot fetch readings from Supabase');
         return [];
       }
 
@@ -499,13 +502,13 @@ class SupabaseService {
       const { data, error } = await query;
 
       if (error) {
-        console.error('❌ Error fetching readings:', error);
+        log.error('❌ Error fetching readings:', error);
         return [];
       }
 
       return data || [];
     } catch (error) {
-      console.error('❌ Error getting readings:', error);
+      log.error('❌ Error getting readings:', error);
       return [];
     }
   }
@@ -520,7 +523,7 @@ class SupabaseService {
       );
       
       if (isDuplicate) {
-        console.log(`⚠️ Skipping duplicate queue item: ${operation} for session ${data.localSessionId}`);
+        log.info('Skipping duplicate queue item: ${operation} for session ${data.localSessionId}');
         return;
       }
     }
@@ -534,7 +537,7 @@ class SupabaseService {
     };
     
     this.syncQueue.push(syncItem);
-    console.log(`📤 Queued for sync: ${operation}`, syncItem.id);
+    log.info('� Queued for sync: ${operation}' syncItem.id);
     
     // Persist queue to storage
     this.persistSyncQueue();
@@ -544,7 +547,7 @@ class SupabaseService {
     try {
       await AsyncStorage.setItem('supabaseSyncQueue', JSON.stringify(this.syncQueue));
     } catch (error) {
-      console.error('❌ Failed to persist sync queue:', error);
+      log.error('❌ Failed to persist sync queue:', error);
     }
   }
 
@@ -553,10 +556,10 @@ class SupabaseService {
       const queue = await AsyncStorage.getItem('supabaseSyncQueue');
       if (queue) {
         this.syncQueue = JSON.parse(queue);
-        console.log(`📥 Loaded ${this.syncQueue.length} items from sync queue`);
+        log.info('� Loaded ${this.syncQueue.length} items from sync queue');
       }
     } catch (error) {
-      console.error('❌ Failed to load sync queue:', error);
+      log.error('❌ Failed to load sync queue:', error);
     }
   }
 
@@ -569,14 +572,14 @@ class SupabaseService {
       const isOrphan = !sessionId || sessionId === 'undefined' || sessionId === 'unknown';
       
       if (isOrphan) {
-        console.log(`🧹 Removing orphaned sync item: ${item.type} with sessionId: ${sessionId}`);
+        log.info('🧹 Removing orphaned sync item: ${item.type} with sessionId: ${sessionId}');
         return false;
       }
       return true;
     });
     
     if (this.syncQueue.length !== originalLength) {
-      console.log(`✅ Cleaned up ${originalLength - this.syncQueue.length} orphaned sync items`);
+      log.info('Cleaned up ${originalLength - this.syncQueue.length} orphaned sync items');
       await this.persistSyncQueue();
     }
   }
@@ -587,13 +590,13 @@ class SupabaseService {
     // Throttle sync processing to prevent infinite loops (minimum 1 second between runs)
     const now = Date.now();
     if (this.lastSyncTime && (now - this.lastSyncTime) < 1000) {
-      console.log('⏱️ Sync queue throttled - too soon since last run');
+      log.info('⏱️ Sync queue throttled - too soon since last run');
       return;
     }
     this.lastSyncTime = now;
 
-    console.log(`🔄 Processing ${this.syncQueue.length} sync queue items`);
-    console.log('🔄 Current session mappings:', Array.from(this.sessionMapping.entries()));
+    log.info('Processing ${this.syncQueue.length} sync queue items');
+    log.info('Current session mappings:' Array.from(this.sessionMapping.entries()));
     
     // Debug: Log details of queued items
     this.syncQueue.forEach((item, index) => {
@@ -671,10 +674,10 @@ class SupabaseService {
 
         if (success) {
           processedItems.push(item.id);
-          console.log(`✅ Synced: ${item.operation}`, item.id);
+          log.info('Synced: ${item.operation}' item.id);
         }
       } catch (error) {
-        console.error(`❌ Failed to sync ${item.operation}:`, error);
+        log.error(`❌ Failed to sync ${item.operation}:`, error);
       }
     }
 
@@ -682,7 +685,7 @@ class SupabaseService {
     this.syncQueue = this.syncQueue.filter(item => !processedItems.includes(item.id));
     await this.persistSyncQueue();
 
-    console.log(`✅ Sync complete. ${processedItems.length} items processed, ${this.syncQueue.length} remaining`);
+    log.info('Sync complete. ${processedItems.length} items processed, ${this.syncQueue.length} remaining');
   }
 
   // Real-time subscriptions (for future use)
@@ -732,12 +735,12 @@ class SupabaseService {
   async clearSyncQueue() {
     this.syncQueue = [];
     await this.persistSyncQueue();
-    console.log('🗑️ Sync queue cleared');
+    log.info('Sync queue cleared');
   }
 
   // Manual trigger for sync queue processing (for debugging)
   async forceSyncQueueProcessing() {
-    console.log('🔧 Manual sync queue processing triggered');
+    log.info('� Manual sync queue processing triggered');
     await this.processSyncQueue();
     return {
       remaining: this.syncQueue.length,
@@ -747,7 +750,7 @@ class SupabaseService {
 
   async initialize() {
     try {
-      console.log('🔧 Initializing SupabaseService...');
+      log.info('� Initializing SupabaseService...');
       
       // Force clear any existing auth sessions that might cause recovery errors
       try {
@@ -762,13 +765,13 @@ class SupabaseService {
         
         if (authKeys.length > 0) {
           await AsyncStorage.multiRemove(authKeys);
-          console.log('🧹 Cleared', authKeys.length, 'auth storage keys');
+          log.info('🧹 Cleared' authKeys.length, 'auth storage keys');
         }
         
         // Note: Not clearing auth sessions to avoid interfering with app auth flow
-        console.log('🔒 Skipping auth session clear to prevent login redirect');
+        log.info('� Skipping auth session clear to prevent login redirect');
       } catch (authError) {
-        console.log('🔒 No auth sessions to clear (expected for anonymous mode)');
+        log.info('� No auth sessions to clear (expected for anonymous mode)');
       }
       
       await this.initializeDeviceId();
@@ -779,18 +782,18 @@ class SupabaseService {
         const { data: { user } } = await supabase.auth.getUser();
         
         if (user) {
-          console.log('✅ User authenticated:', user.id);
+          log.info('User authenticated:' user.id);
           // Update sessions with authenticated user_id to fix RLS
           await this.updateSessionsWithUserId(user.id);
         } else {
-          console.log('⚠️ No authenticated user - skipping anonymous access (causing SQL errors)');
+          log.info('No authenticated user - skipping anonymous access (causing SQL errors)');
           // Skip anonymous access for now to prevent SQL errors
           // TODO: Implement proper anonymous session handling when RLS policies are fixed
         }
              } catch (authError) {
-         console.log('⚠️ Auth check failed:', authError.message);
+         log.info('Auth check failed:' authError.message);
          // Skip fallback to prevent SQL errors
-         console.log('⚠️ Skipping anonymous access fallback (causing SQL errors)');
+         log.info('Skipping anonymous access fallback (causing SQL errors)');
        }
       
       await this.setupNetworkMonitoring();
@@ -799,10 +802,10 @@ class SupabaseService {
       
       // Clear massive sync queue backup due to RLS errors
       if (this.syncQueue.length > 100) {
-        console.log(`🧹 Clearing ${this.syncQueue.length} backed up sync items due to RLS errors`);
+        log.info('🧹 Clearing ${this.syncQueue.length} backed up sync items due to RLS errors');
         this.syncQueue = [];
         await this.persistSyncQueue();
-        console.log('✅ Sync queue cleared');
+        log.info('Sync queue cleared');
       }
 
       // Clean up orphaned sync items with undefined sessionIds
@@ -812,18 +815,18 @@ class SupabaseService {
         await this.processSyncQueue();
       }
       
-      console.log('✅ SupabaseService initialized successfully');
+      log.info('SupabaseService initialized successfully');
     } catch (error) {
-      console.error('❌ SupabaseService initialization failed:', error);
+      log.error('❌ SupabaseService initialization failed:', error);
       // Don't throw - let the app continue with local storage only
-      console.log('📱 Continuing with local storage only');
+      log.info('Continuing with local storage only');
     }
   }
 
   // Session mapping recovery from database
   async recoverSessionMapping(localSessionId) {
     try {
-      console.log('🔍 Attempting to recover session mapping for:', localSessionId);
+      log.info('Attempting to recover session mapping for:' localSessionId);
       
       const { data, error } = await supabase
         .from('sessions')
@@ -836,14 +839,14 @@ class SupabaseService {
         const supabaseSessionId = data.id;
         this.sessionMapping.set(localSessionId, supabaseSessionId);
         await this.persistSessionMapping();
-        console.log('✅ Recovered session mapping:', localSessionId, '→', supabaseSessionId);
+        log.info('Recovered session mapping:' localSessionId, '→', supabaseSessionId);
         return supabaseSessionId;
       } else {
-        console.error('❌ No active session found in Supabase for:', localSessionId, error);
+        log.error('❌ No active session found in Supabase for:', localSessionId, error);
         return null;
       }
     } catch (error) {
-      console.error('❌ Failed to recover session mapping:', error);
+      log.error('❌ Failed to recover session mapping:', error);
       return null;
     }
   }
@@ -851,7 +854,7 @@ class SupabaseService {
   // Clean up stuck sessions for the current user/device
   async cleanupStuckSessions() {
     try {
-      console.log('🔍 Searching for stuck active sessions...');
+      log.info('Searching for stuck active sessions...');
       
       // Query for sessions that are still active but older than 1 hour
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -875,11 +878,11 @@ class SupabaseService {
       const { data: stuckSessions, error } = await query;
       
       if (error) {
-        console.error('❌ Error querying stuck sessions:', error);
+        log.error('❌ Error querying stuck sessions:', error);
         return { cleaned: 0, error: error.message };
       }
       
-      console.log(`🎯 Found ${stuckSessions?.length || 0} stuck sessions`);
+      log.info('Found ${stuckSessions?.length || 0} stuck sessions');
       
       if (!stuckSessions || stuckSessions.length === 0) {
         return { cleaned: 0 };
@@ -899,18 +902,18 @@ class SupabaseService {
           
           if (!updateError) {
             cleanedCount++;
-            console.log(`✅ Cleaned stuck session: ${session.local_session_id}`);
+            log.info('Cleaned stuck session: ${session.local_session_id}');
           } else {
-            console.warn(`⚠️ Could not clean session ${session.local_session_id}:`, updateError.message);
+            log.warn(`⚠️ Could not clean session ${session.local_session_id}:`, updateError.message);
           }
         } catch (sessionError) {
-          console.warn(`⚠️ Error cleaning session ${session.local_session_id}:`, sessionError.message);
+          log.warn(`⚠️ Error cleaning session ${session.local_session_id}:`, sessionError.message);
         }
       }
       
       return { cleaned: cleanedCount, total: stuckSessions.length };
     } catch (error) {
-      console.error('❌ Cleanup stuck sessions failed:', error);
+      log.error('❌ Cleanup stuck sessions failed:', error);
       return { cleaned: 0, error: error.message };
     }
   }
@@ -921,7 +924,7 @@ class SupabaseService {
       // Use the restoreSessionMapping method which includes cleanup logic
       await this.restoreSessionMapping();
     } catch (error) {
-      console.error('❌ Failed to load session mapping:', error);
+      log.error('❌ Failed to load session mapping:', error);
     }
   }
 
@@ -934,12 +937,12 @@ class SupabaseService {
    */
   async syncPreSessionSurvey(localSessionId, clarityPre, energyPre) {
     try {
-      console.log(`🔄 Syncing pre-session survey for: ${localSessionId}`);
+      log.info('Syncing pre-session survey for: ${localSessionId}');
       
       // Get the Supabase session UUID
       const supabaseId = this.sessionMapping.get(localSessionId);
       if (!supabaseId) {
-        console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
+        log.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
         this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
         return { success: true, queued: true };
       }
@@ -961,15 +964,15 @@ class SupabaseService {
       });
 
       if (error) {
-        console.error('❌ Failed to sync pre-session survey:', error);
+        log.error('❌ Failed to sync pre-session survey:', error);
         this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
         return { success: false, error: error.message };
       }
 
-      console.log('✅ Pre-session survey synced to Supabase');
+      log.info('Pre-session survey synced to Supabase');
       return { success: true, data };
     } catch (error) {
-      console.error('❌ Error syncing pre-session survey:', error);
+      log.error('❌ Error syncing pre-session survey:', error);
       this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
       return { success: false, error: error.message };
     }
@@ -980,12 +983,12 @@ class SupabaseService {
    */
   async syncPostSessionSurvey(localSessionId, clarityPost, energyPost, stressPost, notesPost = null) {
     try {
-      console.log(`🔄 Syncing post-session survey for: ${localSessionId}`);
+      log.info('Syncing post-session survey for: ${localSessionId}');
       
       // Get the Supabase session UUID
       const supabaseId = this.sessionMapping.get(localSessionId);
       if (!supabaseId) {
-        console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
+        log.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
         this.queueForSync('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
         return { success: true, queued: true };
       }
@@ -1009,15 +1012,15 @@ class SupabaseService {
       });
 
       if (error) {
-        console.error('❌ Failed to sync post-session survey:', error);
+        log.error('❌ Failed to sync post-session survey:', error);
         this.queueForSync('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
         return { success: false, error: error.message };
       }
 
-      console.log('✅ Post-session survey synced to Supabase');
+      log.info('Post-session survey synced to Supabase');
       return { success: true, data };
     } catch (error) {
-      console.error('❌ Error syncing post-session survey:', error);
+      log.error('❌ Error syncing post-session survey:', error);
       this.queueForSync('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
       return { success: false, error: error.message };
     }
@@ -1028,12 +1031,12 @@ class SupabaseService {
    */
   async syncIntraSessionResponse(localSessionId, phaseNumber, clarity, energy, stress, timestamp) {
     try {
-      console.log(`🔄 Syncing intra-session response for: ${localSessionId}, phase: ${phaseNumber}`);
+      log.info('Syncing intra-session response for: ${localSessionId}, phase: ${phaseNumber}');
       
       // Get the Supabase session UUID
       const supabaseId = this.sessionMapping.get(localSessionId);
       if (!supabaseId) {
-        console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
+        log.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
         this.queueForSync('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
         return { success: true, queued: true };
       }
@@ -1058,15 +1061,15 @@ class SupabaseService {
       });
 
       if (error) {
-        console.error('❌ Failed to sync intra-session response:', error);
+        log.error('❌ Failed to sync intra-session response:', error);
         this.queueForSync('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
         return { success: false, error: error.message };
       }
 
-      console.log('✅ Intra-session response synced to Supabase');
+      log.info('Intra-session response synced to Supabase');
       return { success: true, data };
     } catch (error) {
-      console.error('❌ Error syncing intra-session response:', error);
+      log.error('❌ Error syncing intra-session response:', error);
       this.queueForSync('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
       return { success: false, error: error.message };
     }
@@ -1077,7 +1080,7 @@ class SupabaseService {
    */
   async getSessionSurveyData(sessionId) {
     try {
-      console.log(`📊 Fetching survey data from Supabase for session: ${sessionId}`);
+      log.info('Fetching survey data from Supabase for session: ${sessionId}');
       
       // Get main survey data
       const { data: surveyData, error: surveyError } = await supabase
@@ -1094,12 +1097,12 @@ class SupabaseService {
         .order('phase_number', { ascending: true });
 
       if (surveyError && surveyError.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.error('❌ Failed to fetch survey data:', surveyError);
+        log.error('❌ Failed to fetch survey data:', surveyError);
         return { success: false, error: surveyError.message };
       }
 
       if (responsesError) {
-        console.error('❌ Failed to fetch intra-session responses:', responsesError);
+        log.error('❌ Failed to fetch intra-session responses:', responsesError);
         return { success: false, error: responsesError.message };
       }
 
@@ -1129,10 +1132,10 @@ class SupabaseService {
         }
       }
 
-      console.log(`✅ Survey data fetched from Supabase for ${sessionId}`);
+      log.info('Survey data fetched from Supabase for ${sessionId}');
       return { success: true, data: result };
     } catch (error) {
-      console.error('❌ Error fetching survey data from Supabase:', error);
+      log.error('❌ Error fetching survey data from Supabase:', error);
       return { success: false, error: error.message };
     }
   }
@@ -1140,12 +1143,12 @@ class SupabaseService {
   // Update protocol configuration for an existing session
   async updateSessionProtocolConfig(localSessionId, protocolConfig) {
     try {
-      console.log(`🔄 Updating protocol config for session: ${localSessionId}`);
+      log.info('Updating protocol config for session: ${localSessionId}');
       
       // Get the Supabase session UUID
       const supabaseId = this.sessionMapping.get(localSessionId);
       if (!supabaseId) {
-        console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
+        log.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
         this.queueForSync('updateSessionProtocolConfig', { localSessionId, protocolConfig });
         return { success: true, queued: true };
       }
@@ -1167,15 +1170,15 @@ class SupabaseService {
         .select();
 
       if (error) {
-        console.error('❌ Failed to update protocol config:', error);
+        log.error('❌ Failed to update protocol config:', error);
         this.queueForSync('updateSessionProtocolConfig', { localSessionId, protocolConfig });
         return { success: false, error: error.message };
       }
 
-      console.log('✅ Protocol config updated in Supabase');
+      log.info('Protocol config updated in Supabase');
       return { success: true, data };
     } catch (error) {
-      console.error('❌ Error updating protocol config in Supabase:', error);
+      log.error('❌ Error updating protocol config in Supabase:', error);
       this.queueForSync('updateSessionProtocolConfig', { localSessionId, protocolConfig });
       return { success: false, error: error.message };
     }
@@ -1184,7 +1187,7 @@ class SupabaseService {
   // Helper method to update sessions with authenticated user_id
   async updateSessionsWithUserId(userId) {
     try {
-      console.log('🔧 Attempting to update sessions with authenticated user_id:', userId);
+      log.info('� Attempting to update sessions with authenticated user_id:' userId);
              const { data, error } = await supabase
          .from('sessions')
          .update({ user_id: userId })
@@ -1192,14 +1195,14 @@ class SupabaseService {
          .select();
 
       if (error) {
-        console.error('❌ Failed to update sessions with user_id:', error);
+        log.error('❌ Failed to update sessions with user_id:', error);
         this.queueForSync('updateSessionsWithUserId', { userId });
         return { success: false, error: error.message };
       }
-      console.log(`✅ Updated ${data.length} sessions with user_id: ${userId}`);
+      log.info('Updated ${data.length} sessions with user_id: ${userId}');
       return { success: true, data };
     } catch (error) {
-      console.error('❌ Error updating sessions with user_id:', error);
+      log.error('❌ Error updating sessions with user_id:', error);
       this.queueForSync('updateSessionsWithUserId', { userId });
       return { success: false, error: error.message };
     }
@@ -1208,7 +1211,7 @@ class SupabaseService {
   // Helper method to handle anonymous access
   async handleAnonymousAccess() {
     try {
-      console.log('🔒 Handling anonymous access for device_id:', this.deviceId);
+      log.info('� Handling anonymous access for device_id:' this.deviceId);
              const { data, error } = await supabase
          .from('sessions')
          .select('id')
@@ -1217,13 +1220,13 @@ class SupabaseService {
          .single();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.error('❌ Failed to find anonymous session for device_id:', error);
+        log.error('❌ Failed to find anonymous session for device_id:', error);
         this.queueForSync('handleAnonymousAccess', { deviceId: this.deviceId });
         return { success: false, error: error.message };
       }
 
       if (data) {
-        console.log('✅ Found existing anonymous session for device_id:', this.deviceId);
+        log.info('Found existing anonymous session for device_id:' this.deviceId);
         return { success: true, data };
       }
 
@@ -1256,15 +1259,15 @@ class SupabaseService {
         .select();
 
       if (createError) {
-        console.error('❌ Failed to create anonymous session:', createError);
+        log.error('❌ Failed to create anonymous session:', createError);
         this.queueForSync('handleAnonymousAccess', { deviceId: this.deviceId });
         return { success: false, error: createError.message };
       }
 
-      console.log('✅ Created new anonymous session for device_id:', this.deviceId);
+      log.info('Created new anonymous session for device_id:' this.deviceId);
       return { success: true, data: createdSession };
     } catch (error) {
-      console.error('❌ Error handling anonymous access:', error);
+      log.error('❌ Error handling anonymous access:', error);
       this.queueForSync('handleAnonymousAccess', { deviceId: this.deviceId });
       return { success: false, error: error.message };
     }

@@ -17,7 +17,11 @@
       "Bash(git push:*)",
       "Bash(gh auth:*)",
       "Bash(git merge:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(git branch:*)",
+      "Bash(node:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

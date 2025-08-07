@@ -1,4 +1,7 @@
 import { supabase } from '../config/supabase';
+import logger from '../utils/logger';
+
+const log = logger.createModuleLogger('AuthService');
 
 class AuthService {
   constructor() {
@@ -10,24 +13,24 @@ class AuthService {
   // Initialize auth service and check for existing session
   async initialize() {
     try {
-      console.log('🔐 Initializing AuthService...');
+      log.info('Initializing AuthService...');
       
       // Get current session
       const { data: { session }, error } = await supabase.auth.getSession();
       
       if (error) {
-        console.error('❌ Error getting session:', error.message);
+        log.error('❌ Error getting session:', error.message);
         return false;
       }
 
       this.currentUser = session?.user || null;
       this.isInitialized = true;
 
-      console.log('🔐 Auth initialized:', this.currentUser ? 'User logged in' : 'No user');
+      log.info('Auth initialized:' this.currentUser ? 'User logged in' : 'No user');
       
       // Set up auth state change listener
       supabase.auth.onAuthStateChange((event, session) => {
-        console.log('🔐 Auth state changed:', event, session?.user?.id);
+        log.info('Auth state changed:' event, session?.user?.id);
         this.currentUser = session?.user || null;
         
         // Notify all listeners
@@ -38,7 +41,7 @@ class AuthService {
 
       return true;
     } catch (error) {
-      console.error('❌ Error initializing auth:', error.message);
+      log.error('❌ Error initializing auth:', error.message);
       this.isInitialized = true; // Set as initialized even on error
       return false;
     }
@@ -47,7 +50,7 @@ class AuthService {
   // Send OTP to phone number
   async sendOTP(phoneNumber) {
     try {
-      console.log('📱 Sending OTP to:', phoneNumber);
+      log.info('Sending OTP to:' phoneNumber);
 
       // Clean and format phone number (should include country code)
       const cleanPhone = this.formatPhoneNumber(phoneNumber);
@@ -63,14 +66,14 @@ class AuthService {
       });
 
       if (error) {
-        console.error('❌ Error sending OTP:', error.message);
+        log.error('❌ Error sending OTP:', error.message);
         throw new Error(this.getReadableErrorMessage(error.message));
       }
 
-      console.log('✅ OTP sent successfully');
+      log.info('OTP sent successfully');
       return { success: true, data };
     } catch (error) {
-      console.error('❌ Send OTP failed:', error.message);
+      log.error('❌ Send OTP failed:', error.message);
       throw error;
     }
   }
@@ -78,7 +81,7 @@ class AuthService {
   // Verify OTP and sign in
   async verifyOTP(phoneNumber, otpCode) {
     try {
-      console.log('🔑 Verifying OTP for:', phoneNumber);
+      log.info('� Verifying OTP for:' phoneNumber);
 
       const cleanPhone = this.formatPhoneNumber(phoneNumber);
       
@@ -89,19 +92,19 @@ class AuthService {
       });
 
       if (error) {
-        console.error('❌ Error verifying OTP:', error.message);
+        log.error('❌ Error verifying OTP:', error.message);
         throw new Error(this.getReadableErrorMessage(error.message));
       }
 
       this.currentUser = data.user;
-      console.log('✅ User signed in:', data.user.id);
+      log.info('User signed in:' data.user.id);
 
       // Create user profile if needed
       await this.createUserProfileIfNeeded(data.user, phoneNumber);
 
       return { success: true, user: data.user, session: data.session };
     } catch (error) {
-      console.error('❌ Verify OTP failed:', error.message);
+      log.error('❌ Verify OTP failed:', error.message);
       throw error;
     }
   }
@@ -109,20 +112,20 @@ class AuthService {
   // Sign out user
   async signOut() {
     try {
-      console.log('🔐 Signing out user...');
+      log.info('Signing out user...');
       
       const { error } = await supabase.auth.signOut();
       
       if (error) {
-        console.error('❌ Error signing out:', error.message);
+        log.error('❌ Error signing out:', error.message);
         throw new Error('Failed to sign out');
       }
 
       this.currentUser = null;
-      console.log('✅ User signed out successfully');
+      log.info('User signed out successfully');
       return true;
     } catch (error) {
-      console.error('❌ Sign out failed:', error.message);
+      log.error('❌ Sign out failed:', error.message);
       throw error;
     }
   }
@@ -161,20 +164,20 @@ class AuthService {
         .single();
 
       if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "not found"
-        console.error('❌ Error checking user profile:', fetchError.message);
+        log.error('❌ Error checking user profile:', fetchError.message);
         return;
       }
 
       if (existingProfile) {
-        console.log('✅ User profile already exists');
+        log.info('User profile already exists');
         return;
       }
 
       // Don't create profile here - let onboarding flow handle it
-      console.log('✅ User authenticated - profile creation will be handled by onboarding flow');
+      log.info('User authenticated - profile creation will be handled by onboarding flow');
       
     } catch (error) {
-      console.error('❌ Error in createUserProfileIfNeeded:', error.message);
+      log.error('❌ Error in createUserProfileIfNeeded:', error.message);
     }
   }
 
@@ -232,13 +235,13 @@ class AuthService {
         .single();
 
       if (error) {
-        console.error('❌ Error fetching user profile:', error.message);
+        log.error('❌ Error fetching user profile:', error.message);
         return null;
       }
 
       return data;
     } catch (error) {
-      console.error('❌ Error in getUserProfile:', error.message);
+      log.error('❌ Error in getUserProfile:', error.message);
       return null;
     }
   }
