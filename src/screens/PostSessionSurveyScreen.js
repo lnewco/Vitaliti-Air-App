@@ -130,6 +130,7 @@ const PostSessionSurveyScreen = ({ navigation, route }) => {
                   How are you feeling after your IHHT training? This feedback helps us understand how the training affects you over time.
                 </Text>
                 <Text style={styles.requiredNote}>* Required fields</Text>
+                <Text style={styles.scrollHint}>📝 Scroll down to add optional notes</Text>
               </View>
             </View>
 
@@ -148,8 +149,9 @@ const PostSessionSurveyScreen = ({ navigation, route }) => {
             <ScrollView 
               style={styles.content}
               contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={true}
               keyboardShouldPersistTaps="handled"
+              indicatorStyle="black"
             >
               <View style={styles.surveyContent}>
                 {/* Mental Clarity Scale */}
@@ -257,6 +259,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontStyle: 'italic',
   },
+  scrollHint: {
+    fontSize: 13,
+    color: '#007bff',
+    marginTop: 6,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
   errorContainer: {
     backgroundColor: '#f8d7da',
     borderColor: '#f5c6cb',
@@ -275,7 +284,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 120, // Increased padding to ensure notes section is visible above footer
   },
   surveyContent: {
     gap: 24,

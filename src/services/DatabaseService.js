@@ -38,7 +38,28 @@ class DatabaseService {
         avg_heart_rate REAL,
         min_heart_rate INTEGER,
         max_heart_rate INTEGER,
-        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        session_type TEXT DEFAULT 'IHHT',
+        current_phase TEXT,
+        current_cycle INTEGER DEFAULT 1,
+        total_cycles INTEGER DEFAULT 3,
+        hypoxic_duration INTEGER DEFAULT 420,
+        hyperoxic_duration INTEGER DEFAULT 180,
+        default_hypoxia_level INTEGER,
+        total_duration_seconds INTEGER,
+        avg_hrv_rmssd REAL,
+        min_hrv_rmssd REAL,
+        max_hrv_rmssd REAL,
+        hrv_reading_count INTEGER DEFAULT 0,
+        best_hrv_quality TEXT,
+        planned_total_cycles INTEGER,
+        planned_hypoxic_duration INTEGER, 
+        planned_hyperoxic_duration INTEGER,
+        actual_cycles_completed INTEGER DEFAULT 0,
+        actual_hypoxic_time INTEGER DEFAULT 0,
+        actual_hyperoxic_time INTEGER DEFAULT 0,
+        completion_percentage REAL
       );
     `;
 
@@ -52,6 +73,15 @@ class DatabaseService {
         signal_strength INTEGER,
         is_valid BOOLEAN DEFAULT 1,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        user_id TEXT,
+        fio2_level INTEGER,
+        phase_type TEXT,
+        cycle_number INTEGER,
+        hrv_rmssd REAL,
+        hrv_type TEXT,
+        hrv_interval_count INTEGER,
+        hrv_data_quality TEXT,
+        hrv_confidence REAL,
         FOREIGN KEY (session_id) REFERENCES sessions (id)
       );
     `;
@@ -109,7 +139,17 @@ class DatabaseService {
     // Add new columns one by one (will silently fail if columns already exist, which is fine)
     try {
       // Check if columns exist by trying to add them individually
-      const readingsColumns = ['fio2_level INTEGER', 'phase_type TEXT', 'cycle_number INTEGER'];
+      const readingsColumns = [
+        'fio2_level INTEGER', 
+        'phase_type TEXT', 
+        'cycle_number INTEGER',
+        'user_id TEXT',
+        'hrv_rmssd REAL',
+        'hrv_type TEXT',
+        'hrv_interval_count INTEGER',
+        'hrv_data_quality TEXT',
+        'hrv_confidence REAL'
+      ];
       const sessionsColumns = [
         'session_type TEXT DEFAULT \'IHHT\'', 
         'current_phase TEXT', 
@@ -117,7 +157,21 @@ class DatabaseService {
         'total_cycles INTEGER DEFAULT 3',
         'hypoxic_duration INTEGER DEFAULT 420',
         'hyperoxic_duration INTEGER DEFAULT 180',
-        'default_hypoxia_level INTEGER'
+        'default_hypoxia_level INTEGER',
+        'updated_at INTEGER NOT NULL DEFAULT (strftime(\'%s\', \'now\'))',
+        'total_duration_seconds INTEGER',
+        'avg_hrv_rmssd REAL',
+        'min_hrv_rmssd REAL',
+        'max_hrv_rmssd REAL',
+        'hrv_reading_count INTEGER DEFAULT 0',
+        'best_hrv_quality TEXT',
+        'planned_total_cycles INTEGER',
+        'planned_hypoxic_duration INTEGER', 
+        'planned_hyperoxic_duration INTEGER',
+        'actual_cycles_completed INTEGER DEFAULT 0',
+        'actual_hypoxic_time INTEGER DEFAULT 0',
+        'actual_hyperoxic_time INTEGER DEFAULT 0',
+        'completion_percentage REAL'
       ];
       
       for (const column of readingsColumns) {
@@ -136,9 +190,9 @@ class DatabaseService {
         }
       }
       
-      console.log('✅ FiO2 tracking columns verified/added to local database');
+      console.log('✅ HRV, protocol, and FiO2 columns verified/added to local database');
     } catch (error) {
-      console.log('📝 FiO2 column setup completed with expected warnings');
+      console.log('📝 Database column setup completed with expected warnings');
     }
   }
 
@@ -147,9 +201,10 @@ class DatabaseService {
     const query = `
       INSERT INTO sessions (
         id, start_time, status, session_type, default_hypoxia_level,
-        total_cycles, hypoxic_duration, hyperoxic_duration
+        total_cycles, hypoxic_duration, hyperoxic_duration,
+        planned_total_cycles, planned_hypoxic_duration, planned_hyperoxic_duration
       )
-      VALUES (?, ?, 'active', 'IHHT', ?, ?, ?, ?)
+      VALUES (?, ?, 'active', 'IHHT', ?, ?, ?, ?, ?, ?, ?)
     `;
     const startTime = Date.now();
     
@@ -164,14 +219,65 @@ class DatabaseService {
       hypoxiaLevel, 
       totalCycles, 
       hypoxicDuration, 
-      hyperoxicDuration
+      hyperoxicDuration,
+      totalCycles,      // planned_total_cycles (same as total_cycles initially)
+      hypoxicDuration,  // planned_hypoxic_duration
+      hyperoxicDuration // planned_hyperoxic_duration
     ]);
     
-    console.log(`🎬 Session created: ${sessionId} (Cycles: ${totalCycles}, Hypoxic: ${hypoxicDuration}s, Hyperoxic: ${hyperoxicDuration}s, Hypoxia Level: ${hypoxiaLevel})`);
+    console.log(`🎬 Session created: ${sessionId} (Planned: ${totalCycles} cycles, ${hypoxicDuration}s hypoxic, ${hyperoxicDuration}s hyperoxic, Hypoxia Level: ${hypoxiaLevel})`);
     return sessionId;
   }
 
-  async endSession(sessionId) {
+  // New method to update protocol configuration for existing sessions
+  async updateSessionProtocol(sessionId, protocolConfig) {
+    const query = `
+      UPDATE sessions 
+      SET total_cycles = ?, hypoxic_duration = ?, hyperoxic_duration = ?,
+          planned_total_cycles = ?, planned_hypoxic_duration = ?, planned_hyperoxic_duration = ?,
+          updated_at = ?
+      WHERE id = ?
+    `;
+    
+    const totalCycles = protocolConfig.totalCycles;
+    const hypoxicDuration = protocolConfig.hypoxicDuration;
+    const hyperoxicDuration = protocolConfig.hyperoxicDuration;
+    
+    await this.db.executeSql(query, [
+      totalCycles, hypoxicDuration, hyperoxicDuration,
+      totalCycles, hypoxicDuration, hyperoxicDuration, // planned values
+      Date.now(),
+      sessionId
+    ]);
+    
+    console.log(`🔧 Updated protocol for session ${sessionId}: ${totalCycles} cycles, ${hypoxicDuration}s hypoxic, ${hyperoxicDuration}s hyperoxic`);
+  }
+
+  // Update actual execution stats during the session
+  async updateActualExecution(sessionId, actualData) {
+    const query = `
+      UPDATE sessions 
+      SET actual_cycles_completed = ?, 
+          actual_hypoxic_time = ?, 
+          actual_hyperoxic_time = ?,
+          completion_percentage = ?,
+          updated_at = ?
+      WHERE id = ?
+    `;
+    
+    await this.db.executeSql(query, [
+      actualData.cyclesCompleted || 0,
+      actualData.hypoxicTime || 0,
+      actualData.hyperoxicTime || 0,
+      actualData.completionPercentage || 0,
+      Date.now(),
+      sessionId
+    ]);
+    
+    console.log(`📊 Updated actual execution for session ${sessionId}: ${actualData.cyclesCompleted} cycles completed (${actualData.completionPercentage}%)`);
+  }
+
+  async endSession(sessionId, startTime = null) {
     const endTime = Date.now();
     
     try {
@@ -182,11 +288,18 @@ class DatabaseService {
       const stats = await this.getSessionStats(sessionId);
       console.log(`📊 Session stats calculated:`, stats);
       
+      // Calculate total duration if startTime provided
+      let totalDuration = null;
+      if (startTime) {
+        totalDuration = Math.floor((endTime - startTime) / 1000); // Convert to seconds
+        console.log(`⏱️ Session duration: ${totalDuration} seconds`);
+      }
+      
       const query = `
         UPDATE sessions 
         SET end_time = ?, status = 'completed',
             total_readings = ?, avg_spo2 = ?, min_spo2 = ?, max_spo2 = ?,
-            avg_heart_rate = ?, min_heart_rate = ?, max_heart_rate = ?
+            avg_heart_rate = ?, min_heart_rate = ?, max_heart_rate = ?, total_duration_seconds = ?
         WHERE id = ?
       `;
       
@@ -200,16 +313,27 @@ class DatabaseService {
         stats.avgHeartRate,
         stats.minHeartRate,
         stats.maxHeartRate,
+        totalDuration,
         sessionId
       ]);
       
-      console.log(`✅ Session ended successfully in local DB: ${sessionId}`);
+      console.log(`✅ Session ended successfully in local DB: ${sessionId} (Duration: ${totalDuration}s)`);
       return stats;
     } catch (error) {
       console.error(`❌ Failed to end session ${sessionId} in local DB:`, error);
       console.error(`❌ Error details:`, error.message, error.stack);
       throw error;
     }
+  }
+
+  async updateSessionCycle(sessionId, currentCycle) {
+    const query = `
+      UPDATE sessions 
+      SET current_cycle = ?, updated_at = ?
+      WHERE id = ?
+    `;
+    await this.db.executeSql(query, [currentCycle, Date.now(), sessionId]);
+    console.log(`📊 Updated session ${sessionId} to cycle ${currentCycle} in local DB`);
   }
 
   async getSession(sessionId) {
@@ -232,8 +356,8 @@ class DatabaseService {
   // Reading Management
   async addReading(sessionId, reading) {
     const query = `
-      INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid, fio2_level, phase_type, cycle_number)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid, fio2_level, phase_type, cycle_number, hrv_rmssd, hrv_type, hrv_interval_count, hrv_data_quality, hrv_confidence)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     // More flexible validation: valid if we have either spo2 or heart rate data
@@ -249,7 +373,12 @@ class DatabaseService {
       isValid ? 1 : 0,
       reading.fio2Level || null,
       reading.phaseType || null,
-      reading.cycleNumber || null
+      reading.cycleNumber || null,
+      reading.hrv?.rmssd || null,
+      reading.hrv?.type || null,
+      reading.hrv?.intervalCount || null,
+      reading.hrv?.dataQuality || null,
+      reading.hrv?.confidence || null
     ]);
   }
 
@@ -258,8 +387,8 @@ class DatabaseService {
     
     await this.db.transaction(async (tx) => {
       const query = `
-        INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid, fio2_level, phase_type, cycle_number)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid, fio2_level, phase_type, cycle_number, hrv_rmssd, hrv_type, hrv_interval_count, hrv_data_quality, hrv_confidence)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       for (const reading of readings) {
@@ -275,7 +404,12 @@ class DatabaseService {
           isValid ? 1 : 0,
           reading.fio2Level || null,
           reading.phaseType || null,
-          reading.cycleNumber || null
+          reading.cycleNumber || null,
+          reading.hrv?.rmssd || null,
+          reading.hrv?.type || null,
+          reading.hrv?.intervalCount || null,
+          reading.hrv?.dataQuality || null,
+          reading.hrv?.confidence || null
         ]);
       }
     });

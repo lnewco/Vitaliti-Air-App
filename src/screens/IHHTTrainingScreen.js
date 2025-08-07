@@ -303,8 +303,23 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
 
   const handleSessionComplete = (sessionData) => {
     console.log('🎯 Navigating to post-session survey for completed session');
+    console.log('📊 Session completion data received:', JSON.stringify(sessionData, null, 2));
     
-    const sessionIdForSurvey = sessionData?.id || sessionData?.sessionId;
+    const sessionIdForSurvey = sessionData?.id || sessionData?.sessionId || sessionInfo?.sessionId || sessionInfo?.currentSession?.id;
+    
+    if (!sessionIdForSurvey) {
+      console.error('❌ No sessionId found in completion data! Available keys:', Object.keys(sessionData || {}));
+      console.error('💡 Session info fallback:', { sessionId: sessionInfo?.sessionId, currentSessionId: sessionInfo?.currentSession?.id });
+      // Still navigate but alert the user
+      Alert.alert(
+        'Session Completed',
+        'Your session has ended successfully! However, there was an issue saving the survey data. Please check your session history.',
+        [{ text: 'OK', onPress: () => navigation.navigate('MainTabs', { screen: 'History' }) }]
+      );
+      return;
+    }
+    
+    console.log('✅ Using sessionId for survey:', sessionIdForSurvey);
     navigation.navigate('PostSessionSurvey', { sessionId: sessionIdForSurvey });
   };
 
@@ -345,7 +360,22 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       
     } catch (error) {
       console.error('Failed to terminate session:', error);
-      // Still navigate to history even if there's an error
+      
+      // Check if session was already ended (common case)
+      if (error.message.includes('No active session')) {
+        console.log('⚠️ Session was already ended - checking if survey navigation is in progress');
+        
+        // If we have recent session info, navigate to survey anyway
+        const recentSessionId = sessionInfo?.sessionId || sessionInfo?.currentSession?.id;
+        if (recentSessionId) {
+          console.log('✅ Found recent session ID, navigating to survey:', recentSessionId);
+          navigation.navigate('PostSessionSurvey', { sessionId: recentSessionId });
+          return;
+        }
+      }
+      
+      // Only navigate to history as last resort
+      console.log('🔄 No session ID available, navigating to history as fallback');
       navigation.navigate('MainTabs', { screen: 'History' });
     }
   };
@@ -451,8 +481,14 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       
       {/* Header */}
       <View style={[styles.header, { backgroundColor: sessionInfo.currentPhase === 'HYPOXIC' ? '#2196F3' : '#4CAF50' }]}>
-        <TouchableOpacity style={styles.backButton} onPress={handleEndSession}>
-          <Text style={styles.backButtonText}>← Back</Text>
+        <TouchableOpacity 
+          style={[styles.backButton, (!sessionStarted || !sessionInfo.isActive) && styles.backButtonDisabled]} 
+          onPress={(!sessionStarted || !sessionInfo.isActive) ? null : handleEndSession}
+          disabled={!sessionStarted || !sessionInfo.isActive}
+        >
+          <Text style={[styles.backButtonText, (!sessionStarted || !sessionInfo.isActive) && styles.backButtonTextDisabled]}>
+            {(!sessionStarted || !sessionInfo.isActive) ? '← Session Ended' : '← Back'}
+          </Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>IHHT Training Session</Text>
         <TouchableOpacity style={styles.pauseButton} onPress={sessionInfo.isPaused ? resumeSession : pauseSession}>
@@ -560,8 +596,14 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       <View style={styles.fixedControls}>
         {/* Primary Controls */}
         <View style={styles.controls}>
-          <TouchableOpacity style={styles.endButton} onPress={handleEndSession}>
-            <Text style={styles.endButtonText}>End Session</Text>
+          <TouchableOpacity 
+            style={[styles.endButton, (!sessionStarted || !sessionInfo.isActive) && styles.endButtonDisabled]} 
+            onPress={(!sessionStarted || !sessionInfo.isActive) ? null : handleEndSession}
+            disabled={!sessionStarted || !sessionInfo.isActive}
+          >
+            <Text style={[styles.endButtonText, (!sessionStarted || !sessionInfo.isActive) && styles.endButtonTextDisabled]}>
+              {(!sessionStarted || !sessionInfo.isActive) ? 'Session Ended' : 'End Session'}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.pauseControlButton, sessionInfo.isPaused ? styles.resumeButton : styles.pauseControlButtonActive]} 
@@ -593,8 +635,14 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
             <TouchableOpacity style={styles.resumeButton} onPress={resumeSession}>
               <Text style={styles.resumeButtonText}>Resume Training</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.endSessionButton} onPress={handleEndSession}>
-              <Text style={styles.endSessionButtonText}>End Session</Text>
+            <TouchableOpacity 
+              style={[styles.endSessionButton, (!sessionStarted || !sessionInfo.isActive) && styles.endSessionButtonDisabled]} 
+              onPress={(!sessionStarted || !sessionInfo.isActive) ? null : handleEndSession}
+              disabled={!sessionStarted || !sessionInfo.isActive}
+            >
+              <Text style={[styles.endSessionButtonText, (!sessionStarted || !sessionInfo.isActive) && styles.endSessionButtonTextDisabled]}>
+                {(!sessionStarted || !sessionInfo.isActive) ? 'Session Ended' : 'End Session'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -984,11 +1032,31 @@ const styles = StyleSheet.create({
      fontSize: 14,
      color: '#666666',
    },
-   sliderCurrentValue: {
-     fontSize: 18,
-     fontWeight: 'bold',
-     color: '#333333',
-   },
+     sliderCurrentValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333333',
+  },
+  // Disabled button styles
+  backButtonDisabled: {
+    opacity: 0.5,
+  },
+  backButtonTextDisabled: {
+    color: '#999999',
+  },
+  endButtonDisabled: {
+    backgroundColor: '#F5F5F5',
+    opacity: 0.6,
+  },
+  endButtonTextDisabled: {
+    color: '#999999',
+  },
+  endSessionButtonDisabled: {
+    opacity: 0.5,
+  },
+  endSessionButtonTextDisabled: {
+    color: '#999999',
+  },
 });
 
 export default IHHTTrainingScreen; 

@@ -142,6 +142,10 @@ class SupabaseService {
         total_cycles: sessionData.protocolConfig?.totalCycles || 3,
         hypoxic_duration: sessionData.protocolConfig?.hypoxicDuration || 420, // 7 minutes
         hyperoxic_duration: sessionData.protocolConfig?.hyperoxicDuration || 180, // 3 minutes
+        // Planned protocol (same as total initially)
+        planned_total_cycles: sessionData.protocolConfig?.totalCycles || 3,
+        planned_hypoxic_duration: sessionData.protocolConfig?.hypoxicDuration || 420,
+        planned_hyperoxic_duration: sessionData.protocolConfig?.hyperoxicDuration || 180,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         // Store the local session ID as metadata
@@ -190,7 +194,7 @@ class SupabaseService {
     }
   }
 
-  async endSession(sessionId, stats) {
+  async endSession(sessionId, stats, startTime = null) {
     try {
       // Get the Supabase UUID for this local session ID
       let supabaseSessionId = this.sessionMapping.get(sessionId);
@@ -233,6 +237,12 @@ class SupabaseService {
         return null;
       }
 
+      // Calculate total duration if startTime provided
+      let totalDuration = null;
+      if (startTime) {
+        totalDuration = Math.floor((Date.now() - startTime) / 1000); // Convert to seconds
+      }
+
       const updates = {
         end_time: new Date().toISOString(),
         status: 'completed',
@@ -243,6 +253,7 @@ class SupabaseService {
         avg_heart_rate: stats.avgHeartRate,
         min_heart_rate: stats.minHeartRate,
         max_heart_rate: stats.maxHeartRate,
+        total_duration_seconds: totalDuration,
         updated_at: new Date().toISOString()
       };
 
@@ -265,6 +276,41 @@ class SupabaseService {
       console.error('❌ Supabase error details:', error.message, error.stack);
       console.error('❌ Session ID:', sessionId, 'Stats:', stats);
       this.queueForSync('endSession', { sessionId, stats });
+      return null;
+    }
+  }
+
+  async updateSessionCycle(sessionId, currentCycle) {
+    try {
+      // Get the Supabase UUID for this local session ID
+      let supabaseSessionId = this.sessionMapping.get(sessionId);
+      
+      if (!supabaseSessionId) {
+        console.warn('⚠️ No Supabase session mapping found for cycle update:', sessionId);
+        this.queueForSync('updateSessionCycle', { sessionId, currentCycle });
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from('sessions')
+        .update({ 
+          current_cycle: currentCycle,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', supabaseSessionId)
+        .select();
+
+      if (error) {
+        console.error('❌ Supabase cycle update failed:', error);
+        this.queueForSync('updateSessionCycle', { sessionId, currentCycle });
+        return null;
+      }
+
+      console.log(`☁️ Updated session ${sessionId} to cycle ${currentCycle} in Supabase`);
+      return data[0];
+    } catch (error) {
+      console.error('❌ Error updating session cycle in Supabase:', error);
+      this.queueForSync('updateSessionCycle', { sessionId, currentCycle });
       return null;
     }
   }
@@ -292,7 +338,7 @@ class SupabaseService {
       // Get current authenticated user
       const currentUser = authService.getCurrentUser();
       
-      // Use atomic function for single reading insert
+      // Use atomic function for single reading insert with HRV data
       const { data, error } = await supabase.rpc('insert_single_reading_with_device_id', {
         device_id_value: deviceIdToUse,
         p_session_id: supabaseSessionId,
@@ -306,6 +352,11 @@ class SupabaseService {
         p_fio2_level: reading.fio2Level || null,
         p_phase_type: reading.phaseType || null,
         p_cycle_number: reading.cycleNumber || null,
+        p_hrv_rmssd: reading.hrv?.rmssd || null,
+        p_hrv_type: reading.hrv?.type || null,
+        p_hrv_interval_count: reading.hrv?.intervalCount || null,
+        p_hrv_data_quality: reading.hrv?.dataQuality || null,
+        p_hrv_confidence: reading.hrv?.confidence || null,
         p_created_at: new Date().toISOString()
       });
 
@@ -361,6 +412,11 @@ class SupabaseService {
         fio2_level: reading.fio2Level || null,
         phase_type: reading.phaseType || null,
         cycle_number: reading.cycleNumber || null,
+        hrv_rmssd: reading.hrv?.rmssd || null,
+        hrv_type: reading.hrv?.type || null,
+        hrv_interval_count: reading.hrv?.intervalCount || null,
+        hrv_data_quality: reading.hrv?.dataQuality || null,
+        hrv_confidence: reading.hrv?.confidence || null,
         created_at: new Date().toISOString()
       }));
 
@@ -504,6 +560,27 @@ class SupabaseService {
     }
   }
 
+  async cleanupOrphanedSyncItems() {
+    const originalLength = this.syncQueue.length;
+    
+    // Remove items where sessionId is undefined, null, or 'unknown'
+    this.syncQueue = this.syncQueue.filter(item => {
+      const sessionId = item.data?.sessionId || item.data?.localSessionId;
+      const isOrphan = !sessionId || sessionId === 'undefined' || sessionId === 'unknown';
+      
+      if (isOrphan) {
+        console.log(`🧹 Removing orphaned sync item: ${item.type} with sessionId: ${sessionId}`);
+        return false;
+      }
+      return true;
+    });
+    
+    if (this.syncQueue.length !== originalLength) {
+      console.log(`✅ Cleaned up ${originalLength - this.syncQueue.length} orphaned sync items`);
+      await this.persistSyncQueue();
+    }
+  }
+
   async processSyncQueue() {
     if (!this.isOnline || this.syncQueue.length === 0) return;
 
@@ -535,6 +612,21 @@ class SupabaseService {
             break;
           case 'endSession':
             success = await this.endSession(item.data.sessionId, item.data.stats) !== null;
+            break;
+          case 'updateSessionCycle':
+            success = await this.updateSessionCycle(item.data.sessionId, item.data.currentCycle) !== null;
+            break;
+          case 'updateSessionProtocolConfig':
+            const protocolResult = await this.updateSessionProtocolConfig(item.data.localSessionId, item.data.protocolConfig);
+            success = protocolResult.success && !protocolResult.queued;
+            break;
+          case 'updateSessionsWithUserId':
+            const userIdResult = await this.updateSessionsWithUserId(item.data.userId);
+            success = userIdResult.success;
+            break;
+          case 'handleAnonymousAccess':
+            const anonymousResult = await this.handleAnonymousAccess();
+            success = anonymousResult.success;
             break;
           case 'addReading':
             success = await this.addReading(item.data) !== null;
@@ -680,9 +772,41 @@ class SupabaseService {
       }
       
       await this.initializeDeviceId();
+      
+      // Fix RLS issues by ensuring proper authentication
+      try {
+        // Get current auth state
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          console.log('✅ User authenticated:', user.id);
+          // Update sessions with authenticated user_id to fix RLS
+          await this.updateSessionsWithUserId(user.id);
+        } else {
+          console.log('⚠️ No authenticated user - skipping anonymous access (causing SQL errors)');
+          // Skip anonymous access for now to prevent SQL errors
+          // TODO: Implement proper anonymous session handling when RLS policies are fixed
+        }
+             } catch (authError) {
+         console.log('⚠️ Auth check failed:', authError.message);
+         // Skip fallback to prevent SQL errors
+         console.log('⚠️ Skipping anonymous access fallback (causing SQL errors)');
+       }
+      
       await this.setupNetworkMonitoring();
       await this.loadSyncQueue();
       await this.loadSessionMapping();
+      
+      // Clear massive sync queue backup due to RLS errors
+      if (this.syncQueue.length > 100) {
+        console.log(`🧹 Clearing ${this.syncQueue.length} backed up sync items due to RLS errors`);
+        this.syncQueue = [];
+        await this.persistSyncQueue();
+        console.log('✅ Sync queue cleared');
+      }
+
+      // Clean up orphaned sync items with undefined sessionIds
+      await this.cleanupOrphanedSyncItems();
       
       if (this.isOnline && this.syncQueue.length > 0) {
         await this.processSyncQueue();
@@ -1009,6 +1133,139 @@ class SupabaseService {
       return { success: true, data: result };
     } catch (error) {
       console.error('❌ Error fetching survey data from Supabase:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Update protocol configuration for an existing session
+  async updateSessionProtocolConfig(localSessionId, protocolConfig) {
+    try {
+      console.log(`🔄 Updating protocol config for session: ${localSessionId}`);
+      
+      // Get the Supabase session UUID
+      const supabaseId = this.sessionMapping.get(localSessionId);
+      if (!supabaseId) {
+        console.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
+        this.queueForSync('updateSessionProtocolConfig', { localSessionId, protocolConfig });
+        return { success: true, queued: true };
+      }
+
+             const updates = {
+         total_cycles: protocolConfig.totalCycles || 3,
+         hypoxic_duration: protocolConfig.hypoxicDuration || 420, // 7 minutes
+         hyperoxic_duration: protocolConfig.hyperoxicDuration || 180, // 3 minutes
+         planned_total_cycles: protocolConfig.totalCycles || 3,
+         planned_hypoxic_duration: protocolConfig.hypoxicDuration || 420,
+         planned_hyperoxic_duration: protocolConfig.hyperoxicDuration || 180,
+         updated_at: new Date().toISOString()
+       };
+
+      const { data, error } = await supabase
+        .from('sessions')
+        .update(updates)
+        .eq('id', supabaseId)
+        .select();
+
+      if (error) {
+        console.error('❌ Failed to update protocol config:', error);
+        this.queueForSync('updateSessionProtocolConfig', { localSessionId, protocolConfig });
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Protocol config updated in Supabase');
+      return { success: true, data };
+    } catch (error) {
+      console.error('❌ Error updating protocol config in Supabase:', error);
+      this.queueForSync('updateSessionProtocolConfig', { localSessionId, protocolConfig });
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Helper method to update sessions with authenticated user_id
+  async updateSessionsWithUserId(userId) {
+    try {
+      console.log('🔧 Attempting to update sessions with authenticated user_id:', userId);
+             const { data, error } = await supabase
+         .from('sessions')
+         .update({ user_id: userId })
+         .is('user_id', null) // Only update sessions that are currently anonymous
+         .select();
+
+      if (error) {
+        console.error('❌ Failed to update sessions with user_id:', error);
+        this.queueForSync('updateSessionsWithUserId', { userId });
+        return { success: false, error: error.message };
+      }
+      console.log(`✅ Updated ${data.length} sessions with user_id: ${userId}`);
+      return { success: true, data };
+    } catch (error) {
+      console.error('❌ Error updating sessions with user_id:', error);
+      this.queueForSync('updateSessionsWithUserId', { userId });
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Helper method to handle anonymous access
+  async handleAnonymousAccess() {
+    try {
+      console.log('🔒 Handling anonymous access for device_id:', this.deviceId);
+             const { data, error } = await supabase
+         .from('sessions')
+         .select('id')
+         .eq('device_id', this.deviceId)
+         .is('user_id', null) // Only select anonymous sessions
+         .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        console.error('❌ Failed to find anonymous session for device_id:', error);
+        this.queueForSync('handleAnonymousAccess', { deviceId: this.deviceId });
+        return { success: false, error: error.message };
+      }
+
+      if (data) {
+        console.log('✅ Found existing anonymous session for device_id:', this.deviceId);
+        return { success: true, data };
+      }
+
+      // If no anonymous session, create one
+      const newSession = {
+        device_id: this.deviceId,
+        user_id: null, // Explicitly set to null for anonymous access
+        start_time: new Date().toISOString(),
+        status: 'active',
+        total_readings: 0,
+        session_type: 'IHHT',
+        default_hypoxia_level: null, // No default for anonymous
+        // Protocol configuration
+        total_cycles: 3,
+        hypoxic_duration: 420, // 7 minutes
+        hyperoxic_duration: 180, // 3 minutes
+        // Planned protocol (same as total initially)
+        planned_total_cycles: 3,
+        planned_hypoxic_duration: 420,
+        planned_hyperoxic_duration: 180,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        // Store the local session ID as metadata
+        local_session_id: null // No local ID for anonymous sessions
+      };
+
+      const { data: createdSession, error: createError } = await supabase
+        .from('sessions')
+        .insert([newSession])
+        .select();
+
+      if (createError) {
+        console.error('❌ Failed to create anonymous session:', createError);
+        this.queueForSync('handleAnonymousAccess', { deviceId: this.deviceId });
+        return { success: false, error: createError.message };
+      }
+
+      console.log('✅ Created new anonymous session for device_id:', this.deviceId);
+      return { success: true, data: createdSession };
+    } catch (error) {
+      console.error('❌ Error handling anonymous access:', error);
+      this.queueForSync('handleAnonymousAccess', { deviceId: this.deviceId });
       return { success: false, error: error.message };
     }
   }

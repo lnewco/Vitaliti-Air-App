@@ -41,9 +41,9 @@ class EnhancedSessionManager {
     
     // Protocol configuration (defaults)
     this.protocolConfig = {
-      totalCycles: 5,
-      hypoxicDuration: 300,    // 5 minutes in seconds
-      hyperoxicDuration: 120   // 2 minutes in seconds
+      totalCycles: 3,
+      hypoxicDuration: 420,    // 7 minutes in seconds
+      hyperoxicDuration: 180   // 3 minutes in seconds
     };
     
     // Live Activity state
@@ -238,6 +238,7 @@ class EnhancedSessionManager {
         });
       } else {
         console.log('📋 Using existing session - skipping database creation');
+        await this.updateSessionProtocol(sessionId);
       }
 
       // Set session timing
@@ -446,6 +447,9 @@ class EnhancedSessionManager {
       this.currentPhase = 'HYPOXIC';
       this.phaseTimeRemaining = this.protocolConfig.hypoxicDuration;
       this.phaseStartTime = Date.now();
+      
+      // Update database with new cycle
+      await this.updateSessionCycle();
       
       console.log(`🔄 Advanced to Cycle ${this.currentCycle} - HYPOXIC phase`);
     }
@@ -686,7 +690,7 @@ class EnhancedSessionManager {
       }
       
       // Recalculate stats to ensure we have the latest data
-      const result = await DatabaseService.endSession(sessionId);
+      const result = await DatabaseService.endSession(sessionId, this.currentSession?.startTime || this.startTime);
       console.log('✅ Step 7: Local database updated with final statistics');
       return result;
     }, 10000, 'Database end');
@@ -729,7 +733,7 @@ class EnhancedSessionManager {
         ...stats,
         totalCycles: this.currentCycle,
         completedPhases: this.currentPhase === 'COMPLETED' ? this.totalCycles * 2 : (this.currentCycle - 1) * 2 + (this.currentPhase === 'HYPEROXIC' ? 1 : 0)
-      });
+      }, this.currentSession?.startTime || this.startTime);
       
       if (result) {
         console.log('✅ Step 7: Supabase updated successfully');
@@ -739,20 +743,8 @@ class EnhancedSessionManager {
       }
     }, 10000, 'Supabase end');
 
-    // Step 8: Reset state (immediate, can't fail)
-    console.log('🔄 Step 8: Resetting session state...');
-    this.resetSessionState();
-    console.log('✅ Step 8: State reset');
-
-    // Step 9: Clear storage (with timeout)
-    await withTimeout(async () => {
-      console.log('🔄 Step 9: Clearing AsyncStorage...');
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      await AsyncStorage.removeItem('activeSession');
-      console.log('✅ Step 9: Storage cleared');
-    }, 2000, 'Storage clear');
-
-    // Always complete successfully
+    // Step 8: Create completion object BEFORE resetting state
+    console.log('🔄 Step 8: Creating session completion object...');
     const completedSession = {
       ...this.currentSession,
       endTime: Date.now(),
@@ -762,6 +754,20 @@ class EnhancedSessionManager {
       currentPhase: 'COMPLETED',  // Always set to COMPLETED
       finalCycle: finalCycle  // Add this for clarity
     };
+    console.log('✅ Step 8: Session completion object created');
+
+    // Step 9: Reset state (immediate, can't fail)
+    console.log('🔄 Step 9: Resetting session state...');
+    this.resetSessionState();
+    console.log('✅ Step 9: State reset');
+
+    // Step 10: Clear storage (with timeout)
+    await withTimeout(async () => {
+      console.log('🔄 Step 10: Clearing AsyncStorage...');
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      await AsyncStorage.removeItem('activeSession');
+      console.log('✅ Step 10: Storage cleared');
+    }, 2000, 'Storage clear');
 
     // Session summary
     console.log('\n' + '='.repeat(60));
@@ -855,6 +861,37 @@ class EnhancedSessionManager {
     } catch (error) {
       console.error('❌ Recovery attempt failed:', error);
       // Will retry on next app launch
+    }
+  }
+
+  // Update current cycle in database
+  async updateSessionCycle() {
+    if (!this.currentSession?.id) return;
+
+    try {
+      // Update local database
+      await DatabaseService.updateSessionCycle(this.currentSession.id, this.currentCycle);
+      
+      // Update Supabase
+      await SupabaseService.updateSessionCycle(this.currentSession.id, this.currentCycle);
+      
+      console.log(`📊 Updated session cycle to ${this.currentCycle} in database`);
+    } catch (error) {
+      console.error('❌ Failed to update session cycle:', error);
+    }
+  }
+
+  // Update protocol for an existing session
+  async updateSessionProtocol(sessionId) {
+    if (!DatabaseService.db) {
+      await DatabaseService.init();
+    }
+    try {
+      await DatabaseService.updateSessionProtocol(sessionId, this.protocolConfig);
+      await SupabaseService.updateSessionProtocolConfig(sessionId, this.protocolConfig);
+      console.log(`📊 Updated protocol for session ${sessionId}`);
+    } catch (error) {
+      console.error('❌ Failed to update session protocol:', error);
     }
   }
 
@@ -1201,8 +1238,8 @@ class EnhancedSessionManager {
                 await DatabaseService.init();
               }
               
-              const stats = await DatabaseService.endSession(sessionData.id);
-              await SupabaseService.endSession(sessionData.id, stats);
+              const stats = await DatabaseService.endSession(sessionData.id, sessionData.startTime);
+              await SupabaseService.endSession(sessionData.id, stats, sessionData.startTime);
               console.log('✅ Cleaned up stuck session in databases');
             } catch (dbError) {
               console.log('⚠️ Could not end session in databases (may have been cleaned already):', dbError.message);
