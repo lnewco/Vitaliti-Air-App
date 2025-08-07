@@ -536,12 +536,24 @@ class EnhancedSessionManager {
 
   async completeSession() {
     console.log('🏁 IHHT session completed!');
+    console.log(`📊 Completing session with cycle ${this.currentCycle}, phase ${this.currentPhase}`);
     
     // Mark as completed but preserve the cycle count
     const finalCycle = this.currentCycle;
     this.currentPhase = 'COMPLETED';
     this.phaseTimeRemaining = 0;
     this.currentCycle = finalCycle; // Preserve the cycle count
+    
+    // IMPORTANT: Update the database with the final cycle count before stopping
+    if (this.currentSession?.id) {
+      try {
+        await DatabaseService.updateSessionCycle(this.currentSession.id, finalCycle);
+        await SupabaseService.updateSessionCycle(this.currentSession.id, finalCycle);
+        console.log(`✅ Updated final cycle count to ${finalCycle} in databases`);
+      } catch (error) {
+        console.error('⚠️ Failed to update final cycle count:', error);
+      }
+    }
     
     // Update Live Activity
     await this.updateLiveActivity();
@@ -981,9 +993,14 @@ class EnhancedSessionManager {
       phase: this.currentPhase,
       cycle: this.currentCycle,
       fio2Level: this.currentHypoxiaLevel,
-      phaseType: this.currentPhase,
-      cycleNumber: this.currentCycle
+      phaseType: this.currentPhase,  // Critical for graph display
+      cycleNumber: this.currentCycle  // Critical for graph display
     };
+    
+    // Debug log to ensure phase data is being recorded
+    if (this.readingBuffer.length % 10 === 0) {
+      console.log(`📊 Reading #${this.readingBuffer.length + 1}: Phase=${this.currentPhase}, Cycle=${this.currentCycle}`);
+    }
 
     // Only log first reading and major milestones to reduce noise
     if (this.currentSession.readingCount === 0) {
