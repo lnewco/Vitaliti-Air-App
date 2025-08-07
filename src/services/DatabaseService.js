@@ -1,4 +1,7 @@
 import SQLite from 'react-native-sqlite-storage';
+import logger from '../utils/logger';
+
+const log = logger.createModuleLogger('DatabaseService');
 
 // Enable promise-based API
 SQLite.enablePromise(true);
@@ -10,16 +13,16 @@ class DatabaseService {
 
   async init() {
     try {
-      console.log('🗄️ Initializing database...');
+      log.info('�️ Initializing database...');
       this.db = await SQLite.openDatabase({
         name: 'vitaliti.db',
         location: 'default',
       });
       
       await this.createTables();
-      console.log('✅ Database initialized successfully');
+      log.info('Database initialized successfully');
     } catch (error) {
-      console.error('❌ Database initialization failed:', error);
+      log.error('❌ Database initialization failed:', error);
       throw error;
     }
   }
@@ -190,9 +193,9 @@ class DatabaseService {
         }
       }
       
-      console.log('✅ HRV, protocol, and FiO2 columns verified/added to local database');
+      log.info('HRV, protocol, and FiO2 columns verified/added to local database');
     } catch (error) {
-      console.log('📝 Database column setup completed with expected warnings');
+      log.info('Database column setup completed with expected warnings');
     }
   }
 
@@ -225,7 +228,7 @@ class DatabaseService {
       hyperoxicDuration // planned_hyperoxic_duration
     ]);
     
-    console.log(`🎬 Session created: ${sessionId} (Planned: ${totalCycles} cycles, ${hypoxicDuration}s hypoxic, ${hyperoxicDuration}s hyperoxic, Hypoxia Level: ${hypoxiaLevel})`);
+    log.info('Session created: ${sessionId} (Planned: ${totalCycles} cycles, ${hypoxicDuration}s hypoxic, ${hyperoxicDuration}s hyperoxic, Hypoxia Level: ${hypoxiaLevel})');
     return sessionId;
   }
 
@@ -250,7 +253,7 @@ class DatabaseService {
       sessionId
     ]);
     
-    console.log(`🔧 Updated protocol for session ${sessionId}: ${totalCycles} cycles, ${hypoxicDuration}s hypoxic, ${hyperoxicDuration}s hyperoxic`);
+    log.info('� Updated protocol for session ${sessionId}: ${totalCycles} cycles, ${hypoxicDuration}s hypoxic, ${hyperoxicDuration}s hyperoxic');
   }
 
   // Update actual execution stats during the session
@@ -274,25 +277,25 @@ class DatabaseService {
       sessionId
     ]);
     
-    console.log(`📊 Updated actual execution for session ${sessionId}: ${actualData.cyclesCompleted} cycles completed (${actualData.completionPercentage}%)`);
+    log.info('Updated actual execution for session ${sessionId}: ${actualData.cyclesCompleted} cycles completed (${actualData.completionPercentage}%)');
   }
 
   async endSession(sessionId, startTime = null) {
     const endTime = Date.now();
     
     try {
-      console.log(`🏁 Ending session in local database: ${sessionId}`);
+      log.info('Ending session in local database: ${sessionId}');
       
       // Calculate session statistics
-      console.log(`📊 Calculating stats for session: ${sessionId}`);
+      log.info('Calculating stats for session: ${sessionId}');
       const stats = await this.getSessionStats(sessionId);
-      console.log(`📊 Session stats calculated:`, stats);
+      log.info('Session stats calculated:' stats);
       
       // Calculate total duration if startTime provided
       let totalDuration = null;
       if (startTime) {
         totalDuration = Math.floor((endTime - startTime) / 1000); // Convert to seconds
-        console.log(`⏱️ Session duration: ${totalDuration} seconds`);
+        log.info('⏱️ Session duration: ${totalDuration} seconds');
       }
       
       const query = `
@@ -303,7 +306,7 @@ class DatabaseService {
         WHERE id = ?
       `;
       
-      console.log(`🔄 Executing update query for session: ${sessionId}`);
+      log.info('Executing update query for session: ${sessionId}');
       await this.db.executeSql(query, [
         endTime,
         stats.totalReadings,
@@ -317,11 +320,11 @@ class DatabaseService {
         sessionId
       ]);
       
-      console.log(`✅ Session ended successfully in local DB: ${sessionId} (Duration: ${totalDuration}s)`);
+      log.info('Session ended successfully in local DB: ${sessionId} (Duration: ${totalDuration}s)');
       return stats;
     } catch (error) {
-      console.error(`❌ Failed to end session ${sessionId} in local DB:`, error);
-      console.error(`❌ Error details:`, error.message, error.stack);
+      log.error(`❌ Failed to end session ${sessionId} in local DB:`, error);
+      log.error(`❌ Error details:`, error.message, error.stack);
       throw error;
     }
   }
@@ -333,7 +336,7 @@ class DatabaseService {
       WHERE id = ?
     `;
     await this.db.executeSql(query, [currentCycle, Date.now(), sessionId]);
-    console.log(`📊 Updated session ${sessionId} to cycle ${currentCycle} in local DB`);
+    log.info('Updated session ${sessionId} to cycle ${currentCycle} in local DB');
   }
 
   async getSession(sessionId) {
@@ -414,7 +417,7 @@ class DatabaseService {
       }
     });
     
-    console.log(`📦 Batch inserted ${readings.length} readings with FiO2 data`);
+    log.info('� Batch inserted ${readings.length} readings with FiO2 data');
   }
 
   async getSessionReadings(sessionId, validOnly = false) {
@@ -452,7 +455,7 @@ class DatabaseService {
     const stats = result.rows.item(0);
     
     // Log for debugging
-    console.log('📊 Session stats calculated:', {
+    log.info('Session stats calculated:' {
       sessionId,
       totalReadings: stats.totalReadings,
       validSpO2Readings: stats.validSpO2Readings,
@@ -466,7 +469,7 @@ class DatabaseService {
 
   // Data Management
   async reprocessSessionStats(sessionId) {
-    console.log(`🔄 Reprocessing stats for session: ${sessionId}`);
+    log.info('Reprocessing stats for session: ${sessionId}');
     
     // Recalculate statistics with new logic
     const stats = await this.getSessionStats(sessionId);
@@ -489,12 +492,12 @@ class DatabaseService {
       sessionId
     ]);
     
-    console.log(`✅ Reprocessed stats for session ${sessionId}:`, stats);
+    log.info('Reprocessed stats for session ${sessionId}:' stats);
     return stats;
   }
 
   async reprocessAllNullStats() {
-    console.log('🔄 Reprocessing all sessions with null statistics...');
+    log.info('Reprocessing all sessions with null statistics...');
     
     // Find sessions with null stats
     const query = `
@@ -511,7 +514,7 @@ class DatabaseService {
       sessionsToReprocess.push(result.rows.item(i).id);
     }
     
-    console.log(`📋 Found ${sessionsToReprocess.length} sessions to reprocess`);
+    log.info('� Found ${sessionsToReprocess.length} sessions to reprocess');
     
     const results = [];
     for (const sessionId of sessionsToReprocess) {
@@ -519,13 +522,13 @@ class DatabaseService {
         const stats = await this.reprocessSessionStats(sessionId);
         results.push({ sessionId, success: true, stats });
       } catch (error) {
-        console.error(`❌ Failed to reprocess session ${sessionId}:`, error);
+        log.error(`❌ Failed to reprocess session ${sessionId}:`, error);
         results.push({ sessionId, success: false, error: error.message });
       }
     }
     
     const successful = results.filter(r => r.success).length;
-    console.log(`✅ Reprocessed ${successful}/${sessionsToReprocess.length} sessions successfully`);
+    log.info('Reprocessed ${successful}/${sessionsToReprocess.length} sessions successfully');
     
     return results;
   }
@@ -543,13 +546,13 @@ class DatabaseService {
     
     // This will cascade delete readings due to foreign key
     await this.db.executeSql(deleteQuery);
-    console.log('🧹 Cleaned up old sessions');
+    log.info('🧹 Cleaned up old sessions');
   }
 
   async clearAllData() {
     await this.db.executeSql('DELETE FROM readings');
     await this.db.executeSql('DELETE FROM sessions');
-    console.log('🗑️ Cleared all data');
+    log.info('Cleared all data');
   }
 
   async getStorageInfo() {
@@ -643,7 +646,7 @@ class DatabaseService {
         throw new Error('Survey values must be integers between 1 and 5');
       }
 
-      console.log(`📝 Saving pre-session survey for: ${sessionId}`);
+      log.info('Saving pre-session survey for: ${sessionId}');
       
       // Use INSERT OR IGNORE followed by UPDATE to preserve existing data
       const insertQuery = `
@@ -660,11 +663,11 @@ class DatabaseService {
       await this.db.executeSql(insertQuery, [sessionId, clarityPre, energyPre]);
       await this.db.executeSql(updateQuery, [clarityPre, energyPre, sessionId]);
       
-      console.log(`✅ Pre-session survey saved: clarity=${clarityPre}, energy=${energyPre}`);
+      log.info('Pre-session survey saved: clarity=${clarityPre}, energy=${energyPre}');
       
       return { success: true };
     } catch (error) {
-      console.error('❌ Failed to save pre-session survey:', error);
+      log.error('❌ Failed to save pre-session survey:', error);
       throw error;
     }
   }
@@ -679,7 +682,7 @@ class DatabaseService {
         throw new Error('Survey values must be integers between 1 and 5');
       }
 
-      console.log(`📝 Saving post-session survey for: ${sessionId}`);
+      log.info('Saving post-session survey for: ${sessionId}');
       
       // Use INSERT OR IGNORE followed by UPDATE to preserve existing data
       const insertQuery = `
@@ -696,11 +699,11 @@ class DatabaseService {
       await this.db.executeSql(insertQuery, [sessionId, clarityPost, energyPost, stressPost, notesPost]);
       await this.db.executeSql(updateQuery, [clarityPost, energyPost, stressPost, notesPost, sessionId]);
       
-      console.log(`✅ Post-session survey saved: clarity=${clarityPost}, energy=${energyPost}, stress=${stressPost}`);
+      log.info('Post-session survey saved: clarity=${clarityPost}, energy=${energyPost}, stress=${stressPost}');
       
       return { success: true };
     } catch (error) {
-      console.error('❌ Failed to save post-session survey:', error);
+      log.error('❌ Failed to save post-session survey:', error);
       throw error;
     }
   }
@@ -715,7 +718,7 @@ class DatabaseService {
         throw new Error('Survey values must be integers between 1 and 5');
       }
 
-      console.log(`📝 Saving intra-session response for: ${sessionId}, phase: ${phaseNumber}`);
+      log.info('Saving intra-session response for: ${sessionId}, phase: ${phaseNumber}');
       
       const query = `
         INSERT OR REPLACE INTO intra_session_responses 
@@ -724,11 +727,11 @@ class DatabaseService {
       `;
       
       await this.db.executeSql(query, [sessionId, phaseNumber, clarity, energy, stress, timestamp]);
-      console.log(`✅ Intra-session response saved: phase=${phaseNumber}, clarity=${clarity}, energy=${energy}, stress=${stress}`);
+      log.info('Intra-session response saved: phase=${phaseNumber}, clarity=${clarity}, energy=${energy}, stress=${stress}');
       
       return { success: true };
     } catch (error) {
-      console.error('❌ Failed to save intra-session response:', error);
+      log.error('❌ Failed to save intra-session response:', error);
       throw error;
     }
   }
@@ -738,7 +741,7 @@ class DatabaseService {
    */
   async getSessionSurveyData(sessionId) {
     try {
-      console.log(`📊 Fetching survey data for session: ${sessionId}`);
+      log.info('Fetching survey data for session: ${sessionId}');
       
       // Get main survey data
       const [surveyResult] = await this.db.executeSql(
@@ -792,7 +795,7 @@ class DatabaseService {
         });
       }
       
-      console.log(`✅ Survey data retrieved for ${sessionId}:`, {
+      log.info('Survey data retrieved for ${sessionId}:' {
         hasPreSession: !!surveyData.preSession,
         hasPostSession: !!surveyData.postSession,
         intraResponseCount: surveyData.intraSessionResponses.length
@@ -800,7 +803,7 @@ class DatabaseService {
       
       return surveyData;
     } catch (error) {
-      console.error('❌ Failed to get survey data:', error);
+      log.error('❌ Failed to get survey data:', error);
       throw error;
     }
   }
@@ -835,7 +838,7 @@ class DatabaseService {
         isPostSessionComplete: hasPostSession
       };
     } catch (error) {
-      console.error('❌ Failed to check survey completion status:', error);
+      log.error('❌ Failed to check survey completion status:', error);
       throw error;
     }
   }
@@ -852,15 +855,15 @@ class DatabaseService {
    */
   async deleteSurveyData(sessionId) {
     try {
-      console.log(`🗑️ Deleting survey data for session: ${sessionId}`);
+      log.info('Deleting survey data for session: ${sessionId}');
       
       await this.db.executeSql('DELETE FROM session_surveys WHERE session_id = ?', [sessionId]);
       await this.db.executeSql('DELETE FROM intra_session_responses WHERE session_id = ?', [sessionId]);
       
-      console.log(`✅ Survey data deleted for session: ${sessionId}`);
+      log.info('Survey data deleted for session: ${sessionId}');
       return { success: true };
     } catch (error) {
-      console.error('❌ Failed to delete survey data:', error);
+      log.error('❌ Failed to delete survey data:', error);
       throw error;
     }
   }
@@ -869,7 +872,7 @@ class DatabaseService {
     if (this.db) {
       await this.db.close();
       this.db = null;
-      console.log('📱 Database closed');
+      log.info('Database closed');
     }
   }
 }

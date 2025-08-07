@@ -42,8 +42,9 @@ src/
 │   ├── AuthService.js         # Supabase auth integration
 │   └── screens/               # Login & OTP screens
 ├── components/                # Reusable UI components
-│   ├── ConnectionManager.js   # Bluetooth connection UI
+│   ├── ErrorBoundary.js       # Error handling wrapper
 │   ├── HeartRateDisplay.js    # Heart rate visualization
+│   ├── OptimizedConnectionManager.js # Bluetooth connection UI
 │   ├── SafetyIndicator.js     # Safety status & alerts
 │   ├── SpO2Display.js         # SpO2 visualization
 │   └── StepIndicator.js       # Multi-step UI component
@@ -60,12 +61,14 @@ src/
 │   ├── MainAppContent.js     # Authenticated app shell
 │   ├── SessionHistoryScreen.js # Past sessions
 │   └── SessionSetupScreen.js # Pre-training setup
-└── services/                 # Core business logic
-    ├── BluetoothService.js   # BLE device communication
-    ├── DatabaseService.js    # Local data persistence
-    ├── EnhancedSessionManager.js # Advanced session logic
-    ├── SessionManager.js     # Basic session management
-    └── SupabaseService.js    # Cloud data sync
+├── services/                 # Core business logic
+│   ├── BluetoothService.js   # BLE device communication
+│   ├── DatabaseService.js    # Local data persistence
+│   ├── EnhancedSessionManager.js # Unified session management
+│   └── SupabaseService.js    # Cloud data sync
+└── utils/                    # Utility functions
+    ├── logger.js             # Centralized logging system
+    └── surveyValidation.js   # Survey form validation
 ```
 
 ## Getting Started
@@ -92,7 +95,7 @@ src/
 
 3. **Configure Supabase**
    - Update `src/config/supabase.js` with your Supabase URL and anon key
-   - Run the database schema: `supabase-schema.sql`
+   - Run database migrations in order from `database/migrations/` folder
 
 4. **Start the development server**
    ```bash
@@ -149,11 +152,11 @@ const supabaseAnonKey = 'your-anon-key';
 ### IHHT Training Sessions
 
 **Session Structure**
-- Fixed 5-cycle training protocol
-- Hypoxic phases: 5 minutes each
-- Hyperoxic (recovery) phases: 2 minutes each  
-- Total session duration: 35 minutes
+- Configurable training protocols (3-7 cycles)
+- Default: 5 cycles with 5-minute hypoxic, 2-minute hyperoxic phases
+- Total session duration: Variable based on protocol
 - Adjustable hypoxia intensity (0-10 scale)
+- Protocol templates for different experience levels
 
 **Safety Features**
 - Continuous SpO2 monitoring
@@ -168,6 +171,8 @@ const supabaseAnonKey = 'your-anon-key';
 - Real-time progress tracking
 
 **Implementation**: `src/screens/IHHTTrainingScreen.js`, `src/services/EnhancedSessionManager.js`
+
+Note: The deprecated `SessionManager.js` has been removed. All session management is now handled by `EnhancedSessionManager.js`.
 
 ### Data Management
 
@@ -250,36 +255,21 @@ const spo2 = byte5 & 0x7F;
 
 ## Database Schema
 
-### Sessions Table
-```sql
-CREATE TABLE sessions (
-  id UUID PRIMARY KEY,
-  device_id TEXT NOT NULL,
-  start_time TIMESTAMPTZ NOT NULL,
-  end_time TIMESTAMPTZ,
-  status TEXT DEFAULT 'active',
-  total_readings INTEGER DEFAULT 0,
-  avg_spo2 REAL,
-  min_spo2 INTEGER,
-  max_spo2 INTEGER,
-  avg_heart_rate REAL,
-  min_heart_rate INTEGER,
-  max_heart_rate INTEGER
-);
-```
+The database schema is managed through migrations located in `database/migrations/`. Run migrations in order:
 
-### Readings Table
-```sql
-CREATE TABLE readings (
-  id BIGSERIAL PRIMARY KEY,
-  session_id UUID REFERENCES sessions(id),
-  timestamp TIMESTAMPTZ NOT NULL,
-  spo2 INTEGER,
-  heart_rate INTEGER,
-  signal_strength INTEGER,
-  is_valid BOOLEAN DEFAULT TRUE
-);
-```
+1. **001_initial_schema.sql** - Base tables (sessions, readings)
+2. **002_auth_and_profiles.sql** - User authentication and profiles
+3. **003_onboarding_data.sql** - Onboarding flow data
+4. **004_surveys.sql** - Pre/post session surveys
+5. **005_protocol_config.sql** - IHHT protocol configuration
+6. **006_security_policies.sql** - Row Level Security policies
+
+Key tables include:
+- `sessions` - Training session metadata
+- `readings` - Individual sensor readings
+- `user_profiles` - User account information
+- `survey_responses` - Session survey data
+- `protocol_templates` - IHHT protocol configurations
 
 ## iOS Live Activities
 

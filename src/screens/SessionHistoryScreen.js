@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
-import SessionManager from '../services/SessionManager';
+import EnhancedSessionManager from '../services/EnhancedSessionManager';
 
 const { width: screenWidth } = Dimensions.get('window');
 const CHART_WIDTH = screenWidth - 60; // Account for container padding
@@ -76,7 +76,7 @@ const SessionHistoryScreen = ({ route, navigation }) => {
       setLoading(true);
       
       // Get sessions from local database
-      const localSessions = await SessionManager.getAllSessions();
+      const localSessions = await EnhancedSessionManager.getAllSessions();
       
       // Get sessions from Supabase as backup/supplement
       let supabaseSessions = [];
@@ -152,7 +152,7 @@ const SessionHistoryScreen = ({ route, navigation }) => {
       setModalVisible(true);
       
       // Try to get data from local database first
-      let sessionData = await SessionManager.getSessionWithData(sessionId);
+      let sessionData = await EnhancedSessionManager.getSessionWithData(sessionId);
       
       // Check if we have complete data
       const hasLocalData = sessionData !== null;

@@ -9,10 +9,11 @@
 
 ## Architecture
 - **React Native + Expo** app for Bluetooth pulse oximetry monitoring
-- **Main modules**: `/src/screens` (DashboardScreen, SessionHistoryScreen), `/src/components` (HeartRateDisplay, SpO2Display, DeviceScanner), `/src/services` (BluetoothService, DatabaseService, SessionManager), `/src/context` (BluetoothContext)
-- **Database**: SQLite via react-native-sqlite-storage for session storage
+- **Main modules**: `/src/screens` (DashboardScreen, SessionHistoryScreen, IHHTTrainingScreen), `/src/components` (HeartRateDisplay, SpO2Display, OptimizedConnectionManager), `/src/services` (BluetoothService, DatabaseService, EnhancedSessionManager), `/src/context` (BluetoothContext)
+- **Database**: SQLite locally + Supabase cloud (PostgreSQL)
 - **Bluetooth**: react-native-ble-plx for BCI Protocol communication
 - **Data flow**: BluetoothService → BluetoothContext → UI components
+- **Logging**: Centralized logger utility with log levels
 
 ## Code Style
 - **Imports**: Relative imports from `/src`, absolute for external packages
