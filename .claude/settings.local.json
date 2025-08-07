@@ -17,7 +17,9 @@
       "Bash(git push:*)",
       "Bash(gh auth:*)",
       "Bash(git merge:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(git stash show:*)",
+      "Bash(git log:*)"
     ],
     "deny": []
   }

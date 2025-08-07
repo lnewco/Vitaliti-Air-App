@@ -1678,7 +1678,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - react-native-safe-area-context (5.5.2):
+  - react-native-safe-area-context (5.4.0):
     - React-Core
   - react-native-sqlite-storage (6.0.1):
     - React-Core
@@ -2006,11 +2006,11 @@ PODS:
     - React-utils (= 0.79.5)
   - RNCAsyncStorage (2.1.2):
     - React-Core
-  - RNDateTimePicker (8.4.3):
+  - RNDateTimePicker (8.4.1):
     - React-Core
   - RNFS (2.20.0):
     - React-Core
-  - RNGestureHandler (2.27.2):
+  - RNGestureHandler (2.24.0):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -2158,7 +2158,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - RNScreens (4.13.1):
+  - RNScreens (4.11.1):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -2183,7 +2183,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - RNSVG (15.11.2):
+  - RNSVG (13.14.1):
     - React-Core
   - SocketRocket (0.7.1)
   - UMAppLoader (5.1.3)
@@ -2573,7 +2573,7 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 96a2f2a176268581733be182fa6eebab1c0193be
   React-microtasksnativemodule: bda561d2648e1e52bd9e5a87f8889836bdbde2e2
   react-native-ble-plx: b9cfaeaa9acde80373d8a8df390212fc1d66e5d9
-  react-native-safe-area-context: 0f7bf11598f9a61b7ceac8dc3f59ef98697e99e1
+  react-native-safe-area-context: 9d72abf6d8473da73033b597090a80b709c0b2f1
   react-native-sqlite-storage: 0c84826214baaa498796c7e46a5ccc9a82e114ed
   React-NativeModulesApple: 1ecb83880dd11baf2228f8dd89d8419c387e03ad
   React-oscompat: 0592889a9fcf0eacb205532028e4a364e22907dd
@@ -2607,12 +2607,12 @@ SPEC CHECKSUMS:
   ReactCodegen: 6cb6e0d0b52471abc883541c76589d1c367c64c7
   ReactCommon: 1ab5451fc5da87c4cc4c3046e19a8054624ca763
   RNCAsyncStorage: b9f5f78da5d16a853fe3dc22e8268d932fc45a83
-  RNDateTimePicker: 405932b521fab5295a4829ced9eca36c39273a4c
+  RNDateTimePicker: 60f9e986d61e42169a2716c1b51f1f93dfa82665
   RNFS: 89de7d7f4c0f6bafa05343c578f61118c8282ed8
-  RNGestureHandler: 43ff77261c9f3cfcfd195aa16860bfdcfe108ef5
+  RNGestureHandler: ce4a87dba81030b374d7f1993c4376f5c230da2e
   RNReanimated: efe63b33e23e1b5b06e5e087779eceeee742452b
-  RNScreens: b062e220dfd58455779e4e9f2123c81e37d51fe7
-  RNSVG: ab84f2de7dd4f2c86d01825b8a65e0ef712fc36b
+  RNScreens: 62fdbbc4c984150b34c36f095c6ba2510ca9b6a5
+  RNSVG: ae50dd253f44447b32d0f5a3657a97859f289891
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   UMAppLoader: 55159b69750129faa7a51c493cb8ea55a7b64eb9
   Yoga: adb397651e1c00672c12e9495babca70777e411e

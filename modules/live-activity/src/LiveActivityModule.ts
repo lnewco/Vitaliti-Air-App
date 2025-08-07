@@ -10,15 +10,20 @@ import {
   ActivityStateChangeEvent
 } from './LiveActivityModule.types';
 
-// Import the native module
-const LiveActivityModuleNative = NativeModulesProxy.LiveActivityModule;
+// Import the native module safely
+let LiveActivityModuleNative = null;
+try {
+  LiveActivityModuleNative = NativeModulesProxy.LiveActivityModule;
+} catch (error) {
+  console.log('Live Activity native module not available');
+}
 
 class LiveActivityModuleImpl implements LiveActivityModuleInterface {
   /**
    * Check if Live Activities are supported on this device
    */
   async isSupported(): Promise<boolean> {
-    if (Platform.OS !== 'ios') {
+    if (Platform.OS !== 'ios' || !LiveActivityModuleNative) {
       return false;
     }
     
@@ -34,8 +39,8 @@ class LiveActivityModuleImpl implements LiveActivityModuleInterface {
    * Start a new Live Activity for an IHHT session
    */
   async startActivity(sessionData: IHHTSessionData): Promise<LiveActivityResponse> {
-    if (Platform.OS !== 'ios') {
-      throw new Error('Live Activities are only supported on iOS');
+    if (Platform.OS !== 'ios' || !LiveActivityModuleNative) {
+      return { success: false, message: 'Live Activities not available' };
     }
 
     try {
@@ -51,8 +56,8 @@ class LiveActivityModuleImpl implements LiveActivityModuleInterface {
    * Update the current Live Activity with new session data
    */
   async updateActivity(updateData: IHHTActivityUpdateData): Promise<LiveActivityResponse> {
-    if (Platform.OS !== 'ios') {
-      throw new Error('Live Activities are only supported on iOS');
+    if (Platform.OS !== 'ios' || !LiveActivityModuleNative) {
+      return { success: false, message: 'Live Activities not available' };
     }
 
     try {
@@ -68,8 +73,8 @@ class LiveActivityModuleImpl implements LiveActivityModuleInterface {
    * Stop the current Live Activity
    */
   async stopActivity(): Promise<LiveActivityResponse> {
-    if (Platform.OS !== 'ios') {
-      return { success: true, message: 'Live Activities not supported on this platform' };
+    if (Platform.OS !== 'ios' || !LiveActivityModuleNative) {
+      return { success: true, message: 'Live Activities not available' };
     }
 
     try {
@@ -85,7 +90,7 @@ class LiveActivityModuleImpl implements LiveActivityModuleInterface {
    * Get the current activity status
    */
   getActivityStatus(): ActivityStatus {
-    if (Platform.OS !== 'ios') {
+    if (Platform.OS !== 'ios' || !LiveActivityModuleNative) {
       return { hasActiveActivity: false };
     }
 
