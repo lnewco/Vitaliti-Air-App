@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(claude mcp:*)",
+      "Bash(npx @supabase/mcp-server:*)",
+      "mcp__supabase__list_projects",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__execute_sql",
+      "Bash(npm install:*)",
+      "Bash(rm:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git stash:*)",
+      "Bash(git push:*)",
+      "Bash(gh auth:*)",
+      "Bash(git merge:*)",
+      "Bash(grep:*)"
+    ],
+    "deny": []
+  }
+}

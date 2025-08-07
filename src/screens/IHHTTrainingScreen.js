@@ -75,6 +75,15 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     hypoxicDuration: 5,     // in minutes
     hyperoxicDuration: 2    // in minutes
   };
+  
+  // Log route params only once on mount
+  React.useEffect(() => {
+    console.log('🔍 IHHTTrainingScreen initialized with:', {
+      sessionId: route?.params?.sessionId,
+      totalCycles: protocolConfig.totalCycles,
+      usingDefaultConfig: !route?.params?.protocolConfig
+    });
+  }, []);
 
   const { 
     pulseOximeterData, 
@@ -89,8 +98,8 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   
   // Enhanced session state - using the enhanced session manager
   const [sessionInfo, setSessionInfo] = useState(EnhancedSessionManager.getSessionInfo());
-  const [totalTimeElapsed, setTotalTimeElapsed] = useState(0);
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [sessionCompleted, setSessionCompleted] = useState(false);
   
   // Hypoxia level state
   const [hypoxiaLevel, setHypoxiaLevel] = useState(5);
@@ -175,6 +184,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
         case 'sessionEnded':
           handleSessionComplete(data);
           setSessionStarted(false);
+          setSessionCompleted(true); // Mark session as completed
           break;
       }
     });
@@ -190,20 +200,35 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     };
   }, []);
 
-  // Timer for total elapsed time
+  // Calculate total elapsed time from session start
+  const getTotalTimeElapsed = () => {
+    if (!sessionInfo.sessionStartTime) return 0;
+    if (!sessionInfo.isActive) return 0;
+    
+    const elapsed = Math.floor((Date.now() - sessionInfo.sessionStartTime) / 1000);
+    return elapsed;
+  };
+  
+  // Update timer display every second
+  const [, forceUpdate] = useState({});
   useEffect(() => {
     if (!sessionInfo.isActive || sessionInfo.isPaused) return;
-
+    
     const timer = setInterval(() => {
-      setTotalTimeElapsed(prev => prev + 1);
+      forceUpdate({}); // Force re-render to update time display
     }, 1000);
-
+    
     return () => clearInterval(timer);
   }, [sessionInfo.isActive, sessionInfo.isPaused]);
 
   // Session creation and safety monitoring effect
   useEffect(() => {
     if (!pulseOximeterData) return;
+    
+    // Check if session was already completed (prevent restart)
+    if (sessionCompleted || sessionInfo.currentPhase === 'COMPLETED' || EnhancedSessionManager.currentPhase === 'COMPLETED') {
+      return; // Don't start a new session if one was just completed
+    }
     
     // Only start session when we get VALID measurements (finger detected OR valid spo2/heart rate)
     const hasValidMeasurement = pulseOximeterData.isFingerDetected || 
@@ -246,7 +271,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     
     // Add reading to enhanced session
     EnhancedSessionManager.addReading(pulseOximeterData);
-  }, [pulseOximeterData, sessionInfo.isActive, sessionStarted]);
+  }, [pulseOximeterData, sessionInfo.isActive, sessionStarted, sessionCompleted]);
 
   const startSession = async () => {
     try {
@@ -254,11 +279,17 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       
       // If we have both sessionId and protocolConfig, we need to set the protocol first
       if (existingSessionId && protocolConfig) {
-        console.log('🔧 Setting protocol config for existing session:', protocolConfig);
+        console.log('🔧 Setting protocol config for existing session:', {
+          sessionId: existingSessionId,
+          protocolConfig: protocolConfig,
+          totalCycles: protocolConfig.totalCycles
+        });
         EnhancedSessionManager.setProtocol(protocolConfig);
+        console.log('✅ Protocol set. Actual cycles in manager:', EnhancedSessionManager.protocolConfig.totalCycles);
         await EnhancedSessionManager.startSession(existingSessionId);
       } else {
         // Support legacy single parameter (either sessionId or protocolConfig)
+        console.log('⚠️ Using legacy session start with:', existingSessionId || protocolConfig);
         await EnhancedSessionManager.startSession(existingSessionId || protocolConfig);
       }
       
@@ -315,6 +346,10 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const terminateSession = async () => {
     try {
       Vibration.cancel();
+      
+      // Mark the session as completed before stopping to prevent extra phase recordings
+      EnhancedSessionManager.currentPhase = 'COMPLETED';
+      
       const result = await EnhancedSessionManager.stopSession();
       
       // Navigate to post-session survey screen
@@ -363,6 +398,12 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   };
 
   const handleSkipToNext = async () => {
+    // Prevent skip if session is completed or not started
+    if (!sessionInfo.isActive || sessionCompleted || sessionInfo.currentPhase === 'COMPLETED') {
+      console.log(`❌ Cannot skip - session not active or already completed`);
+      return;
+    }
+    
     const success = await EnhancedSessionManager.skipToNextPhase();
     if (success) {
       Vibration.vibrate(100); // Brief feedback
@@ -404,11 +445,18 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   };
 
   const formatTotalTime = (seconds) => {
-    const totalDuration = (sessionInfo.hypoxicDuration + sessionInfo.hyperoxicDuration) * sessionInfo.totalCycles;
-    const totalMins = Math.floor(totalDuration / 60);
+    // Calculate original planned duration
+    const originalDuration = (sessionInfo.hypoxicDuration + sessionInfo.hyperoxicDuration) * sessionInfo.totalCycles;
+    
+    // Adjust for skipped time
+    const adjustedDuration = originalDuration - (sessionInfo.totalSkippedTime || 0);
+    
+    const totalMins = Math.floor(adjustedDuration / 60);
+    const totalSecs = adjustedDuration % 60;
     const currentMins = Math.floor(seconds / 60);
     const currentSecs = seconds % 60;
-    return `${currentMins}:${currentSecs.toString().padStart(2, '0')} / ${totalMins}:00`;
+    
+    return `${currentMins}:${currentSecs.toString().padStart(2, '0')} / ${totalMins}:${totalSecs.toString().padStart(2, '0')}`;
   };
 
   const getPhaseProgress = () => {
@@ -464,7 +512,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
 
         {/* Main Timer */}
         <View style={styles.mainTimer}>
-          <Text style={styles.timerText}>⏱️ {formatTotalTime(totalTimeElapsed)}</Text>
+          <Text style={styles.timerText}>⏱️ {formatTotalTime(getTotalTimeElapsed())}</Text>
           <Text style={styles.cycleText}>🔄 Cycle {sessionInfo.currentCycle} of {sessionInfo.totalCycles}</Text>
         </View>
 
@@ -583,7 +631,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           <View style={styles.pauseCard}>
             <Text style={styles.pauseTitle}>⏸️ SESSION PAUSED</Text>
             <Text style={styles.pauseStats}>Cycle {sessionInfo.currentCycle} of {sessionInfo.totalCycles}</Text>
-            <Text style={styles.pauseStats}>{formatTotalTime(totalTimeElapsed)} elapsed</Text>
+            <Text style={styles.pauseStats}>{formatTotalTime(getTotalTimeElapsed())} elapsed</Text>
             <TouchableOpacity style={styles.resumeButton} onPress={resumeSession}>
               <Text style={styles.resumeButtonText}>Resume Training</Text>
             </TouchableOpacity>

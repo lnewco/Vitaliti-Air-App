@@ -25,11 +25,79 @@ class SupabaseService {
     }
   }
 
+  // Persist session mapping to AsyncStorage
+  async persistSessionMapping() {
+    try {
+      const mappingData = Array.from(this.sessionMapping.entries());
+      // Use 'sessionMapping' key for backward compatibility
+      await AsyncStorage.setItem('sessionMapping', JSON.stringify(Object.fromEntries(this.sessionMapping)));
+      console.log('💾 Persisted session mapping with', mappingData.length, 'entries');
+    } catch (error) {
+      console.error('❌ Failed to persist session mapping:', error);
+    }
+  }
+
+  // Restore session mapping from AsyncStorage
+  async restoreSessionMapping() {
+    try {
+      // Try to load from 'sessionMapping' key (backward compatible)
+      const mappingJson = await AsyncStorage.getItem('sessionMapping');
+      if (mappingJson) {
+        const mappingObj = JSON.parse(mappingJson);
+        this.sessionMapping = new Map(Object.entries(mappingObj));
+        console.log('🔄 Restored session mapping with', this.sessionMapping.size, 'entries');
+        
+        // Clean up old mappings (older than 24 hours)
+        const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+        const entries = Array.from(this.sessionMapping.entries());
+        const cleanedEntries = entries.filter(([localId]) => {
+          // Parse the timestamp from the local session ID if it includes one
+          const timestamp = parseInt(localId.split('_')[1] || '0');
+          return timestamp > oneDayAgo || timestamp === 0;
+        });
+        
+        if (cleanedEntries.length < entries.length) {
+          this.sessionMapping = new Map(cleanedEntries);
+          await this.persistSessionMapping();
+          console.log('🧹 Cleaned up', entries.length - cleanedEntries.length, 'old session mappings');
+        }
+      } else {
+        console.log('📥 No stored session mappings found');
+      }
+    } catch (error) {
+      console.error('❌ Failed to restore session mapping:', error);
+      this.sessionMapping = new Map();
+    }
+  }
+
   async getDeviceId() {
     if (!this.deviceId) {
       await this.initializeDeviceId();
     }
     return this.deviceId;
+  }
+
+
+
+  // Get session data from database
+  async verifySessionData(supabaseSessionId) {
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('id, device_id, user_id, local_session_id, status')
+        .eq('id', supabaseSessionId)
+        .single();
+      
+      if (error) {
+        console.error('❌ Failed to fetch session data:', error);
+        return null;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Error fetching session data:', error);
+      return null;
+    }
   }
 
   async setupNetworkMonitoring() {
@@ -85,8 +153,6 @@ class SupabaseService {
       };
 
       console.log('💾 Creating session with device_id:', this.deviceId, 'user_id:', currentUser?.id || 'null');
-      console.log('🔐 Auth uid:', currentUser?.id);
-      console.log('📱 Device ID for RLS:', this.deviceId);
       
       // Ensure device ID is set
       if (!this.deviceId) {
@@ -133,7 +199,14 @@ class SupabaseService {
       // Get the Supabase UUID for this local session ID
       let supabaseSessionId = this.sessionMapping.get(sessionId);
       
-      // If mapping is lost (app restart), look it up from database
+      // If mapping is lost (app restart), try to recover it
+      if (!supabaseSessionId) {
+        console.log('🔍 Session mapping not in memory, checking persistent storage...');
+        await this.restoreSessionMapping();
+        supabaseSessionId = this.sessionMapping.get(sessionId);
+      }
+      
+      // If still not found, look it up from database
       if (!supabaseSessionId) {
         console.log('🔍 Session mapping lost, looking up Supabase session ID...');
         
@@ -142,14 +215,16 @@ class SupabaseService {
             .from('sessions')
             .select('id')
             .eq('local_session_id', sessionId)
-            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(1)
             .single();
             
           if (data && !error) {
             supabaseSessionId = data.id;
-            // Restore the mapping
+            // Restore the mapping and persist it
             this.sessionMapping.set(sessionId, supabaseSessionId);
-            console.log('✅ Found Supabase session:', supabaseSessionId);
+            await this.persistSessionMapping();
+            console.log('✅ Found and restored Supabase session:', supabaseSessionId);
           }
         } catch (lookupError) {
           console.error('❌ Failed to lookup session:', lookupError);
@@ -243,59 +318,57 @@ class SupabaseService {
   // Reading Management
   async addReading(reading) {
     try {
-      // Get the Supabase UUID for this local session ID
+      // Get session mapping
       let supabaseSessionId = this.sessionMapping.get(reading.sessionId);
       
-      // If mapping not found, try to recover it from database
+      // Recover session mapping if needed
       if (!supabaseSessionId) {
-        console.warn('⚠️ No session mapping found, attempting recovery for:', reading.sessionId);
         supabaseSessionId = await this.recoverSessionMapping(reading.sessionId);
-        
         if (!supabaseSessionId) {
           console.error('❌ Failed to recover session mapping for:', reading.sessionId);
-          console.error('❌ Current mappings:', Array.from(this.sessionMapping.entries()));
           this.queueForSync('addReading', reading);
           return null;
         }
       }
 
-      // Get current authenticated user (fall back to anonymous)
+      // Get session data to determine correct device_id
+      const sessionData = await this.verifySessionData(supabaseSessionId);
+      const deviceIdToUse = sessionData?.device_id || this.deviceId;
+
+      // Get current authenticated user
       const currentUser = authService.getCurrentUser();
       
-      const supabaseReading = {
-        session_id: supabaseSessionId,
-        user_id: currentUser?.id || null, // Link to authenticated user or anonymous
-        timestamp: new Date(reading.timestamp).toISOString(),
-        spo2: reading.spo2,
-        heart_rate: reading.heartRate,
-        signal_strength: reading.signalStrength,
-        is_valid: (reading.spo2 !== null && reading.spo2 > 0) || 
-                 (reading.heartRate !== null && reading.heartRate > 0),
-        fio2_level: reading.fio2Level || null,
-        phase_type: reading.phaseType || null,
-        cycle_number: reading.cycleNumber || null,
-        hrv_rmssd: reading.hrv?.rmssd || null,
-        hrv_type: reading.hrv?.type || null,
-        hrv_interval_count: reading.hrv?.intervalCount || null,
-        hrv_data_quality: reading.hrv?.dataQuality || null,
-        hrv_confidence: reading.hrv?.confidence || null,
-        created_at: new Date().toISOString()
-      };
-
-      const { data, error } = await supabase
-        .from('readings')
-        .insert([supabaseReading])
-        .select();
+      // Use atomic function for single reading insert with HRV data
+      const { data, error } = await supabase.rpc('insert_single_reading_with_device_id', {
+        device_id_value: deviceIdToUse,
+        p_session_id: supabaseSessionId,
+        p_user_id: currentUser?.id || null,
+        p_timestamp: new Date(reading.timestamp).toISOString(),
+        p_spo2: reading.spo2,
+        p_heart_rate: reading.heartRate,
+        p_signal_strength: reading.signalStrength,
+        p_is_valid: (reading.spo2 !== null && reading.spo2 > 0) || 
+                    (reading.heartRate !== null && reading.heartRate > 0),
+        p_fio2_level: reading.fio2Level || null,
+        p_phase_type: reading.phaseType || null,
+        p_cycle_number: reading.cycleNumber || null,
+        p_hrv_rmssd: reading.hrv?.rmssd || null,
+        p_hrv_type: reading.hrv?.type || null,
+        p_hrv_interval_count: reading.hrv?.intervalCount || null,
+        p_hrv_data_quality: reading.hrv?.dataQuality || null,
+        p_hrv_confidence: reading.hrv?.confidence || null,
+        p_created_at: new Date().toISOString()
+      });
 
       if (error) {
-        console.error('❌ Supabase reading insert failed, queuing for sync:', error.message);
+        console.error('❌ Single reading insert failed:', error);
         this.queueForSync('addReading', reading);
         return null;
       }
 
       return data[0];
     } catch (error) {
-      console.error('❌ Error adding reading, queuing for sync:', error.message);
+      console.error('❌ Error adding reading:', error.message);
       this.queueForSync('addReading', reading);
       return null;
     }
@@ -303,32 +376,33 @@ class SupabaseService {
 
   async addReadingsBatch(readings) {
     try {
-      // Check if we have all the session mappings
+      // Get session mapping
       const firstReading = readings[0];
       if (!firstReading) return null;
       
       let supabaseSessionId = this.sessionMapping.get(firstReading.sessionId);
       
-      // If mapping not found, try to recover it from database
+      // Recover session mapping if needed
       if (!supabaseSessionId) {
-        console.warn('⚠️ No session mapping found for batch, attempting recovery for:', firstReading.sessionId);
         supabaseSessionId = await this.recoverSessionMapping(firstReading.sessionId);
-        
         if (!supabaseSessionId) {
           console.error('❌ Failed to recover session mapping for batch:', firstReading.sessionId);
-          console.error('❌ Current mappings:', Array.from(this.sessionMapping.entries()));
-          console.error('❌ Readings count in failed batch:', readings.length);
           this.queueForSync('addReadingsBatch', readings);
           return null;
         }
       }
 
-      // Get current authenticated user (fall back to anonymous)
+      // Get session data to determine correct device_id
+      const sessionData = await this.verifySessionData(supabaseSessionId);
+      const deviceIdToUse = sessionData?.device_id || this.deviceId;
+      
+      // Get current authenticated user
       const currentUser = authService.getCurrentUser();
       
+      // Prepare readings data
       const supabaseReadings = readings.map(reading => ({
         session_id: supabaseSessionId,
-        user_id: currentUser?.id || null, // Link to authenticated user or anonymous
+        user_id: currentUser?.id || null,
         timestamp: new Date(reading.timestamp).toISOString(),
         spo2: reading.spo2,
         heart_rate: reading.heartRate,
@@ -346,18 +420,19 @@ class SupabaseService {
         created_at: new Date().toISOString()
       }));
 
-      const { data, error } = await supabase
-        .from('readings')
-        .insert(supabaseReadings)
-        .select();
+      // Use atomic function that sets device_id and inserts in same transaction
+      const { data, error } = await supabase.rpc('insert_readings_with_device_id', {
+        device_id_value: deviceIdToUse,
+        readings_data: supabaseReadings
+      });
 
       if (error) {
-        console.error('❌ Supabase batch insert failed:', error);
+        console.error('❌ Batch insert failed:', error);
         this.queueForSync('addReadingsBatch', readings);
         return null;
       }
 
-      console.log(`☁️ Batch inserted ${data.length} readings with FiO2 data to Supabase`);
+      console.log(`☁️ Successfully inserted ${data.length} readings to Supabase`);
       return data;
     } catch (error) {
       console.error('❌ Error batch inserting readings:', error);
@@ -840,28 +915,11 @@ class SupabaseService {
     }
   }
 
-  // Session mapping persistence
-  async persistSessionMapping() {
-    try {
-      const mappingObj = Object.fromEntries(this.sessionMapping);
-      await AsyncStorage.setItem('sessionMapping', JSON.stringify(mappingObj));
-      console.log('💾 Persisted session mapping:', Object.keys(mappingObj).length, 'entries');
-    } catch (error) {
-      console.error('❌ Failed to persist session mapping:', error);
-    }
-  }
-
+  // Load session mapping from storage (called during initialization)
   async loadSessionMapping() {
     try {
-      const mappingJson = await AsyncStorage.getItem('sessionMapping');
-      if (mappingJson) {
-        const mappingObj = JSON.parse(mappingJson);
-        this.sessionMapping = new Map(Object.entries(mappingObj));
-        console.log(`📥 Loaded ${this.sessionMapping.size} session mappings from storage`);
-        console.log('📥 Loaded mappings:', Array.from(this.sessionMapping.entries()));
-      } else {
-        console.log('📥 No stored session mappings found');
-      }
+      // Use the restoreSessionMapping method which includes cleanup logic
+      await this.restoreSessionMapping();
     } catch (error) {
       console.error('❌ Failed to load session mapping:', error);
     }
@@ -886,23 +944,21 @@ class SupabaseService {
         return { success: true, queued: true };
       }
 
+      // Get session data to determine correct device_id
+      const sessionData = await this.verifySessionData(supabaseId);
+      const deviceIdToUse = sessionData?.device_id || this.deviceId;
+
       // Get current authenticated user
       const currentUser = authService.getCurrentUser();
       
-      // Create survey data
-      const surveyData = {
-        session_id: supabaseId,
-        clarity_pre: clarityPre,
-        energy_pre: energyPre,
-        user_id: currentUser?.id || null
-      };
-
-      const { data, error } = await supabase
-        .from('session_surveys')
-        .upsert(surveyData, { 
-          onConflict: 'session_id',
-          ignoreDuplicates: false 
-        });
+      // Use atomic function for survey insert
+      const { data, error } = await supabase.rpc('insert_pre_session_survey_with_device_id', {
+        device_id_value: deviceIdToUse,
+        p_session_id: supabaseId,
+        p_user_id: currentUser?.id || null,
+        p_clarity_pre: clarityPre,
+        p_energy_pre: energyPre
+      });
 
       if (error) {
         console.error('❌ Failed to sync pre-session survey:', error);
@@ -934,25 +990,23 @@ class SupabaseService {
         return { success: true, queued: true };
       }
 
+      // Get session data to determine correct device_id
+      const sessionData = await this.verifySessionData(supabaseId);
+      const deviceIdToUse = sessionData?.device_id || this.deviceId;
+
       // Get current authenticated user
       const currentUser = authService.getCurrentUser();
       
-      // Create survey data
-      const surveyData = {
-        session_id: supabaseId,
-        clarity_post: clarityPost,
-        energy_post: energyPost,
-        stress_post: stressPost,
-        notes_post: notesPost,
-        user_id: currentUser?.id || null
-      };
-
-      const { data, error } = await supabase
-        .from('session_surveys')
-        .upsert(surveyData, { 
-          onConflict: 'session_id',
-          ignoreDuplicates: false 
-        });
+      // Use atomic function for survey insert
+      const { data, error } = await supabase.rpc('insert_post_session_survey_with_device_id', {
+        device_id_value: deviceIdToUse,
+        p_session_id: supabaseId,
+        p_user_id: currentUser?.id || null,
+        p_clarity_post: clarityPost,
+        p_energy_post: energyPost,
+        p_stress_post: stressPost,
+        p_notes_post: notesPost
+      });
 
       if (error) {
         console.error('❌ Failed to sync post-session survey:', error);
@@ -984,26 +1038,24 @@ class SupabaseService {
         return { success: true, queued: true };
       }
 
+      // Get session data to determine correct device_id
+      const sessionData = await this.verifySessionData(supabaseId);
+      const deviceIdToUse = sessionData?.device_id || this.deviceId;
+
       // Get current authenticated user
       const currentUser = authService.getCurrentUser();
       
-      // Create response data
-      const responseData = {
-        session_id: supabaseId,
-        phase_number: phaseNumber,
-        clarity,
-        energy,
-        stress,
-        timestamp: new Date(timestamp).toISOString(),
-        user_id: currentUser?.id || null
-      };
-
-      const { data, error } = await supabase
-        .from('intra_session_responses')
-        .upsert(responseData, { 
-          onConflict: 'session_id,phase_number',
-          ignoreDuplicates: false 
-        });
+      // Use atomic function for intra-session response insert
+      const { data, error } = await supabase.rpc('insert_intra_session_response_with_device_id', {
+        device_id_value: deviceIdToUse,
+        p_session_id: supabaseId,
+        p_user_id: currentUser?.id || null,
+        p_phase_number: phaseNumber,
+        p_clarity: clarity,
+        p_energy: energy,
+        p_stress: stress,
+        p_timestamp: new Date(timestamp).toISOString()
+      });
 
       if (error) {
         console.error('❌ Failed to sync intra-session response:', error);
