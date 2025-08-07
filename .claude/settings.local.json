@@ -21,7 +21,11 @@
       "Bash(git branch:*)",
       "Bash(node:*)",
       "Bash(mkdir:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(npm start)",
+      "Bash(npx react-native bundle:*)",
+      "Bash(npx expo export:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }

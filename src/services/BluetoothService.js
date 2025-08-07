@@ -135,7 +135,7 @@ class BluetoothService {
 
   async startScanning(deviceType = 'pulse-ox') {
     try {
-      log.info('Starting ${deviceType} device scan...');
+      log.info(`Starting ${deviceType} device scan...`);
       this.currentScanType = deviceType;
       this.isScanning = true;
       
@@ -153,7 +153,7 @@ class BluetoothService {
         serviceUUIDs = null;
       }
       
-      log.info('Starting ${deviceType} scan with service filter:' serviceUUIDs);
+      log.info(`Starting ${deviceType} scan with service filter:`, serviceUUIDs);
       
       // Scan for devices
       this.manager.startDeviceScan(serviceUUIDs, null, (error, device) => {
@@ -183,7 +183,7 @@ class BluetoothService {
   }
 
   handleDeviceDiscovered(device) {
-    log.info('Device discovered:' {
+    log.info('Device discovered:', {
       name: device.name,
       localName: device.localName,
       id: device.id,
@@ -193,17 +193,17 @@ class BluetoothService {
     
     // Debug WHOOP detection specifically
     if (device.name && device.name.toLowerCase().includes('whoop')) {
-      log.info('WHOOP device detected by name!' device.name);
+      log.info('WHOOP device detected by name!', device.name);
     }
 
     // Determine device type and log appropriate message
     const deviceType = this.getDeviceType(device);
     if (deviceType === 'pulse-ox') {
-      log.info('Pulse Oximeter device found:' device.name || device.localName || 'Unknown');
+      log.info('Pulse Oximeter device found:', device.name || device.localName || 'Unknown');
     } else if (deviceType === 'hr-monitor') {
-      log.info('Heart Rate Monitor device found:' device.name || device.localName || 'Unknown');
+      log.info('Heart Rate Monitor device found:', device.name || device.localName || 'Unknown');
     } else {
-      log.info('Unknown device found:' device.name || device.localName || 'Unknown', 'Services:', device.serviceUUIDs);
+      log.info('Unknown device found:', device.name || device.localName || 'Unknown', 'Services:', device.serviceUUIDs);
     }
 
     // Only report devices that match the current scan type (or if scanning for 'all')
@@ -212,12 +212,12 @@ class BluetoothService {
                         (this.currentScanType === 'both' && (deviceType === 'pulse-ox' || deviceType === 'hr-monitor'));
 
     if (shouldReport && this.onDeviceFound) {
-      log.info('� Reporting ${deviceType} device (scan type: ${this.currentScanType})');
+      log.info(`� Reporting ${deviceType} device (scan type: ${this.currentScanType})`);
       // Add deviceType property while preserving device methods
       device.deviceType = deviceType;
       this.onDeviceFound(device);
     } else if (deviceType !== 'unknown') {
-      log.info('⏭️ Skipping ${deviceType} device (looking for ${this.currentScanType})');
+      log.info(`⏭️ Skipping ${deviceType} device (looking for ${this.currentScanType})`);
     }
   }
 
@@ -269,7 +269,7 @@ class BluetoothService {
   async connectToDevice(device) {
     try {
       const deviceType = device.deviceType || this.getDeviceType(device);
-      log.info('Connecting to ${deviceType} device:' device.id);
+      log.info(`Connecting to ${deviceType} device:`, device.id);
       
       // Stop scanning before connecting
       await this.stopScanning();
@@ -329,7 +329,7 @@ class BluetoothService {
       
       // Get the BCI service
       const services = await device.services();
-      log.info('Available services:' services.map(s => s.uuid));
+      log.info('Available services:', services.map(s => s.uuid));
       
       const bciService = services.find(service => 
         service.uuid.toUpperCase() === this.BCI_SERVICE_UUID.toUpperCase()
@@ -337,15 +337,15 @@ class BluetoothService {
       
       if (!bciService) {
         log.error('❌ BCI service not found!');
-        log.info('Available services:' services.map(s => s.uuid));
+        log.info('Available services:', services.map(s => s.uuid));
         return;
       }
       
-      log.info('Found BCI service:' bciService.uuid);
+      log.info('Found BCI service:', bciService.uuid);
       
       // Get characteristics
       const characteristics = await bciService.characteristics();
-      log.info('BCI service characteristics:' characteristics.map(c => ({
+      log.info('BCI service characteristics:', characteristics.map(c => ({
         uuid: c.uuid,
         isNotifiable: c.isNotifiable,
         isReadable: c.isReadable,
@@ -363,8 +363,8 @@ class BluetoothService {
         return;
       }
       
-      log.info('Found BCI data characteristic:' dataCharacteristic.uuid);
-      log.info('� Characteristic properties:' {
+      log.info('Found BCI data characteristic:', dataCharacteristic.uuid);
+      log.info('� Characteristic properties:', {
         isNotifiable: dataCharacteristic.isNotifiable,
         isReadable: dataCharacteristic.isReadable,
         isWritable: dataCharacteristic.isWritable
@@ -388,7 +388,7 @@ class BluetoothService {
           }
           
           if (characteristic && characteristic.value) {
-            // log.info('� Raw BCI data received:' characteristic.value); // Disabled: high frequency logging
+            // log.info('� Raw BCI data received:', characteristic.value); // Disabled: high frequency logging
             this.handleBCIDataReceived(characteristic.value);
           }
         });
@@ -409,7 +409,7 @@ class BluetoothService {
       
       // Get the HR service
       const services = await device.services();
-      log.info('Available services:' services.map(s => s.uuid));
+      log.info('Available services:', services.map(s => s.uuid));
       
       const hrService = services.find(service => {
         const serviceUUID = service.uuid.toUpperCase();
@@ -423,7 +423,7 @@ class BluetoothService {
                        serviceUUID.includes(targetUUID);
         
         if (matches) {
-          log.info('Found matching HR service: ${serviceUUID}');
+          log.info(`Found matching HR service: ${serviceUUID}`);
         }
         
         return matches;
@@ -431,15 +431,15 @@ class BluetoothService {
       
       if (!hrService) {
         log.error('❌ HR service not found!');
-        log.info('Available services:' services.map(s => s.uuid));
+        log.info('Available services:', services.map(s => s.uuid));
         return;
       }
       
-      log.info('Found HR service:' hrService.uuid);
+      log.info('Found HR service:', hrService.uuid);
       
       // Get characteristics
       const characteristics = await hrService.characteristics();
-      log.info('HR service characteristics:' characteristics.map(c => ({
+      log.info('HR service characteristics:', characteristics.map(c => ({
         uuid: c.uuid,
         isNotifiable: c.isNotifiable,
         isReadable: c.isReadable,
@@ -462,8 +462,8 @@ class BluetoothService {
         return;
       }
       
-      log.info('Found HR measurement characteristic:' hrMeasurementCharacteristic.uuid);
-      log.info('� Characteristic properties:' {
+      log.info('Found HR measurement characteristic:', hrMeasurementCharacteristic.uuid);
+      log.info('� Characteristic properties:', {
         isNotifiable: hrMeasurementCharacteristic.isNotifiable,
         isReadable: hrMeasurementCharacteristic.isReadable,
         isWritable: hrMeasurementCharacteristic.isWritable
@@ -484,7 +484,7 @@ class BluetoothService {
           }
           
           if (characteristic && characteristic.value) {
-            // log.info('� Raw HR data received:' characteristic.value); // Disabled: high frequency logging
+            // log.info('� Raw HR data received:', characteristic.value); // Disabled: high frequency logging
             this.handleHRDataReceived(characteristic.value);
           }
         });
@@ -539,12 +539,12 @@ class BluetoothService {
 
   parseBCIData(base64Data) {
     try {
-      // log.info('Parsing BCI data:' base64Data); // Disabled: high frequency logging
+      // log.info('Parsing BCI data:', base64Data); // Disabled: high frequency logging
       
       // Decode base64 to buffer
       const buffer = Buffer.from(base64Data, 'base64');
-      // log.info('Buffer length:' buffer.length); // Disabled: high frequency logging
-      // log.info('Raw bytes (hex):' Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
+      // log.info('Buffer length:', buffer.length); // Disabled: high frequency logging
+      // log.info('Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
       
       // Handle different packet sizes
       let packets = [];
@@ -561,7 +561,7 @@ class BluetoothService {
           packets.push(packet);
         }
       } else {
-        log.info('Unexpected buffer length:' buffer.length, 'bytes. Processing as best effort...');
+        log.info('Unexpected buffer length:', buffer.length, 'bytes. Processing as best effort...');
         // Try to process first 5 bytes if available
         if (buffer.length >= 5) {
           packets = [buffer.slice(0, 5)];
@@ -573,7 +573,7 @@ class BluetoothService {
       
       // Process the latest (most recent) packet
       const latestPacket = packets[packets.length - 1];
-      // log.info('Processing latest packet:' Array.from(latestPacket).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
+      // log.info('Processing latest packet:', Array.from(latestPacket).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
       
       return this.parseSingle5BytePacket(latestPacket, base64Data);
       
@@ -592,7 +592,7 @@ class BluetoothService {
       const byte4 = buffer[3]; // Pulse rate bits 0-6, sync bit
       const byte5 = buffer[4]; // SpO2 bits 0-6, sync bit
       
-      // log.info('BCI Bytes:' { // Disabled: high frequency logging
+      // log.info('BCI Bytes:', { // Disabled: high frequency logging
       //   byte1: '0x' + byte1.toString(16).padStart(2, '0').toUpperCase(),
       //   byte2: '0x' + byte2.toString(16).padStart(2, '0').toUpperCase(), 
       //   byte3: '0x' + byte3.toString(16).padStart(2, '0').toUpperCase(),
@@ -629,7 +629,7 @@ class BluetoothService {
       const pleth = byte2 & 0x7F;
       const isPlethValid = pleth !== 0;
       
-      // log.info('� BCI Parsed Values:' { // Disabled: high frequency logging
+      // log.info('� BCI Parsed Values:', { // Disabled: high frequency logging
       //   signalStrength,
       //   isSignalValid,
       //   isProbePlugged,
@@ -656,9 +656,9 @@ class BluetoothService {
       };
       
       if (spo2 !== null || pulseRate !== null) {
-        // log.info('Valid BCI data:' result); // Disabled: high frequency logging
+        // log.info('Valid BCI data:', result); // Disabled: high frequency logging
       } else {
-        // log.info('BCI status data (no valid measurements):' result); // Disabled: high frequency logging
+        // log.info('BCI status data (no valid measurements):', result); // Disabled: high frequency logging
       }
       
       return result;
@@ -671,12 +671,12 @@ class BluetoothService {
 
   parseHRData(base64Data) {
     try {
-      // log.info('Parsing HR data:' base64Data); // Disabled: high frequency logging
+      // log.info('Parsing HR data:', base64Data); // Disabled: high frequency logging
       
       // Decode base64 to buffer
       const buffer = Buffer.from(base64Data, 'base64');
-      // log.info('HR Buffer length:' buffer.length); // Disabled: high frequency logging
-      // log.info('HR Raw bytes (hex):' Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
+      // log.info('HR Buffer length:', buffer.length); // Disabled: high frequency logging
+      // log.info('HR Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
       
       if (buffer.length < 2) {
         log.info('HR buffer too short');
@@ -736,7 +736,7 @@ class BluetoothService {
         }
       }
 
-      // log.info('� HR Parsed Values:' { // Disabled: high frequency logging
+      // log.info('� HR Parsed Values:', { // Disabled: high frequency logging
       //   flags: '0x' + flags.toString(16).padStart(2, '0'),
       //   hrFormat16Bit,
       //   sensorContactSupported,
@@ -757,13 +757,13 @@ class BluetoothService {
           this.realHRVWindow.add(interval, now);
         });
         
-        // log.info('Quick HRV: ${this.quickHRVWindow.getSize()} intervals, Real HRV: ${this.realHRVWindow.getSize()} intervals'); // Disabled: frequent logging
+        // log.info(`Quick HRV: ${this.quickHRVWindow.getSize()} intervals, Real HRV: ${this.realHRVWindow.getSize()} intervals`); // Disabled: frequent logging
         
         // Calculate dual-timeframe HRV
         const hrvResults = this.calculateDualHRV(now);
         
         if (hrvResults) {
-          // log.info('HRV Results:' hrvResults); // Disabled: frequent logging
+          // log.info('HRV Results:', hrvResults); // Disabled: frequent logging
         }
       }
 
@@ -807,9 +807,9 @@ class BluetoothService {
       };
 
       if (heartRate > 0) {
-        // log.info('Valid HR data:' result); // Disabled: high frequency logging
+        // log.info('Valid HR data:', result); // Disabled: high frequency logging
       } else {
-        // log.info('HR status data (no valid measurement):' result); // Disabled: high frequency logging
+        // log.info('HR status data (no valid measurement):', result); // Disabled: high frequency logging
       }
 
       return result;
@@ -884,12 +884,12 @@ class BluetoothService {
    */
   calculateRMSSD(intervals, type = 'Unknown') {
     if (intervals.length < 2) {
-      log.info('${type} HRV: Not enough intervals (${intervals.length} < 2)');
+      log.info(`${type} HRV: Not enough intervals (${intervals.length} < 2)`);
       return null;
     }
 
     try {
-      log.info('🧠 ${type} HRV calculation: ${intervals.length} intervals');
+      log.info(`🧠 ${type} HRV calculation: ${intervals.length} intervals`);
       
       // Calculate RMSSD (Root Mean Square of Successive Differences)
       const successiveDifferences = [];
@@ -899,7 +899,7 @@ class BluetoothService {
       }
 
       if (successiveDifferences.length === 0) {
-        log.info('${type} HRV: No successive differences calculated');
+        log.info(`${type} HRV: No successive differences calculated`);
         return null;
       }
 
@@ -916,7 +916,7 @@ class BluetoothService {
         timestamp: Date.now()
       };
 
-      log.info('${type} HRV calculated: RMSSD=${result.rmssd}ms (${result.dataQuality} quality)');
+      log.info(`${type} HRV calculated: RMSSD=${result.rmssd}ms (${result.dataQuality} quality)`);
       return result;
     } catch (error) {
       log.error(`❌ Error calculating ${type} HRV:`, error);

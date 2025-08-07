@@ -28,16 +28,16 @@ export const AuthProvider = ({ children }) => {
   // Initialize auth service and check for existing session
   useEffect(() => {
     log.info('AuthContext: useEffect triggered');
-    log.info('AuthContext: authService instance:' authService);
-    log.info('AuthContext: authService type:' typeof authService);
-    log.info('AuthContext: authService methods:' authService ? Object.getOwnPropertyNames(Object.getPrototypeOf(authService)) : 'N/A');
+    log.info('AuthContext: authService instance:', authService);
+    log.info('AuthContext: authService type:', typeof authService);
+    log.info('AuthContext: authService methods:', authService ? Object.getOwnPropertyNames(Object.getPrototypeOf(authService)) : 'N/A');
     initializeAuth();
   }, []);
 
   const initializeAuth = async () => {
     try {
       log.info('AuthContext: Initializing authentication...');
-      log.info('AuthContext: authService in initializeAuth:' authService);
+      log.info('AuthContext: authService in initializeAuth:', authService);
       setIsLoading(true);
 
       if (!authService) {
@@ -52,11 +52,11 @@ export const AuthProvider = ({ children }) => {
       setUser(currentUser);
       setIsAuthenticated(!!currentUser);
 
-      log.info('AuthContext: Auth initialized' currentUser ? 'with user' : 'without user');
+      log.info('AuthContext: Auth initialized', currentUser ? 'with user' : 'without user');
 
       // Set up auth state change listener
       const unsubscribe = authService.onAuthStateChange((event, user) => {
-        log.info('AuthContext: Auth state changed:' event, user?.id);
+        log.info('AuthContext: Auth state changed:', event, user?.id);
         setUser(user);
         setIsAuthenticated(!!user);
       });
@@ -73,9 +73,9 @@ export const AuthProvider = ({ children }) => {
   // Send OTP to phone number
   const sendOTP = async (phoneNumber) => {
     try {
-      log.info('AuthContext: Sending OTP to:' phoneNumber);
-      log.info('AuthContext: authService available:' !!authService);
-      log.info('AuthContext: authService methods:' authService ? Object.getOwnPropertyNames(Object.getPrototypeOf(authService)) : 'N/A');
+      log.info('AuthContext: Sending OTP to:', phoneNumber);
+      log.info('AuthContext: authService available:', !!authService);
+      log.info('AuthContext: authService methods:', authService ? Object.getOwnPropertyNames(Object.getPrototypeOf(authService)) : 'N/A');
       
       if (!authService) {
         throw new Error('AuthService not available');

@@ -12,7 +12,7 @@ try {
   BackgroundSessionManager = require('./BackgroundSessionManager').BackgroundSessionManager;
   log.info('Background session management enabled');
 } catch (error) {
-  log.info('Background session management not available:' error.message);
+  log.info('Background session management not available:', error.message);
 }
 
 // Import the Live Activity module for iOS - available in development builds
@@ -21,7 +21,7 @@ try {
   LiveActivityModule = require('../../modules/live-activity/src/LiveActivityModule').default;
   log.info('Live Activities enabled');
 } catch (error) {
-  log.info('Live Activities not available:' error.message);
+  log.info('Live Activities not available:', error.message);
 }
 
 class EnhancedSessionManager {
@@ -86,7 +86,7 @@ class EnhancedSessionManager {
       // Check Live Activity support
       if (LiveActivityModule) {
         const isSupported = await LiveActivityModule.isSupported();
-        log.info('Live Activity support:' isSupported);
+        log.info('Live Activity support:', isSupported);
       }
 
       // Perform startup recovery cleanup
@@ -156,7 +156,7 @@ class EnhancedSessionManager {
           await this.updateLiveActivity();
         }
         
-        log.info('Synced with background state:' backgroundState);
+        log.info('Synced with background state:', backgroundState);
         this.notify('sessionSynced', backgroundState);
       }
     } catch (error) {
@@ -190,7 +190,7 @@ class EnhancedSessionManager {
       hyperoxicDuration: protocolConfig.hyperoxicDuration * 60 // Convert minutes to seconds
     };
     
-    log.info('� Protocol configured:' this.protocolConfig);
+    log.info('� Protocol configured:', this.protocolConfig);
   }
 
   // Enhanced session lifecycle with Live Activity support
@@ -201,7 +201,7 @@ class EnhancedSessionManager {
     
     // Clear any leftover readings from previous sessions
     if (this.readingBuffer.length > 0) {
-      log.info('🧹 Clearing ${this.readingBuffer.length} leftover readings from buffer');
+      log.info(`🧹 Clearing ${this.readingBuffer.length} leftover readings from buffer`);
       this.readingBuffer = [];
     }
 
@@ -290,7 +290,7 @@ class EnhancedSessionManager {
       // Save session state
       await AsyncStorage.setItem('activeSession', JSON.stringify(this.currentSession));
 
-      log.info('Enhanced session started: ${sessionId}');
+      log.info(`Enhanced session started: ${sessionId}`);
       this.notify('sessionStarted', {
         ...this.currentSession,
         currentPhase: this.currentPhase,
@@ -326,7 +326,7 @@ class EnhancedSessionManager {
     }
 
     try {
-      log.info('Starting Live Activity for session:' this.currentSession.id);
+      log.info('Starting Live Activity for session:', this.currentSession.id);
       
       const result = await LiveActivityModule.startActivity({
         sessionId: this.currentSession.id,
@@ -383,7 +383,7 @@ class EnhancedSessionManager {
       
       // Log every 5 seconds to track if timer is working
       if (this.phaseTimeRemaining % 5 === 0) {
-        log.info('⏲️ Phase timer: ${this.phaseTimeRemaining}s remaining in ${this.currentPhase} phase');
+        log.info(`⏲️ Phase timer: ${this.phaseTimeRemaining}s remaining in ${this.currentPhase} phase`);
       }
 
       // Check for phase transition
@@ -431,12 +431,12 @@ class EnhancedSessionManager {
         const adjustedTotalDuration = totalDuration - this.totalSkippedTime;
         const elapsedTime = Math.floor((Date.now() - this.sessionStartTime) / 1000);
         this.phaseTimeRemaining = Math.max(0, adjustedTotalDuration - elapsedTime);
-        log.info('Final phase (auto-advance) - aligned time: ${this.phaseTimeRemaining}s');
+        log.info(`Final phase (auto-advance) - aligned time: ${this.phaseTimeRemaining}s`);
       } else {
         this.phaseTimeRemaining = this.protocolConfig.hyperoxicDuration;
       }
       
-      log.info('Advanced to HYPEROXIC phase (Cycle ${this.currentCycle})');
+      log.info(`Advanced to HYPEROXIC phase (Cycle ${this.currentCycle})`);
       
     } else if (this.currentPhase === 'HYPEROXIC') {
       // Check if session is complete
@@ -454,7 +454,7 @@ class EnhancedSessionManager {
       // Update database with new cycle
       await this.updateSessionCycle();
       
-      log.info('Advanced to Cycle ${this.currentCycle} - HYPOXIC phase');
+      log.info(`Advanced to Cycle ${this.currentCycle} - HYPOXIC phase`);
     }
 
     // Update Live Activity with new phase
@@ -487,7 +487,7 @@ class EnhancedSessionManager {
     const timeSkipped = this.phaseTimeRemaining;
     this.totalSkippedTime += timeSkipped;
     
-    log.info('⏭️ Manually skipping ${this.currentPhase} phase (Cycle ${this.currentCycle}) - ${timeSkipped}s skipped');
+    log.info(`⏭️ Manually skipping ${this.currentPhase} phase (Cycle ${this.currentCycle}) - ${timeSkipped}s skipped`);
     
     // Advance phase directly (don't set phaseTimeRemaining to 0 first)
     await this.advancePhase();
@@ -502,10 +502,10 @@ class EnhancedSessionManager {
       const adjustedTotalDuration = totalDuration - this.totalSkippedTime;
       const elapsedTime = Math.floor((Date.now() - this.sessionStartTime) / 1000);
       this.phaseTimeRemaining = Math.max(0, adjustedTotalDuration - elapsedTime);
-      log.info('Final phase - aligned time: ${this.phaseTimeRemaining}s (total: ${adjustedTotalDuration}s, elapsed: ${elapsedTime}s)');
+      log.info(`Final phase - aligned time: ${this.phaseTimeRemaining}s (total: ${adjustedTotalDuration}s, elapsed: ${elapsedTime}s)`);
     }
     
-    log.info('⏱️ Phase skipped - new phase time: ${this.phaseTimeRemaining}s, phase: ${this.currentPhase}, total skipped: ${this.totalSkippedTime}s');
+    log.info(`⏱️ Phase skipped - new phase time: ${this.phaseTimeRemaining}s, phase: ${this.currentPhase}, total skipped: ${this.totalSkippedTime}s`);
     
     // Clear and restart the timer to ensure it starts counting immediately
     if (this.phaseTimer) {
@@ -539,7 +539,7 @@ class EnhancedSessionManager {
 
   async completeSession() {
     log.info('IHHT session completed!');
-    log.info('Completing session with cycle ${this.currentCycle}, phase ${this.currentPhase}');
+    log.info(`Completing session with cycle ${this.currentCycle}, phase ${this.currentPhase}`);
     
     // Mark as completed but preserve the cycle count
     const finalCycle = this.currentCycle;
@@ -552,7 +552,7 @@ class EnhancedSessionManager {
       try {
         await DatabaseService.updateSessionCycle(this.currentSession.id, finalCycle);
         await SupabaseService.updateSessionCycle(this.currentSession.id, finalCycle);
-        log.info('Updated final cycle count to ${finalCycle} in databases');
+        log.info(`Updated final cycle count to ${finalCycle} in databases`);
       } catch (error) {
         log.error('⚠️ Failed to update final cycle count:', error);
       }
@@ -612,7 +612,7 @@ class EnhancedSessionManager {
     // Store the final cycle count before resetting
     const finalCycle = this.currentCycle;
     
-    log.info('� Starting ROBUST session termination for: ${sessionId}');
+    log.info(`� Starting ROBUST session termination for: ${sessionId}`);
     
     // Helper function to run operations with timeout
     const withTimeout = async (operation, timeoutMs, stepName) => {
@@ -663,7 +663,7 @@ class EnhancedSessionManager {
     
     for (let attempt = 1; attempt <= maxFlushAttempts; attempt++) {
       const flushResult = await withTimeout(async () => {
-        log.info('Step 4: Flushing remaining readings (attempt ${attempt}/${maxFlushAttempts})...');
+        log.info(`Step 4: Flushing remaining readings (attempt ${attempt}/${maxFlushAttempts})...`);
         await this.flushReadingBuffer();
         log.info('Step 4: Readings flushed successfully');
         return true;
@@ -675,7 +675,7 @@ class EnhancedSessionManager {
       }
       
       if (attempt < maxFlushAttempts) {
-        log.info('Flush attempt ${attempt} failed, retrying...');
+        log.info(`Flush attempt ${attempt} failed, retrying...`);
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
       }
     }
@@ -741,8 +741,8 @@ class EnhancedSessionManager {
     // Step 7: End session in Supabase (with timeout, non-blocking)
     await withTimeout(async () => {
       log.info('Step 7: Ending session in Supabase...');
-      log.info('Session mapping check:' Array.from(SupabaseService.sessionMapping.entries()).slice(-3));
-      log.info('Target session ID:' sessionId);
+      log.info('Session mapping check:', Array.from(SupabaseService.sessionMapping.entries()).slice(-3));
+      log.info('Target session ID:', sessionId);
       
       const result = await SupabaseService.endSession(sessionId, {
         ...stats,
@@ -754,7 +754,7 @@ class EnhancedSessionManager {
         log.info('Step 7: Supabase updated successfully');
       } else {
         log.warn('⚠️ Step 7: Supabase update returned null (may be queued)');
-        log.info('Sync queue length:' SupabaseService.syncQueue.length);
+        log.info('Sync queue length:', SupabaseService.syncQueue.length);
       }
     }, 10000, 'Supabase end');
 
@@ -788,15 +788,15 @@ class EnhancedSessionManager {
     log.info('\n' + '='.repeat(60));
     log.info('� SESSION SUMMARY - EASY TO READ');
     log.info('='.repeat(60));
-    log.info('� Session ID: ${sessionId}');
-    log.info('⏰ Duration: ${Math.round((Date.now() - (completedSession.startTime || Date.now())) / 1000)} seconds');
+    log.info(`� Session ID: ${sessionId}`);
+    log.info(`⏰ Duration: ${Math.round((Date.now() - (completedSession.startTime || Date.now())) / 1000)} seconds`);
     log.info(`Total readings collected: ${stats ? stats.totalReadings : 'Unknown'}`);
     log.info(`Average Heart Rate: ${stats ? (stats.avgHeartRate || 'No data') : 'Unknown'}`);
     log.info(`Average SpO2: ${stats ? (stats.avgSpO2 || 'No data') : 'Unknown'}`);
-    log.info('Reading buffer size: ${this.readingBuffer.length}');
-    log.info('Session reading count: ${completedSession.readingCount || 0}');
-    log.info('� Session mapping entries: ${SupabaseService.sessionMapping.size}');
-    log.info('� Sync queue items: ${SupabaseService.syncQueue.length}');
+    log.info(`Reading buffer size: ${this.readingBuffer.length}`);
+    log.info(`Session reading count: ${completedSession.readingCount || 0}`);
+    log.info(`� Session mapping entries: ${SupabaseService.sessionMapping.size}`);
+    log.info(`� Sync queue items: ${SupabaseService.syncQueue.length}`);
     log.info(`Has session mapping for this ID: ${SupabaseService.sessionMapping.has(sessionId) ? '✅ Yes' : '❌ No'}`);
     
     if (stats && stats.totalReadings > 0) {
@@ -845,7 +845,7 @@ class EnhancedSessionManager {
       const allReadings = [...existingReadings, ...readings];
       
       await AsyncStorage.setItem(recoveryKey, JSON.stringify(allReadings));
-      log.info('Saved ${readings.length} readings to recovery buffer for session ${sessionId}');
+      log.info(`Saved ${readings.length} readings to recovery buffer for session ${sessionId}`);
       
       // Schedule recovery attempt
       setTimeout(() => this.attemptRecovery(sessionId), 5000);
@@ -862,14 +862,14 @@ class EnhancedSessionManager {
       if (!recoveryData) return;
       
       const readings = JSON.parse(recoveryData);
-      log.info('Attempting to recover ${readings.length} readings for session ${sessionId}');
+      log.info(`Attempting to recover ${readings.length} readings for session ${sessionId}`);
       
       // Try to save recovered readings
       await DatabaseService.addReadingsBatch(readings);
       
       // Clear recovery buffer on success
       await AsyncStorage.removeItem(recoveryKey);
-      log.info('Successfully recovered ${readings.length} readings');
+      log.info(`Successfully recovered ${readings.length} readings`);
       
       // Trigger stats recalculation
       await DatabaseService.reprocessSessionStats(sessionId);
@@ -890,7 +890,7 @@ class EnhancedSessionManager {
       // Update Supabase
       await SupabaseService.updateSessionCycle(this.currentSession.id, this.currentCycle);
       
-      log.info('Updated session cycle to ${this.currentCycle} in database');
+      log.info(`Updated session cycle to ${this.currentCycle} in database`);
     } catch (error) {
       log.error('❌ Failed to update session cycle:', error);
     }
@@ -904,7 +904,7 @@ class EnhancedSessionManager {
     try {
       await DatabaseService.updateSessionProtocol(sessionId, this.protocolConfig);
       await SupabaseService.updateSessionProtocolConfig(sessionId, this.protocolConfig);
-      log.info('Updated protocol for session ${sessionId}');
+      log.info(`Updated protocol for session ${sessionId}`);
     } catch (error) {
       log.error('❌ Failed to update session protocol:', error);
     }
@@ -938,7 +938,7 @@ class EnhancedSessionManager {
     
     const previousState = this.connectionState;
     this.connectionState = state;
-    log.info('Connection state changed: ${previousState} → ${state}');
+    log.info(`Connection state changed: ${previousState} → ${state}`);
     
     // Update session data if available
     if (this.currentSession) {
@@ -1002,14 +1002,14 @@ class EnhancedSessionManager {
     
     // Debug log to ensure phase data is being recorded
     if (this.readingBuffer.length % 10 === 0) {
-      log.info('Reading #${this.readingBuffer.length + 1}: Phase=${this.currentPhase}, Cycle=${this.currentCycle}');
+      log.info(`Reading #${this.readingBuffer.length + 1}: Phase=${this.currentPhase}, Cycle=${this.currentCycle}`);
     }
 
     // Only log first reading and major milestones to reduce noise
     if (this.currentSession.readingCount === 0) {
       log.info('� First reading collected!');
     } else if (this.currentSession.readingCount % 100 === 0) {
-      log.info('Milestone: ${this.currentSession.readingCount} readings collected');
+      log.info(`Milestone: ${this.currentSession.readingCount} readings collected`);
     }
 
     this.readingBuffer.push(timestampedReading);
@@ -1020,7 +1020,7 @@ class EnhancedSessionManager {
     // this.notify('readingAdded', timestampedReading);
 
     if (this.readingBuffer.length >= this.BATCH_SIZE) {
-      log.info('Buffer full (${this.BATCH_SIZE}) - flushing to database');
+      log.info(`Buffer full (${this.BATCH_SIZE}) - flushing to database`);
       await this.flushReadingBuffer();
     }
   }
@@ -1040,7 +1040,7 @@ class EnhancedSessionManager {
       try {
         await DatabaseService.addReadingsBatch(readings);
         localSuccess = true;
-        log.info('Saved ${readings.length} readings to local database');
+        log.info(`Saved ${readings.length} readings to local database`);
       } catch (localError) {
         log.error('❌ Failed to save to local database:', localError);
         // Re-add readings to buffer for retry
@@ -1053,7 +1053,7 @@ class EnhancedSessionManager {
         try {
           await SupabaseService.addReadingsBatch(readings);
           cloudSuccess = true;
-          log.info('Synced ${readings.length} readings to cloud');
+          log.info(`Synced ${readings.length} readings to cloud`);
         } catch (cloudError) {
           log.warn('⚠️ Failed to sync to cloud (will retry later):', cloudError.message);
           // Queue for later sync - don't fail the whole operation
@@ -1061,7 +1061,7 @@ class EnhancedSessionManager {
         }
       } else {
         // Queue for later sync when session becomes active
-        log.info('� Queued ${readings.length} readings for later cloud sync');
+        log.info(`� Queued ${readings.length} readings for later cloud sync`);
         SupabaseService.queueForSync('addReadingsBatch', readings);
       }
 
@@ -1205,7 +1205,7 @@ class EnhancedSessionManager {
   setHypoxiaLevel(level) {
     if (level >= 0 && level <= 10) {
       this.currentHypoxiaLevel = level;
-      log.info('�️ Hypoxia level set to: ${level}');
+      log.info(`�️ Hypoxia level set to: ${level}`);
     }
   }
 
@@ -1358,7 +1358,7 @@ class EnhancedSessionManager {
       const recoveryKeys = allKeys.filter(key => key.startsWith('recovery_buffer_'));
       
       if (recoveryKeys.length > 0) {
-        log.info('Found ${recoveryKeys.length} recovery buffers to process');
+        log.info(`Found ${recoveryKeys.length} recovery buffers to process`);
         for (const key of recoveryKeys) {
           const sessionId = key.replace('recovery_buffer_', '');
           await this.attemptRecovery(sessionId);
@@ -1377,7 +1377,7 @@ class EnhancedSessionManager {
           const RECOVERY_THRESHOLD = 10 * 60 * 1000; // 10 minutes
           
           if (sessionAge > RECOVERY_THRESHOLD) {
-            log.info('Stored session is ${Math.round(sessionAge / 60000)} minutes old - cleaning up');
+            log.info(`Stored session is ${Math.round(sessionAge / 60000)} minutes old - cleaning up`);
             
             // Try to end the session properly in databases
             try {
@@ -1390,7 +1390,7 @@ class EnhancedSessionManager {
               await SupabaseService.endSession(sessionData.id, stats, sessionData.startTime);
               log.info('Cleaned up stuck session in databases');
             } catch (dbError) {
-              log.info('Could not end session in databases (may have been cleaned already):' dbError.message);
+              log.info('Could not end session in databases (may have been cleaned already):', dbError.message);
             }
             
             // Clear the stored session
@@ -1413,12 +1413,12 @@ class EnhancedSessionManager {
         const cleanupResult = await SupabaseService.cleanupStuckSessions();
         
         if (cleanupResult && cleanupResult.cleaned > 0) {
-          log.info('Successfully cleaned up ${cleanupResult.cleaned} stuck sessions');
+          log.info(`Successfully cleaned up ${cleanupResult.cleaned} stuck sessions`);
         } else {
           log.info('Found 0 stuck sessions');
         }
       } catch (cleanupError) {
-        log.info('Could not cleanup stuck sessions:' cleanupError.message);
+        log.info('Could not cleanup stuck sessions:', cleanupError.message);
       }
       
       // Also run the local database cleanup
@@ -1436,7 +1436,7 @@ class EnhancedSessionManager {
         log.info('� Processing 0 sessions for cleanup...');
         log.info('Successfully cleaned up 0/0 sessions');
       } catch (localCleanupError) {
-        log.info('Local cleanup error:' localCleanupError.message);
+        log.info('Local cleanup error:', localCleanupError.message);
       }
       
       log.info('Startup recovery complete');
