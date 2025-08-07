@@ -228,7 +228,7 @@ class DatabaseService {
       hyperoxicDuration // planned_hyperoxic_duration
     ]);
     
-    log.info('Session created: ${sessionId} (Planned: ${totalCycles} cycles, ${hypoxicDuration}s hypoxic, ${hyperoxicDuration}s hyperoxic, Hypoxia Level: ${hypoxiaLevel})');
+    log.info(`Session created: ${sessionId} (Planned: ${totalCycles} cycles, ${hypoxicDuration}s hypoxic, ${hyperoxicDuration}s hyperoxic, Hypoxia Level: ${hypoxiaLevel})`);
     return sessionId;
   }
 
@@ -253,7 +253,7 @@ class DatabaseService {
       sessionId
     ]);
     
-    log.info('� Updated protocol for session ${sessionId}: ${totalCycles} cycles, ${hypoxicDuration}s hypoxic, ${hyperoxicDuration}s hyperoxic');
+    log.info(`� Updated protocol for session ${sessionId}: ${totalCycles} cycles, ${hypoxicDuration}s hypoxic, ${hyperoxicDuration}s hyperoxic`);
   }
 
   // Update actual execution stats during the session
@@ -277,25 +277,25 @@ class DatabaseService {
       sessionId
     ]);
     
-    log.info('Updated actual execution for session ${sessionId}: ${actualData.cyclesCompleted} cycles completed (${actualData.completionPercentage}%)');
+    log.info(`Updated actual execution for session ${sessionId}: ${actualData.cyclesCompleted} cycles completed (${actualData.completionPercentage}%)`);
   }
 
   async endSession(sessionId, startTime = null) {
     const endTime = Date.now();
     
     try {
-      log.info('Ending session in local database: ${sessionId}');
+      log.info(`Ending session in local database: ${sessionId}`);
       
       // Calculate session statistics
-      log.info('Calculating stats for session: ${sessionId}');
+      log.info(`Calculating stats for session: ${sessionId}`);
       const stats = await this.getSessionStats(sessionId);
-      log.info('Session stats calculated:' stats);
+      log.info('Session stats calculated:', stats);
       
       // Calculate total duration if startTime provided
       let totalDuration = null;
       if (startTime) {
         totalDuration = Math.floor((endTime - startTime) / 1000); // Convert to seconds
-        log.info('⏱️ Session duration: ${totalDuration} seconds');
+        log.info(`⏱️ Session duration: ${totalDuration} seconds`);
       }
       
       const query = `
@@ -306,7 +306,7 @@ class DatabaseService {
         WHERE id = ?
       `;
       
-      log.info('Executing update query for session: ${sessionId}');
+      log.info(`Executing update query for session: ${sessionId}`);
       await this.db.executeSql(query, [
         endTime,
         stats.totalReadings,
@@ -320,7 +320,7 @@ class DatabaseService {
         sessionId
       ]);
       
-      log.info('Session ended successfully in local DB: ${sessionId} (Duration: ${totalDuration}s)');
+      log.info(`Session ended successfully in local DB: ${sessionId} (Duration: ${totalDuration}s)`);
       return stats;
     } catch (error) {
       log.error(`❌ Failed to end session ${sessionId} in local DB:`, error);
@@ -336,7 +336,7 @@ class DatabaseService {
       WHERE id = ?
     `;
     await this.db.executeSql(query, [currentCycle, Date.now(), sessionId]);
-    log.info('Updated session ${sessionId} to cycle ${currentCycle} in local DB');
+    log.info(`Updated session ${sessionId} to cycle ${currentCycle} in local DB`);
   }
 
   async getSession(sessionId) {
@@ -417,7 +417,7 @@ class DatabaseService {
       }
     });
     
-    log.info('� Batch inserted ${readings.length} readings with FiO2 data');
+    log.info(`� Batch inserted ${readings.length} readings with FiO2 data`);
   }
 
   async getSessionReadings(sessionId, validOnly = false) {
@@ -455,7 +455,7 @@ class DatabaseService {
     const stats = result.rows.item(0);
     
     // Log for debugging
-    log.info('Session stats calculated:' {
+    log.info('Session stats calculated:', {
       sessionId,
       totalReadings: stats.totalReadings,
       validSpO2Readings: stats.validSpO2Readings,
@@ -469,7 +469,7 @@ class DatabaseService {
 
   // Data Management
   async reprocessSessionStats(sessionId) {
-    log.info('Reprocessing stats for session: ${sessionId}');
+    log.info(`Reprocessing stats for session: ${sessionId}`);
     
     // Recalculate statistics with new logic
     const stats = await this.getSessionStats(sessionId);
@@ -492,7 +492,7 @@ class DatabaseService {
       sessionId
     ]);
     
-    log.info('Reprocessed stats for session ${sessionId}:' stats);
+    log.info(`Reprocessed stats for session ${sessionId}:`, stats);
     return stats;
   }
 
@@ -514,7 +514,7 @@ class DatabaseService {
       sessionsToReprocess.push(result.rows.item(i).id);
     }
     
-    log.info('� Found ${sessionsToReprocess.length} sessions to reprocess');
+    log.info(`� Found ${sessionsToReprocess.length} sessions to reprocess`);
     
     const results = [];
     for (const sessionId of sessionsToReprocess) {
@@ -528,7 +528,7 @@ class DatabaseService {
     }
     
     const successful = results.filter(r => r.success).length;
-    log.info('Reprocessed ${successful}/${sessionsToReprocess.length} sessions successfully');
+    log.info(`Reprocessed ${successful}/${sessionsToReprocess.length} sessions successfully`);
     
     return results;
   }
@@ -646,7 +646,7 @@ class DatabaseService {
         throw new Error('Survey values must be integers between 1 and 5');
       }
 
-      log.info('Saving pre-session survey for: ${sessionId}');
+      log.info(`Saving pre-session survey for: ${sessionId}`);
       
       // Use INSERT OR IGNORE followed by UPDATE to preserve existing data
       const insertQuery = `
@@ -663,7 +663,7 @@ class DatabaseService {
       await this.db.executeSql(insertQuery, [sessionId, clarityPre, energyPre]);
       await this.db.executeSql(updateQuery, [clarityPre, energyPre, sessionId]);
       
-      log.info('Pre-session survey saved: clarity=${clarityPre}, energy=${energyPre}');
+      log.info(`Pre-session survey saved: clarity=${clarityPre}, energy=${energyPre}`);
       
       return { success: true };
     } catch (error) {
@@ -682,7 +682,7 @@ class DatabaseService {
         throw new Error('Survey values must be integers between 1 and 5');
       }
 
-      log.info('Saving post-session survey for: ${sessionId}');
+      log.info(`Saving post-session survey for: ${sessionId}`);
       
       // Use INSERT OR IGNORE followed by UPDATE to preserve existing data
       const insertQuery = `
@@ -699,7 +699,7 @@ class DatabaseService {
       await this.db.executeSql(insertQuery, [sessionId, clarityPost, energyPost, stressPost, notesPost]);
       await this.db.executeSql(updateQuery, [clarityPost, energyPost, stressPost, notesPost, sessionId]);
       
-      log.info('Post-session survey saved: clarity=${clarityPost}, energy=${energyPost}, stress=${stressPost}');
+      log.info(`Post-session survey saved: clarity=${clarityPost}, energy=${energyPost}, stress=${stressPost}`);
       
       return { success: true };
     } catch (error) {
@@ -718,7 +718,7 @@ class DatabaseService {
         throw new Error('Survey values must be integers between 1 and 5');
       }
 
-      log.info('Saving intra-session response for: ${sessionId}, phase: ${phaseNumber}');
+      log.info(`Saving intra-session response for: ${sessionId}, phase: ${phaseNumber}`);
       
       const query = `
         INSERT OR REPLACE INTO intra_session_responses 
@@ -727,7 +727,7 @@ class DatabaseService {
       `;
       
       await this.db.executeSql(query, [sessionId, phaseNumber, clarity, energy, stress, timestamp]);
-      log.info('Intra-session response saved: phase=${phaseNumber}, clarity=${clarity}, energy=${energy}, stress=${stress}');
+      log.info(`Intra-session response saved: phase=${phaseNumber}, clarity=${clarity}, energy=${energy}, stress=${stress}`);
       
       return { success: true };
     } catch (error) {
@@ -741,7 +741,7 @@ class DatabaseService {
    */
   async getSessionSurveyData(sessionId) {
     try {
-      log.info('Fetching survey data for session: ${sessionId}');
+      log.info(`Fetching survey data for session: ${sessionId}`);
       
       // Get main survey data
       const [surveyResult] = await this.db.executeSql(
@@ -795,7 +795,7 @@ class DatabaseService {
         });
       }
       
-      log.info('Survey data retrieved for ${sessionId}:' {
+      log.info(`Survey data retrieved for ${sessionId}:`, {
         hasPreSession: !!surveyData.preSession,
         hasPostSession: !!surveyData.postSession,
         intraResponseCount: surveyData.intraSessionResponses.length
@@ -855,12 +855,12 @@ class DatabaseService {
    */
   async deleteSurveyData(sessionId) {
     try {
-      log.info('Deleting survey data for session: ${sessionId}');
+      log.info(`Deleting survey data for session: ${sessionId}`);
       
       await this.db.executeSql('DELETE FROM session_surveys WHERE session_id = ?', [sessionId]);
       await this.db.executeSql('DELETE FROM intra_session_responses WHERE session_id = ?', [sessionId]);
       
-      log.info('Survey data deleted for session: ${sessionId}');
+      log.info(`Survey data deleted for session: ${sessionId}`);
       return { success: true };
     } catch (error) {
       log.error('❌ Failed to delete survey data:', error);

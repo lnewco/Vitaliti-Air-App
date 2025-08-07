@@ -26,11 +26,11 @@ class AuthService {
       this.currentUser = session?.user || null;
       this.isInitialized = true;
 
-      log.info('Auth initialized:' this.currentUser ? 'User logged in' : 'No user');
+      log.info('Auth initialized:', this.currentUser ? 'User logged in' : 'No user');
       
       // Set up auth state change listener
       supabase.auth.onAuthStateChange((event, session) => {
-        log.info('Auth state changed:' event, session?.user?.id);
+        log.info('Auth state changed:', event, session?.user?.id);
         this.currentUser = session?.user || null;
         
         // Notify all listeners
@@ -50,7 +50,7 @@ class AuthService {
   // Send OTP to phone number
   async sendOTP(phoneNumber) {
     try {
-      log.info('Sending OTP to:' phoneNumber);
+      log.info('Sending OTP to:', phoneNumber);
 
       // Clean and format phone number (should include country code)
       const cleanPhone = this.formatPhoneNumber(phoneNumber);
@@ -81,7 +81,7 @@ class AuthService {
   // Verify OTP and sign in
   async verifyOTP(phoneNumber, otpCode) {
     try {
-      log.info('� Verifying OTP for:' phoneNumber);
+      log.info('� Verifying OTP for:', phoneNumber);
 
       const cleanPhone = this.formatPhoneNumber(phoneNumber);
       
@@ -97,7 +97,7 @@ class AuthService {
       }
 
       this.currentUser = data.user;
-      log.info('User signed in:' data.user.id);
+      log.info('User signed in:', data.user.id);
 
       // Create user profile if needed
       await this.createUserProfileIfNeeded(data.user, phoneNumber);
