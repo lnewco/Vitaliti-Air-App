@@ -96,11 +96,14 @@ export const AuthProvider = ({ children }) => {
   // Verify OTP and sign in
   const verifyOTP = async (phoneNumber, otpCode) => {
     try {
-      log.info('� AuthContext: Verifying OTP...');
+      log.info('✅ AuthContext: Verifying OTP...');
+      log.info('Phone number:', phoneNumber);
+      log.info('OTP code length:', otpCode?.length);
+      
       const result = await authService.verifyOTP(phoneNumber, otpCode);
       
       // Auth state will be updated automatically via onAuthStateChange listener
-      log.info('AuthContext: OTP verification successful');
+      log.info('✅ AuthContext: OTP verification successful');
       return result;
     } catch (error) {
       log.error('❌ AuthContext: OTP verification failed:', error.message);

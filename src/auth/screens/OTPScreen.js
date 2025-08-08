@@ -20,8 +20,11 @@ const OTPScreen = ({ route, navigation }) => {
   const [isResending, setIsResending] = useState(false);
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   
   const inputRefs = useRef([]);
+  const verificationInProgress = useRef(false); // Use ref for immediate updates
+  const lastVerifiedCode = useRef(null); // Track last verified code to prevent duplicates
   const { verifyOTP, sendOTP } = useAuth();
 
   // Timer countdown
@@ -49,10 +52,14 @@ const OTPScreen = ({ route, navigation }) => {
         }
       });
       
-      // Auto-verify
-      setTimeout(() => {
-        handleVerifyOTP(text);
-      }, 100);
+      // Auto-verify (prevent duplicate calls using ref for immediate effect)
+      if (!verificationInProgress.current && lastVerifiedCode.current !== text) {
+        verificationInProgress.current = true;
+        setIsVerifying(true);
+        setTimeout(() => {
+          handleVerifyOTP(text);
+        }, 100);
+      }
       
       return;
     }
@@ -69,9 +76,13 @@ const OTPScreen = ({ route, navigation }) => {
       inputRefs.current[index + 1]?.focus();
     }
 
-    // Auto-verify when all 6 digits are entered
-    if (text && index === 5 && newOtp.every(digit => digit.length === 1)) {
-      handleVerifyOTP(newOtp.join(''));
+    // Auto-verify when all 6 digits are entered (prevent duplicate calls)
+    const fullCode = newOtp.join('');
+    if (text && index === 5 && newOtp.every(digit => digit.length === 1) && 
+        !verificationInProgress.current && lastVerifiedCode.current !== fullCode) {
+      verificationInProgress.current = true;
+      setIsVerifying(true);
+      handleVerifyOTP(fullCode);
     }
   };
 
@@ -83,21 +94,48 @@ const OTPScreen = ({ route, navigation }) => {
   };
 
   const handleVerifyOTP = async (otpCode = null) => {
+    const codeToVerify = otpCode || otp.join('');
+    
+    // Check using ref for most up-to-date value and prevent duplicate of same code
+    if (verificationInProgress.current || lastVerifiedCode.current === codeToVerify) {
+      console.log('⚠️ Verification already in progress or code already verified');
+      verificationInProgress.current = false; // Reset in case of edge case
+      setIsVerifying(false);
+      return;
+    }
+    
     try {
-      const codeToVerify = otpCode || otp.join('');
-      
       if (codeToVerify.length !== 6) {
         Alert.alert('Invalid Code', 'Please enter the complete 6-digit verification code.');
+        verificationInProgress.current = false;
+        setIsVerifying(false);
         return;
       }
 
+      // Mark this code as being verified
+      verificationInProgress.current = true;
+      lastVerifiedCode.current = codeToVerify;
       setIsLoading(true);
+      setIsVerifying(true);
+
+      console.log('🔐 Verifying OTP code:', codeToVerify.substring(0, 2) + '****');
 
       // Verify OTP
       await verifyOTP(phoneNumber, codeToVerify);
+      
+      // Success - reset flags after a short delay to allow navigation
+      setTimeout(() => {
+        setIsLoading(false);
+        setIsVerifying(false);
+        verificationInProgress.current = false;
+      }, 500);
 
     } catch (error) {
       console.error('❌ OTP verification error:', error.message);
+      
+      // Clear the last verified code on error so user can retry with same code
+      lastVerifiedCode.current = null;
+      verificationInProgress.current = false;
       
       // Clear OTP inputs on error
       setOtp(['', '', '', '', '', '']);
@@ -107,8 +145,10 @@ const OTPScreen = ({ route, navigation }) => {
         'Verification Failed',
         error.message || 'Invalid verification code. Please try again.'
       );
-    } finally {
+      
+      // Reset verification flags on error
       setIsLoading(false);
+      setIsVerifying(false);
     }
   };
 
@@ -120,10 +160,13 @@ const OTPScreen = ({ route, navigation }) => {
 
       await sendOTP(phoneNumber);
 
-      // Reset timer and OTP
+      // Reset everything including refs
       setTimer(60);
       setCanResend(false);
       setOtp(['', '', '', '', '', '']);
+      verificationInProgress.current = false;
+      lastVerifiedCode.current = null;
+      setIsVerifying(false);
       inputRefs.current[0]?.focus();
 
       Alert.alert(

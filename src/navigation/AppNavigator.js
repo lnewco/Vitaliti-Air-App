@@ -24,12 +24,16 @@ const AppNavigator = () => {
     checkOnboardingStatus();
   }, []);
 
-  // Re-check onboarding status when authentication state changes
+  // Re-check onboarding status and navigate when authentication state changes
   useEffect(() => {
     if (isAuthenticated) {
       checkOnboardingStatus();
     }
-  }, [isAuthenticated]);
+    // Navigate when auth state changes and we're ready
+    if (!isLoading && !isCheckingOnboarding && hasSeenOnboarding !== null) {
+      navigateBasedOnAuthAndOnboarding();
+    }
+  }, [isAuthenticated, isLoading, isCheckingOnboarding, hasSeenOnboarding]);
 
   // Listen for app state changes to re-check onboarding status
   useEffect(() => {
@@ -154,6 +158,39 @@ const AppNavigator = () => {
     } catch (error) {
       console.error('Navigation failed:', error);
       // Don't crash, just log the error
+    }
+  };
+
+  // New function to handle navigation based on auth and onboarding state
+  const navigateBasedOnAuthAndOnboarding = () => {
+    if (!navigationRef.current || !navigationRef.current.isReady()) {
+      console.log('🔄 Navigation not ready for auth state change');
+      setTimeout(() => navigateBasedOnAuthAndOnboarding(), 100);
+      return;
+    }
+
+    const flow = getInitialFlow();
+    const targetScreen = flow === 'onboarding' ? 'Onboarding' : flow === 'auth' ? 'Auth' : 'Main';
+    const currentRoute = navigationRef.current.getCurrentRoute();
+    
+    console.log('🔄 Auth state changed - navigating from', currentRoute?.name, 'to', targetScreen);
+    
+    if (currentRoute?.name !== targetScreen) {
+      try {
+        // Use reset for auth state changes to ensure clean navigation stack
+        navigationRef.current.reset({
+          index: 0,
+          routes: [{ name: targetScreen }],
+        });
+      } catch (error) {
+        console.error('Navigation after auth change failed:', error);
+        // Fallback to navigate
+        try {
+          navigationRef.current.navigate(targetScreen);
+        } catch (navError) {
+          console.error('Fallback navigation also failed:', navError);
+        }
+      }
     }
   };
 
