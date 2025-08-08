@@ -50,10 +50,11 @@ class AuthService {
   // Send OTP to phone number
   async sendOTP(phoneNumber) {
     try {
-      log.info('Sending OTP to:', phoneNumber);
+      log.info('📱 Sending OTP to:', phoneNumber);
 
       // Clean and format phone number (should include country code)
       const cleanPhone = this.formatPhoneNumber(phoneNumber);
+      log.info('Formatted phone for OTP:', cleanPhone);
       
       const { data, error } = await supabase.auth.signInWithOtp({
         phone: cleanPhone,
@@ -67,10 +68,13 @@ class AuthService {
 
       if (error) {
         log.error('❌ Error sending OTP:', error.message);
+        log.error('Error code:', error.code);
+        log.error('Error details:', JSON.stringify(error));
         throw new Error(this.getReadableErrorMessage(error.message));
       }
 
-      log.info('OTP sent successfully');
+      log.info('✅ OTP sent successfully at:', new Date().toISOString());
+      log.info('Response data:', JSON.stringify(data));
       return { success: true, data };
     } catch (error) {
       log.error('❌ Send OTP failed:', error.message);
@@ -81,9 +85,17 @@ class AuthService {
   // Verify OTP and sign in
   async verifyOTP(phoneNumber, otpCode) {
     try {
-      log.info('� Verifying OTP for:', phoneNumber);
+      log.info('🔑 Verifying OTP for:', phoneNumber);
+      log.info('OTP Code length:', otpCode?.length);
+      log.info('OTP Code (masked):', otpCode ? otpCode.substring(0, 2) + '****' : 'empty');
 
       const cleanPhone = this.formatPhoneNumber(phoneNumber);
+      log.info('Formatted phone:', cleanPhone);
+      
+      // Validate OTP code
+      if (!otpCode || otpCode.length !== 6) {
+        throw new Error('Invalid verification code. Please enter a 6-digit code.');
+      }
       
       const { data, error } = await supabase.auth.verifyOtp({
         phone: cleanPhone,
@@ -93,11 +105,13 @@ class AuthService {
 
       if (error) {
         log.error('❌ Error verifying OTP:', error.message);
+        log.error('Error code:', error.code);
+        log.error('Error details:', JSON.stringify(error));
         throw new Error(this.getReadableErrorMessage(error.message));
       }
 
       this.currentUser = data.user;
-      log.info('User signed in:', data.user.id);
+      log.info('✅ User signed in successfully:', data.user.id);
 
       // Create user profile if needed
       await this.createUserProfileIfNeeded(data.user, phoneNumber);
@@ -199,6 +213,7 @@ class AuthService {
   getReadableErrorMessage(errorMessage) {
     const errorMappings = {
       'Invalid login credentials': 'Invalid verification code. Please try again.',
+      'Token has expired or is invalid': 'Verification code has expired or is invalid. Please request a new one.',
       'Token has expired': 'Verification code has expired. Please request a new one.',
       'Too many requests': 'Too many attempts. Please wait before trying again.',
       'Invalid phone number': 'Please enter a valid phone number.',
