@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,43 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../auth/AuthContext';
 import { CommonActions } from '@react-navigation/native';
+import { supabase } from '../config/supabase';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, signOut } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [userName, setUserName] = useState(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+
+  // Fetch user profile data on mount
+  useEffect(() => {
+    fetchUserProfile();
+  }, [user]);
+
+  const fetchUserProfile = async () => {
+    if (!user?.id) {
+      setIsLoadingProfile(false);
+      return;
+    }
+
+    try {
+      setIsLoadingProfile(true);
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('full_name')
+        .eq('user_id', user.id)
+        .single();
+
+      if (data && data.full_name) {
+        setUserName(data.full_name);
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
 
   // Format phone number for display
   const formatPhoneNumber = (phone) => {
@@ -137,10 +169,19 @@ const ProfileScreen = ({ navigation }) => {
             <View style={styles.avatarContainer}>
               <Text style={styles.avatarText}>👤</Text>
             </View>
-            <Text style={styles.userLabel}>Logged in as:</Text>
-            <Text style={styles.userPhone}>{getUserIdentifier()}</Text>
-            {user?.id && (
-              <Text style={styles.userId}>ID: {user.id.substring(0, 8)}...</Text>
+            {isLoadingProfile ? (
+              <ActivityIndicator size="small" color="#3B82F6" style={{ marginVertical: 10 }} />
+            ) : (
+              <>
+                {userName && (
+                  <Text style={styles.userName}>{userName}</Text>
+                )}
+                <Text style={styles.userLabel}>Phone Number</Text>
+                <Text style={styles.userPhone}>{getUserIdentifier()}</Text>
+                {user?.id && (
+                  <Text style={styles.userId}>ID: {user.id.substring(0, 8)}...</Text>
+                )}
+              </>
             )}
           </View>
         </View>
@@ -241,15 +282,22 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 40,
   },
+  userName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
   userLabel: {
     fontSize: 14,
     color: '#6B7280',
-    marginBottom: 8,
+    marginBottom: 4,
+    marginTop: 8,
   },
   userPhone: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#374151',
     marginBottom: 4,
   },
   userId: {
