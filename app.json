@@ -69,13 +69,7 @@
     },
     "plugins": [
       "expo-background-task",
-      "expo-secure-store",
-      [
-        "expo-background-fetch",
-        {
-          "backgroundFetchInterval": 15
-        }
-      ]
+      "expo-secure-store"
     ]
   }
 }

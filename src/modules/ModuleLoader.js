@@ -253,48 +253,58 @@ class ModuleLoader {
   }
 
   /**
-   * Load background fetch module
+   * Load background task module
    */
-  async loadBackgroundFetch() {
-    const moduleName = 'backgroundFetch';
+  async loadBackgroundTask() {
+    const moduleName = 'backgroundTask';
     
     if (this.modules[moduleName]) {
       return this.modules[moduleName];
     }
 
     if (!runtimeEnvironment.hasCapability('backgroundFetch')) {
-      console.log('📱 BackgroundFetch: Not available in Expo Go');
-      return this.createBackgroundFetchFallback();
+      console.log('📱 BackgroundTask: Not available in Expo Go');
+      return this.createBackgroundTaskFallback();
     }
 
     try {
-      // Try to load expo-background-fetch (works in dev builds)
-      const BackgroundFetch = require('expo-background-fetch');
+      // Try to load expo-background-task (works in dev builds)
+      const BackgroundTask = require('expo-background-task');
       const TaskManager = require('expo-task-manager');
       
-      console.log('✅ BackgroundFetch: Module loaded successfully');
-      this.modules[moduleName] = { BackgroundFetch, TaskManager };
+      console.log('✅ BackgroundTask: Module loaded successfully');
+      this.modules[moduleName] = { BackgroundTask, TaskManager };
       return this.modules[moduleName];
     } catch (error) {
-      console.warn('⚠️ BackgroundFetch: Not available', error.message);
+      console.warn('⚠️ BackgroundTask: Not available', error.message);
     }
 
-    return this.createBackgroundFetchFallback();
+    return this.createBackgroundTaskFallback();
   }
 
   /**
-   * Create no-op fallback for background fetch
+   * Create no-op fallback for background task
    */
-  createBackgroundFetchFallback() {
+  createBackgroundTaskFallback() {
     const fallback = {
-      BackgroundFetch: {
+      BackgroundTask: {
         registerTaskAsync: async () => {
-          console.warn('BackgroundFetch: Not supported in Expo Go');
+          console.warn('BackgroundTask: Not supported in Expo Go');
         },
         unregisterTaskAsync: async () => {
-          console.warn('BackgroundFetch: Not supported in Expo Go');
+          console.warn('BackgroundTask: Not supported in Expo Go');
         },
         getStatusAsync: async () => 3, // Denied status
+        BackgroundTaskStatus: {
+          Available: 1,
+          Denied: 2,
+          Restricted: 3
+        },
+        BackgroundTaskResult: {
+          NewData: 1,
+          NoData: 2,
+          Failed: 3
+        }
       },
       TaskManager: {
         defineTask: () => {
@@ -306,7 +316,7 @@ class ModuleLoader {
       isNative: false
     };
 
-    this.modules.backgroundFetch = fallback;
+    this.modules.backgroundTask = fallback;
     return fallback;
   }
 

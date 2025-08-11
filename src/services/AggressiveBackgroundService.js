@@ -15,7 +15,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, Alert } from 'react-native';
-import * as BackgroundFetch from 'expo-background-fetch';
+import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import moduleLoader from '../modules/ModuleLoader';
@@ -102,13 +102,13 @@ export default class AggressiveBackgroundService {
       console.log(`📱 Background fetch already registered: ${isRegistered}`);
       
       if (!isRegistered) {
-        console.log('📱 Registering background fetch task...');
-        await BackgroundFetch.registerTaskAsync(BACKGROUND_TASK_NAME, {
+        console.log('📱 Registering background task...');
+        await BackgroundTask.registerTaskAsync(BACKGROUND_TASK_NAME, {
           minimumInterval: 15, // 15 seconds (minimum allowed)
           stopOnTerminate: false,
           startOnBoot: false,
         });
-        console.log('✅ Background fetch task registered successfully');
+        console.log('✅ Background task registered successfully');
       } else {
         console.log('📱 Background fetch task already registered, skipping');
       }
@@ -136,17 +136,21 @@ export default class AggressiveBackgroundService {
       console.warn('⚠️ Notification permissions not granted, some background features may not work');
     }
     
-    // Request background app refresh
-    const backgroundRefreshStatus = await BackgroundFetch.getStatusAsync();
-    if (backgroundRefreshStatus !== BackgroundFetch.BackgroundFetchStatus.Available) {
-      console.warn('⚠️ Background App Refresh not available:', backgroundRefreshStatus);
-      
-      // Show user guidance
-      Alert.alert(
-        'Background App Refresh Required',
-        'For the best session experience, please enable Background App Refresh for this app in iOS Settings.',
-        [{ text: 'OK' }]
-      );
+    // Request background app refresh  
+    try {
+      const backgroundRefreshStatus = await BackgroundTask.getStatusAsync();
+      if (backgroundRefreshStatus !== BackgroundTask.BackgroundTaskStatus.Available) {
+        console.warn('⚠️ Background App Refresh not available:', backgroundRefreshStatus);
+        
+        // Show user guidance
+        Alert.alert(
+          'Background App Refresh Required',
+          'For the best session experience, please enable Background App Refresh for this app in iOS Settings.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.warn('⚠️ Error checking background refresh status:', error.message);
     }
   }
 
@@ -355,7 +359,7 @@ export default class AggressiveBackgroundService {
     
     if (error) {
       console.error('❌ Background fetch error:', error);
-      return BackgroundFetch.BackgroundFetchResult.Failed;
+      return BackgroundTask.BackgroundTaskResult.Failed;
     }
     
     try {
@@ -365,15 +369,15 @@ export default class AggressiveBackgroundService {
         // Update session state in background
         await this.sessionTick();
         
-        console.log('✅ Background fetch: session updated');
-        return BackgroundFetch.BackgroundFetchResult.NewData;
+        console.log('✅ Background task: session updated');
+        return BackgroundTask.BackgroundTaskResult.NewData;
       } else {
-        console.log('📱 Background fetch: no active session');
-        return BackgroundFetch.BackgroundFetchResult.NoData;
+        console.log('📱 Background task: no active session');
+        return BackgroundTask.BackgroundTaskResult.NoData;
       }
     } catch (error) {
-      console.error('❌ Background fetch task error:', error);
-      return BackgroundFetch.BackgroundFetchResult.Failed;
+      console.error('❌ Background task error:', error);
+      return BackgroundTask.BackgroundTaskResult.Failed;
     }
   }
 
@@ -521,7 +525,7 @@ export default class AggressiveBackgroundService {
     await Notifications.cancelAllScheduledNotificationsAsync();
     
     // Unregister background tasks
-    await BackgroundFetch.unregisterTaskAsync(BACKGROUND_TASK_NAME);
+    await BackgroundTask.unregisterTaskAsync(BACKGROUND_TASK_NAME);
     
     // Clear session state
     await AsyncStorage.removeItem(SESSION_STATE_KEY);
