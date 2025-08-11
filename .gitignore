@@ -76,4 +76,7 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# Claude AI local settings
+.claude/settings.local.json
+
 # @end expo-cli.claude/
