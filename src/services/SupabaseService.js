@@ -383,13 +383,13 @@ class SupabaseService {
       const firstReading = readings[0];
       if (!firstReading) return null;
       
-      let supabaseSessionId = this.sessionMapping.get(firstReading.sessionId);
+      let supabaseSessionId = this.sessionMapping.get(firstReading.session_id || firstReading.sessionId);
       
       // Recover session mapping if needed
       if (!supabaseSessionId) {
-        supabaseSessionId = await this.recoverSessionMapping(firstReading.sessionId);
+        supabaseSessionId = await this.recoverSessionMapping(firstReading.session_id || firstReading.sessionId);
         if (!supabaseSessionId) {
-          log.error('❌ Failed to recover session mapping for batch:', firstReading.sessionId);
+          log.error('❌ Failed to recover session mapping for batch:', firstReading.session_id || firstReading.sessionId);
           this.queueForSync('addReadingsBatch', readings);
           return null;
         }
@@ -600,7 +600,14 @@ class SupabaseService {
     
     // Debug: Log details of queued items
     this.syncQueue.forEach((item, index) => {
-      console.log(`📋 Queue item ${index + 1}: ${item.operation} for session ${item.data.localSessionId || item.data.sessionId || 'unknown'}`);
+      // Handle different data structures for different operations
+      let sessionId = 'unknown';
+      if (item.operation === 'addReadingsBatch' && Array.isArray(item.data) && item.data.length > 0) {
+        sessionId = item.data[0].session_id || 'unknown';
+      } else {
+        sessionId = item.data.localSessionId || item.data.sessionId || item.data.session_id || 'unknown';
+      }
+      console.log(`📋 Queue item ${index + 1}: ${item.operation} for session ${sessionId}`);
     });
     
     const processedItems = [];

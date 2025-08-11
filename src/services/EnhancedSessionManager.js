@@ -9,10 +9,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, AppState } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import * as Notifications from 'expo-notifications';
 import DatabaseService from './DatabaseService';
 import SupabaseService from './SupabaseService';
 import serviceFactory from './ServiceFactory';
 import runtimeEnvironment from '../utils/RuntimeEnvironment';
+
+// Configure notification handling
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 class EnhancedSessionManager {
   constructor() {
@@ -71,7 +81,16 @@ class EnhancedSessionManager {
 
   async initializeServices() {
     try {
-      console.log('🎬 Initializing Enhanced Session Manager');
+      console.log('🎬 Starting Enhanced Session Manager initialization');
+      console.log('🎬 About to initialize service factory');
+      
+      // Clear any leftover notifications from previous sessions immediately
+      try {
+        await Notifications.cancelAllScheduledNotificationsAsync();
+        console.log('🔔 Cleared all notifications during initialization');
+      } catch (error) {
+        console.error('❌ Error clearing notifications during init:', error);
+      }
       
       // Initialize service factory
       await serviceFactory.initialize();
@@ -138,16 +157,32 @@ class EnhancedSessionManager {
   }
 
   async handleAppStateChange(nextAppState) {
+    console.log('📱 App state changed to:', nextAppState);
+    console.log('📱 DEBUG: Session active status:', this.isActive);
+    console.log('📱 DEBUG: Current session:', this.currentSession?.id);
+    
     if (this.isActive) {
       if (nextAppState === 'background') {
-        console.log('📱 App backgrounded - starting background monitoring');
-        await this.startBackgroundMonitoring();
-        this.startBackgroundTimeout();
+        console.log('📱 App backgrounded - session will continue (background timeout disabled)');
+        console.log('📱 DEBUG: Phase at background:', this.currentPhase, 'Cycle:', this.currentCycle);
+        // DISABLED: Don't start background timeout that ends the session
+        // await this.startBackgroundMonitoring();
+        // this.startBackgroundTimeout();
       } else if (nextAppState === 'active') {
-        console.log('📱 App foregrounded - syncing with background state');
-        this.clearBackgroundTimeout();
-        await this.syncWithBackgroundState();
+        console.log('📱 App foregrounded - checking session status');
+        console.log('📱 DEBUG: Session still active?', this.isActive);
+        console.log('📱 DEBUG: Current session after foreground:', this.currentSession?.id);
+        console.log('📱 DEBUG: Phase after foreground:', this.currentPhase, 'Cycle:', this.currentCycle);
+        
+        if (!this.isActive) {
+          console.log('🚨 DEBUG: Session was ended while in background!');
+        }
+        // Session should still be active, no need to sync
+        // this.clearBackgroundTimeout();
+        // await this.syncWithBackgroundState();
       }
+    } else {
+      console.log('📱 DEBUG: No active session during app state change');
     }
   }
 
@@ -415,34 +450,71 @@ class EnhancedSessionManager {
     }
   }
 
-  async schedulePhaseNotifications() {
-    if (!this.notificationService) {
-      console.log('📱 Notification service not available, skipping phase notifications');
-      return;
-    }
-    
+  async sendPhaseStartNotification(phase) {
     try {
-      // Cancel any existing notifications
-      if (this.notificationService.cancelAll) {
-        await this.notificationService.cancelAll();
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') return;
+      
+      const phaseAction = phase === 'HYPEROXIC' ? 'Take OFF mask' : 'Put ON mask';
+      
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `🔵 ${phase === 'HYPEROXIC' ? 'Hyperoxic' : 'Hypoxic'} Phase Now`,
+          body: phaseAction,
+          data: { type: 'phaseStart', phase }
+        },
+        trigger: null // Send immediately
+      });
+      
+      console.log(`📱 Sent immediate "${phase} Phase Now" notification`);
+    } catch (error) {
+      console.error('❌ Error sending phase start notification:', error);
+    }
+  }
+
+  async schedulePhaseNotifications() {
+    try {
+      // Aggressively cancel all existing notifications multiple times to ensure cleanup
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      // Wait a moment then cancel again to ensure cleanup
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      console.log('📱 Double-cancelled all existing notifications before scheduling new ones');
+      
+      // Request permission first
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('📱 Notification permission not granted');
+        return;
       }
       
-      // Schedule warning notification 30 seconds before phase change
+      // Don't schedule notifications at session start (when phase just started)
+      // Only schedule when we're mid-phase and have enough time remaining
       const warningTime = (this.phaseTimeRemaining - 30) * 1000;
+      console.log(`📱 Notification timing: phaseTimeRemaining=${this.phaseTimeRemaining}s, warningTime=${warningTime}ms, currentPhase=${this.currentPhase}`);
+      
+      // Skip notifications if we just started the phase (within first 10 seconds)
+      const phaseDuration = this.currentPhase === 'HYPOXIC' ? this.protocolConfig.hypoxicDuration : this.protocolConfig.hyperoxicDuration;
+      const timeElapsedInPhase = phaseDuration - this.phaseTimeRemaining;
+      
+      if (timeElapsedInPhase < 10) {
+        console.log(`📱 Skipping notifications - phase just started (${timeElapsedInPhase}s elapsed)`);
+        return;
+      }
+      
       if (warningTime > 0) {
         const nextPhase = this.currentPhase === 'HYPOXIC' ? 'Hyperoxic' : 'Hypoxic';
         
-        await this.notificationService.scheduleNotification(
-          {
+        await Notifications.scheduleNotificationAsync({
+          content: {
             title: `⏰ ${nextPhase} Phase Coming Up`,
             body: `Get ready to switch in 30 seconds`,
             data: { type: 'phaseWarning' }
           },
-          {
-            type: this.notificationService.getTriggerType().TIMESTAMP,
-            timestamp: Date.now() + warningTime
+          trigger: {
+            seconds: Math.max(1, Math.floor(warningTime / 1000))
           }
-        );
+        });
       }
       
       // Schedule phase change notification
@@ -450,17 +522,16 @@ class EnhancedSessionManager {
       const nextPhase = this.currentPhase === 'HYPOXIC' ? 'Hyperoxic' : 'Hypoxic';
       const instruction = nextPhase === 'Hypoxic' ? 'Put ON mask' : 'Take OFF mask';
       
-      await this.notificationService.scheduleNotification(
-        {
+      await Notifications.scheduleNotificationAsync({
+        content: {
           title: `${nextPhase === 'Hypoxic' ? '🔴' : '🔵'} ${nextPhase} Phase Now`,
           body: instruction,
           data: { type: 'phaseChange' }
         },
-        {
-          type: this.notificationService.getTriggerType().TIMESTAMP,
-          timestamp: Date.now() + changeTime
+        trigger: {
+          seconds: Math.max(1, Math.floor(changeTime / 1000))
         }
-      );
+      });
       
       console.log('📱 Scheduled phase notifications');
     } catch (error) {
@@ -534,9 +605,13 @@ class EnhancedSessionManager {
       
       console.log(`🔄 Advanced to HYPEROXIC phase (Cycle ${this.currentCycle})`);
       
+      // Send immediate notification for phase start
+      await this.sendPhaseStartNotification('HYPEROXIC');
+      
     } else if (this.currentPhase === 'HYPEROXIC') {
       // Check if session is complete
       if (this.currentCycle >= this.protocolConfig.totalCycles) {
+        console.log(`🎉 DEBUG: Session completing - cycle ${this.currentCycle}/${this.protocolConfig.totalCycles}`);
         await this.completeSession();
         return;
       }
@@ -551,6 +626,9 @@ class EnhancedSessionManager {
       await this.updateSessionCycle();
       
       console.log(`🔄 Advanced to Cycle ${this.currentCycle} - HYPOXIC phase`);
+      
+      // Send immediate notification for phase start
+      await this.sendPhaseStartNotification('HYPOXIC');
     }
 
     // Schedule new notifications for this phase
@@ -656,8 +734,11 @@ class EnhancedSessionManager {
     await this.stopLiveActivity();
 
     // Cancel notifications
-    if (this.notificationService) {
-      await this.notificationService.cancelAll();
+    try {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      console.log('📱 Cancelled all notifications');
+    } catch (error) {
+      console.error('❌ Error cancelling notifications:', error);
     }
 
     // Flush remaining readings
@@ -864,6 +945,7 @@ class EnhancedSessionManager {
       currentPhase: this.currentPhase,
       currentCycle: this.currentCycle,
       phaseTimeRemaining: this.phaseTimeRemaining,
+      sessionStartTime: this.startTime, // Add session start time for UI timer
       totalCycles: this.protocolConfig.totalCycles,
       hypoxicDuration: this.protocolConfig.hypoxicDuration,
       hyperoxicDuration: this.protocolConfig.hyperoxicDuration,

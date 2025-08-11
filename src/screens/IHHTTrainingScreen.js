@@ -179,7 +179,9 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
         case 'sessionPaused':
         case 'sessionResumed':
         case 'sessionSynced':
-          setSessionInfo(EnhancedSessionManager.getSessionInfo());
+          const updatedInfo = EnhancedSessionManager.getSessionInfo();
+          console.log(`📱 UI received ${event} event, phaseTimeRemaining: ${updatedInfo.phaseTimeRemaining}s`);
+          setSessionInfo(updatedInfo);
           break;
         case 'sessionEnded':
           handleSessionComplete(data);
@@ -284,13 +286,34 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           protocolConfig: protocolConfig,
           totalCycles: protocolConfig.totalCycles
         });
-        EnhancedSessionManager.setProtocol(protocolConfig);
+        
+        // Convert minutes to seconds for EnhancedSessionManager
+        const protocolInSeconds = {
+          ...protocolConfig,
+          hypoxicDuration: protocolConfig.hypoxicDuration * 60,    // Convert minutes to seconds
+          hyperoxicDuration: protocolConfig.hyperoxicDuration * 60  // Convert minutes to seconds
+        };
+        
+        console.log('🔧 Setting protocol configuration:', protocolInSeconds);
+        EnhancedSessionManager.setProtocol(protocolInSeconds);
         console.log('✅ Protocol set. Actual cycles in manager:', EnhancedSessionManager.protocolConfig.totalCycles);
         await EnhancedSessionManager.startSession(existingSessionId);
       } else {
         // Support legacy single parameter (either sessionId or protocolConfig)
         console.log('⚠️ Using legacy session start with:', existingSessionId || protocolConfig);
-        await EnhancedSessionManager.startSession(existingSessionId || protocolConfig);
+        
+        // If passing protocolConfig directly, convert to seconds
+        let paramToPass = existingSessionId || protocolConfig;
+        if (protocolConfig && !existingSessionId) {
+          paramToPass = {
+            ...protocolConfig,
+            hypoxicDuration: protocolConfig.hypoxicDuration * 60,
+            hyperoxicDuration: protocolConfig.hyperoxicDuration * 60
+          };
+          console.log('🔧 Converted legacy protocol to seconds:', paramToPass);
+        }
+        
+        await EnhancedSessionManager.startSession(paramToPass);
       }
       
       setSessionInfo(EnhancedSessionManager.getSessionInfo());

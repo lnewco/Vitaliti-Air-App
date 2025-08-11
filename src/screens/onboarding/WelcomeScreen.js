@@ -16,7 +16,16 @@ const WelcomeScreen = ({ navigation }) => {
     navigation.navigate('BasicInfo');
   };
 
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
+    // Reset onboarding state for existing users
+    try {
+      await AsyncStorage.setItem('onboarding_state', 'completed');
+      await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
+      console.log('🔑 Reset onboarding state for existing user');
+    } catch (error) {
+      console.error('Failed to reset onboarding state:', error);
+    }
+    
     // Navigate to Auth stack for existing users
     console.log('🔑 Navigating to sign in for existing user');
     navigation.navigate('Auth', { screen: 'LoginScreen' });

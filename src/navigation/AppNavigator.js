@@ -25,13 +25,12 @@ const AppNavigator = () => {
     checkOnboardingStatus();
   }, []);
 
-  // Check onboarding status only when auth state changes from false to true
+  // Check onboarding status when auth state changes to authenticated
   useEffect(() => {
-    if (isAuthenticated && !hasCheckedOnboardingRef.current) {
-      console.log('🔄 Auth state changed to authenticated - checking onboarding status once');
-      hasCheckedOnboardingRef.current = true;
+    if (isAuthenticated) {
+      console.log('🔄 Auth state changed to authenticated - checking onboarding status');
       checkOnboardingStatus();
-    } else if (!isAuthenticated) {
+    } else {
       // Reset the flag when user logs out
       hasCheckedOnboardingRef.current = false;
     }
@@ -54,6 +53,19 @@ const AppNavigator = () => {
     const handleAppStateChange = (nextAppState) => {
       if (nextAppState === 'active') {
         console.log('🔄 App became active - re-checking onboarding status');
+        
+        // Check if there's an active session - if so, skip navigation changes
+        try {
+          const EnhancedSessionManager = require('../services/EnhancedSessionManager').default;
+          const sessionInfo = EnhancedSessionManager.getSessionInfo();
+          if (sessionInfo.isActive && !sessionInfo.isPaused) {
+            console.log('🔄 Skipping navigation check - active session in progress');
+            return;
+          }
+        } catch (error) {
+          console.log('🔄 Could not check session status, proceeding with navigation check');
+        }
+        
         checkOnboardingStatus();
       }
     };
