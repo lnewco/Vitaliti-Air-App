@@ -16,7 +16,7 @@
       "supportsTablet": true,
       "appleTeamId": "2726NBK599",
       "deploymentTarget": "16.2",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.sophiafay24.VitalitiAirApp"
