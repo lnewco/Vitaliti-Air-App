@@ -284,10 +284,12 @@ export default class AggressiveBackgroundService {
   async handleAppStateChange(nextAppState) {
     console.log('🔄 App state changing to:', nextAppState);
     
-    if (nextAppState === 'background' || nextAppState === 'inactive') {
+    if (nextAppState === 'background') {
+      // Only react to 'background', not 'inactive' to prevent double-triggering
       this.lastBackgroundTime = Date.now();
       
-      if (this.isActive && this.sessionData) {
+      if (this.isActive && this.sessionData && !this.aggressiveMode) {
+        // Only engage aggressive mode once
         console.log('📱 App backgrounded during active session - ENGAGING AGGRESSIVE PERSISTENCE');
         
         // Enter maximum aggression mode
@@ -299,7 +301,7 @@ export default class AggressiveBackgroundService {
         }
         await this.startHeartbeat();
         
-        // Schedule additional background notifications
+        // Schedule emergency notifications only once
         await this.scheduleEmergencyNotifications();
         
         // Save background entry state
@@ -328,8 +330,8 @@ export default class AggressiveBackgroundService {
   }
 
   async scheduleEmergencyNotifications() {
-    // Schedule notifications at critical intervals to wake up the app
-    const criticalIntervals = [15, 30, 45, 60, 75, 90, 105, 120]; // seconds
+    // Schedule only a few critical notifications to wake up the app
+    const criticalIntervals = [60, 120]; // Just 2 notifications: 1 minute and 2 minutes
     
     for (const interval of criticalIntervals) {
       await Notifications.scheduleNotificationAsync({
@@ -351,7 +353,7 @@ export default class AggressiveBackgroundService {
       });
     }
     
-    console.log('🚨 Emergency keepalive notifications scheduled');
+    console.log('🚨 Emergency keepalive notifications scheduled (2 total)');
   }
 
   async backgroundFetchTask({ data, error }) {
