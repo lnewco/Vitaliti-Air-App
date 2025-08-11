@@ -570,10 +570,10 @@ const SessionSetupScreen = ({ navigation }) => {
             <View style={styles.sessionOverview}>
               <Text style={styles.overviewTitle}>📋 Session Overview</Text>
               <Text style={styles.overviewContent}>
-                • 5 cycles of hypoxic-hyperoxic training{'\n'}
-                • Approximately 35 minutes duration{'\n'}
-                • Real-time safety monitoring{'\n'}
-                • Guided breathing phases
+                • {protocolConfig.totalCycles} {protocolConfig.totalCycles === 1 ? 'cycle' : 'cycles'} of hypoxic-hyperoxic training{'\n'}
+                • {protocolConfig.hypoxicDuration} minute{protocolConfig.hypoxicDuration === 1 ? '' : 's'} per hypoxic phase{'\n'}
+                • {protocolConfig.hyperoxicDuration} minute{protocolConfig.hyperoxicDuration === 1 ? '' : 's'} per recovery interval{'\n'}
+                • Total duration: {protocolConfig.totalCycles * (protocolConfig.hypoxicDuration + protocolConfig.hyperoxicDuration)} minutes
               </Text>
             </View>
           </View>

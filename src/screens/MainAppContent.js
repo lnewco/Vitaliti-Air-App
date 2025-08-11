@@ -9,6 +9,7 @@ import SessionHistoryScreen from './SessionHistoryScreen';
 import SessionSetupScreen from './SessionSetupScreen';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
+import ProfileScreen from './ProfileScreen';
 
 
 const Tab = createBottomTabNavigator();
@@ -52,6 +53,20 @@ function TabNavigator() {
           tabBarLabel: 'History',
           tabBarIcon: ({ color, size }) => (
             <Text style={{ fontSize: 20 }}>📈</Text>
+          ),
+          tabBarLabelStyle: {
+            fontSize: 14,
+            fontWeight: '600',
+          },
+        }}
+      />
+      <Tab.Screen 
+        name="Profile" 
+        component={ProfileScreen}
+        options={{
+          tabBarLabel: 'Profile',
+          tabBarIcon: ({ color, size }) => (
+            <Text style={{ fontSize: 20 }}>👤</Text>
           ),
           tabBarLabelStyle: {
             fontSize: 14,

@@ -1,10 +1,25 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Image } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import OnboardingProgressIndicator from '../../components/OnboardingProgressIndicator';
 
 const WelcomeScreen = ({ navigation }) => {
-  const handleGetStarted = () => {
+  const handleGetStarted = async () => {
+    // Mark onboarding as in progress
+    try {
+      await AsyncStorage.setItem('onboarding_state', 'in_progress');
+      console.log('📝 Onboarding state set to: in_progress');
+    } catch (error) {
+      console.error('Failed to save onboarding state:', error);
+    }
+    
     navigation.navigate('BasicInfo');
+  };
+
+  const handleSignIn = () => {
+    // Navigate to Auth stack for existing users
+    console.log('🔑 Navigating to sign in for existing user');
+    navigation.navigate('Auth', { screen: 'LoginScreen' });
   };
 
   return (
@@ -32,6 +47,13 @@ const WelcomeScreen = ({ navigation }) => {
             onPress={handleGetStarted}
           >
             <Text style={styles.getStartedButtonText}>Get Started</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.signInButton}
+            onPress={handleSignIn}
+          >
+            <Text style={styles.signInButtonText}>Already have an account? Sign In</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -109,6 +131,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
+  },
+  signInButton: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 12,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  signInButtonText: {
+    color: '#3B82F6',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 

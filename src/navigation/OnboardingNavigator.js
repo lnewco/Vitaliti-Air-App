@@ -6,7 +6,7 @@ import WelcomeScreen from '../screens/onboarding/WelcomeScreen';
 import BasicInfoScreen from '../screens/onboarding/BasicInfoScreen';
 import ConsentScreen from '../screens/onboarding/ConsentScreen';
 import HealthSafetyScreen from '../screens/onboarding/HealthSafetyScreen';
-import PhoneVerificationScreen from '../screens/onboarding/PhoneVerificationScreen';
+import PhoneVerificationScreen from '../components/PhoneVerificationScreen';
 import CompletionScreen from '../screens/onboarding/CompletionScreen';
 
 const Stack = createStackNavigator();
@@ -59,6 +59,7 @@ const OnboardingNavigator = () => {
         name="PhoneVerification" 
         component={PhoneVerificationScreen}
         options={{ title: 'Phone Verification' }}
+        initialParams={{ isOnboarding: true }}
       />
       <Stack.Screen 
         name="Completion" 
