@@ -19,21 +19,30 @@ const AppNavigator = () => {
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
   const navigationRef = useRef();
   const routeNameRef = useRef();
+  const hasCheckedOnboardingRef = useRef(false); // Track if we've checked for current auth session
 
   useEffect(() => {
     checkOnboardingStatus();
   }, []);
 
-  // Re-check onboarding status and navigate when authentication state changes
+  // Check onboarding status only when auth state changes from false to true
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !hasCheckedOnboardingRef.current) {
+      console.log('🔄 Auth state changed to authenticated - checking onboarding status once');
+      hasCheckedOnboardingRef.current = true;
       checkOnboardingStatus();
+    } else if (!isAuthenticated) {
+      // Reset the flag when user logs out
+      hasCheckedOnboardingRef.current = false;
     }
-    // Navigate when auth state changes and we're ready
+  }, [isAuthenticated]); // Only depend on isAuthenticated
+
+  // Separate effect for navigation based on state changes
+  useEffect(() => {
     if (!isLoading && !isCheckingOnboarding && hasSeenOnboarding !== null) {
       navigateBasedOnAuthAndOnboarding();
     }
-  }, [isAuthenticated, isLoading, isCheckingOnboarding, hasSeenOnboarding]);
+  }, [isLoading, isCheckingOnboarding, hasSeenOnboarding]); // No isAuthenticated dependency here
 
   // Listen for app state changes to re-check onboarding status
   useEffect(() => {
