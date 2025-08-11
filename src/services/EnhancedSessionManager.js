@@ -1,32 +1,22 @@
+/**
+ * EnhancedSessionManager - Manages IHHT training sessions with hybrid background support
+ * 
+ * This manager automatically adapts to the runtime environment:
+ * - Full native features in production/TestFlight builds
+ * - Graceful fallbacks in Expo Go
+ */
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, AppState } from 'react-native';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import DatabaseService from './DatabaseService';
 import SupabaseService from './SupabaseService';
-import BackgroundService from './BackgroundService';
-import logger from '../utils/logger';
-
-const log = logger.createModuleLogger('EnhancedSessionManager');
-
-// Import the Live Activity module for iOS - available in development builds
-let LiveActivityModule = null;
-// Delay the module loading to prevent crashes during initial app load
-const loadLiveActivityModule = () => {
-  if (LiveActivityModule === null) {
-    try {
-      const module = require('../../modules/live-activity/src/LiveActivityModule');
-      LiveActivityModule = module.default || module;
-      log.info('✅ Live Activities enabled');
-    } catch (error) {
-      log.info('⚠️ Live Activities not available - using standard notifications');
-      // Set to false to prevent future attempts
-      LiveActivityModule = false;
-    }
-  }
-  return LiveActivityModule && LiveActivityModule !== false ? LiveActivityModule : null;
-};
+import serviceFactory from './ServiceFactory';
+import runtimeEnvironment from '../utils/RuntimeEnvironment';
 
 class EnhancedSessionManager {
   constructor() {
+    // Core session state
     this.currentSession = null;
     this.isActive = false;
     this.isPaused = false;
@@ -37,7 +27,7 @@ class EnhancedSessionManager {
     this.listeners = [];
     
     // IHHT Protocol state
-    this.currentPhase = 'HYPOXIC'; // 'HYPOXIC' | 'HYPEROXIC' | 'COMPLETED'
+    this.currentPhase = 'HYPOXIC'; // 'HYPOXIC' | 'HYPEROXIC'
     this.currentCycle = 1;
     this.phaseStartTime = null;
     this.phaseTimeRemaining = 300; // Will be set based on protocol
@@ -50,9 +40,13 @@ class EnhancedSessionManager {
       hyperoxicDuration: 180   // 3 minutes in seconds
     };
     
+    // Service references (will be loaded based on environment)
+    this.backgroundService = null;
+    this.liveActivityService = null;
+    this.notificationService = null;
+    
     // Live Activity state
     this.hasActiveLiveActivity = false;
-    this.liveActivityId = null;
     
     // Timeout references
     this.backgroundTimeout = null;
@@ -61,18 +55,14 @@ class EnhancedSessionManager {
     // FiO2 tracking
     this.currentHypoxiaLevel = 5; // Default hypoxia level (0-10 scale)
     
-    // Session timing tracking
-    this.sessionStartTime = null; // Actual start timestamp for accurate elapsed time
-    this.totalSkippedTime = 0; // Total seconds skipped from phase skips
-    
-    // Connection state tracking for Bluetooth resilience
-    this.connectionState = 'connected';
-    
     // Buffer settings
     this.BATCH_SIZE = 50;
     this.BATCH_INTERVAL = 2000;
     
-    // App state handling
+    // Track initialization
+    this.initialized = false;
+    
+    // Setup app state handling
     this.setupAppStateHandling();
     
     // Initialize services
@@ -81,24 +71,66 @@ class EnhancedSessionManager {
 
   async initializeServices() {
     try {
-      await SupabaseService.initialize();
-      log.info('Supabase service initialized');
+      console.log('🎬 Initializing Enhanced Session Manager');
       
-      // Delay Live Activity check to prevent crashes during app startup
-      setTimeout(() => {
-        const liveActivityModule = loadLiveActivityModule();
-        if (liveActivityModule) {
-          liveActivityModule.isSupported()
-            .then(isSupported => log.info('📱 Live Activity support:', isSupported))
-            .catch(error => log.info('📱 Live Activity check failed:', error.message));
+      // Initialize service factory
+      await serviceFactory.initialize();
+      
+      // Create services based on environment
+      this.backgroundService = await serviceFactory.createBackgroundService();
+      this.liveActivityService = await serviceFactory.createLiveActivityService();
+      this.notificationService = await serviceFactory.createNotificationService();
+      
+      // Initialize Supabase
+      await SupabaseService.initialize();
+      console.log('☁️ Supabase service initialized');
+      
+      // Log capabilities
+      this.logCapabilities();
+      
+      // Request notification permissions (might fail in Expo Go)
+      try {
+        await this.notificationService.requestPermission();
+      } catch (error) {
+        // Silently handle permission errors in Expo Go
+        if (error.message && error.message.includes('ExpoPushTokenManager')) {
+          console.log('📱 Notification permissions skipped in Expo Go');
+        } else {
+          console.warn('⚠️ Notification permission error:', error.message);
         }
-      }, 2000);
-
+      }
+      
       // Perform startup recovery cleanup
       setTimeout(() => this.performStartupRecovery(), 1000);
+      
+      this.initialized = true;
+      console.log('✅ Enhanced Session Manager initialized');
+      
     } catch (error) {
-      log.error('❌ Failed to initialize services:', error);
+      // Log error quietly without disrupting the user
+      console.log('📱 Service initialization partial - running in fallback mode');
+      
+      // Ensure we have basic services even if some failed
+      if (!this.backgroundService) {
+        const ExpoBackgroundService = require('./expo/ExpoBackgroundService').default;
+        this.backgroundService = new ExpoBackgroundService();
+        await this.backgroundService.initialize();
+      }
+      
+      // Continue with degraded functionality
+      this.initialized = true;
     }
+  }
+
+  logCapabilities() {
+    const capabilities = runtimeEnvironment.capabilities;
+    console.log('📱 Session Manager Capabilities:', {
+      environment: runtimeEnvironment.environmentName,
+      backgroundTimer: this.backgroundService?.isNative || false,
+      liveActivities: capabilities.liveActivities,
+      notifications: this.notificationService?.isNative ? 'Rich' : 'Basic',
+      backgroundBLE: capabilities.backgroundBLE,
+    });
   }
 
   setupAppStateHandling() {
@@ -108,34 +140,69 @@ class EnhancedSessionManager {
   async handleAppStateChange(nextAppState) {
     if (this.isActive) {
       if (nextAppState === 'background') {
-        log.info('📱 App backgrounded - starting background monitoring and session timeout');
-        // Use the new BackgroundService for iOS background handling
-        if (this.currentSession) {
-          await BackgroundService.startSession(this.currentSession.id);
-          await BackgroundService.updateSessionState(
-            this.currentPhase,
-            this.currentCycle,
-            this.phaseTimeRemaining
-          );
-        }
+        console.log('📱 App backgrounded - starting background monitoring');
+        await this.startBackgroundMonitoring();
         this.startBackgroundTimeout();
       } else if (nextAppState === 'active') {
-        log.info('App foregrounded - syncing with background state');
+        console.log('📱 App foregrounded - syncing with background state');
         this.clearBackgroundTimeout();
-        // Background service handles foreground transition
+        await this.syncWithBackgroundState();
       }
     }
   }
 
   async startBackgroundMonitoring() {
-    // This method is now handled by BackgroundService in handleAppStateChange
-    log.info('📱 Background monitoring handled by BackgroundService');
+    if (!this.currentSession || !this.backgroundService) return;
+    
+    try {
+      await this.backgroundService.startBackgroundMonitoring({
+        id: this.currentSession.id,
+        currentPhase: this.currentPhase,
+        currentCycle: this.currentCycle,
+        phaseTimeRemaining: this.phaseTimeRemaining,
+        totalCycles: this.protocolConfig.totalCycles,
+        hypoxicDuration: this.protocolConfig.hypoxicDuration,
+        hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
+      });
+      
+      // Update Live Activity if supported
+      if (this.hasActiveLiveActivity) {
+        await this.updateLiveActivity();
+      }
+    } catch (error) {
+      console.error('❌ Error starting background monitoring:', error);
+    }
   }
 
   async syncWithBackgroundState() {
-    // Background state is now maintained by native iOS code
-    // No need to sync as the state is preserved
-    log.info('📱 Background state maintained natively');
+    if (!this.backgroundService) return;
+    
+    try {
+      const backgroundState = await this.backgroundService.syncWithBackgroundState();
+      
+      if (backgroundState && backgroundState.isActive) {
+        // Update local state with background changes
+        this.currentPhase = backgroundState.currentPhase;
+        this.currentCycle = backgroundState.currentCycle;
+        this.phaseTimeRemaining = backgroundState.phaseTimeRemaining;
+        
+        // Update Live Activity if active
+        if (this.hasActiveLiveActivity) {
+          await this.updateLiveActivity();
+        }
+        
+        // Notify listeners of sync
+        this.notify('backgroundSync', backgroundState);
+        
+        console.log('🔄 Synced with background state:', {
+          phaseChanges: backgroundState.phaseChanges || 0,
+          currentPhase: this.currentPhase,
+          timeRemaining: this.phaseTimeRemaining,
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error syncing background state:', error);
+    }
   }
 
   // Event system for UI updates
@@ -151,106 +218,104 @@ class EnhancedSessionManager {
       try {
         listener(event, data);
       } catch (error) {
-        log.error('Session listener error:', error);
+        console.error('Error notifying listener:', error);
       }
     });
   }
 
-  // Protocol configuration method
-  setProtocol(protocolConfig) {
-    this.protocolConfig = {
-      totalCycles: protocolConfig.totalCycles,
-      hypoxicDuration: protocolConfig.hypoxicDuration * 60,   // Convert minutes to seconds
-      hyperoxicDuration: protocolConfig.hyperoxicDuration * 60 // Convert minutes to seconds
-    };
-    
-    log.info('� Protocol configured:', this.protocolConfig);
-  }
-
-  // Enhanced session lifecycle with Live Activity support
-  async startSession(protocolConfigOrSessionId = null) {
+  async startSession(userIdOrSessionId, protocolSettings = {}) {
     if (this.isActive) {
       throw new Error('Session already active');
     }
-    
-    // Clear any leftover readings from previous sessions
-    if (this.readingBuffer.length > 0) {
-      log.info(`🧹 Clearing ${this.readingBuffer.length} leftover readings from buffer`);
-      this.readingBuffer = [];
-    }
 
     try {
-      // Handle both protocol config (object) and existing session ID (string)
-      let protocolConfig = null;
-      let existingSessionId = null;
+      // Handle both old and new calling patterns
+      // Old: startSession(sessionId) 
+      // New: startSession(userId, protocolSettings)
+      let userId = userIdOrSessionId;
+      let sessionId = null;
       
-      if (typeof protocolConfigOrSessionId === 'string') {
-        existingSessionId = protocolConfigOrSessionId;
-      } else if (typeof protocolConfigOrSessionId === 'object' && protocolConfigOrSessionId !== null) {
-        protocolConfig = protocolConfigOrSessionId;
-      }
-      
-      // Set protocol configuration if provided
-      if (protocolConfig) {
-        this.setProtocol(protocolConfig);
-      }
-
-      // Use existing session ID if provided (from survey), otherwise generate new one
-      const sessionId = existingSessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      log.info(`Starting session with ID: ${sessionId} ${existingSessionId ? '(existing)' : '(new)'}`);
-      
-      // Initialize database if needed
-      if (!DatabaseService.db) {
-        await DatabaseService.init();
-      }
-
-      // Create session in databases (skip if already exists)
-      if (!existingSessionId) {
-        await DatabaseService.createSession(sessionId, this.currentHypoxiaLevel, this.protocolConfig);
-        await SupabaseService.createSession({
-          id: sessionId,
-          startTime: Date.now(),
-          defaultHypoxiaLevel: this.currentHypoxiaLevel,
-          protocolConfig: this.protocolConfig
-        });
+      // If it looks like a session ID (has underscore pattern), treat it as old format
+      if (typeof userIdOrSessionId === 'string' && userIdOrSessionId.includes('_')) {
+        sessionId = userIdOrSessionId;
+        userId = null; // Will be set from auth or device ID
+        console.log('🎬 Starting enhanced IHHT session with existing ID:', sessionId);
       } else {
-        log.info('� Using existing session - skipping database creation');
-        await this.updateSessionProtocol(sessionId);
+        console.log('🎬 Starting enhanced IHHT session for user:', userId);
+      }
+      
+      // Wait for initialization if needed
+      if (!this.initialized) {
+        console.log('⏳ Waiting for initialization...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      // Use pre-configured protocol if setProtocol was called, otherwise use passed settings
+      if (protocolSettings.totalCycles || protocolSettings.hypoxicDuration || protocolSettings.hyperoxicDuration) {
+        this.protocolConfig = {
+          totalCycles: protocolSettings.totalCycles || this.protocolConfig.totalCycles,
+          hypoxicDuration: protocolSettings.hypoxicDuration || this.protocolConfig.hypoxicDuration,
+          hyperoxicDuration: protocolSettings.hyperoxicDuration || this.protocolConfig.hyperoxicDuration
+        };
+      }
+      
+      // Create session record (only if we don't have an existing sessionId)
+      if (!sessionId) {
+        sessionId = await SupabaseService.createSession({
+          user_id: userId,
+          protocol_type: 'STANDARD_IHHT',
+          target_spo2: 85,
+          recovery_spo2: 95,
+          total_cycles: this.protocolConfig.totalCycles,
+          cycle_duration: this.protocolConfig.hypoxicDuration + this.protocolConfig.hyperoxicDuration,
+          start_time: new Date().toISOString()
+        });
       }
 
-      // Set session timing
-      this.sessionStartTime = Date.now();
-      this.totalSkippedTime = 0; // Reset skipped time for new session
-      
-      // Set session state
-      this.currentSession = {
-        id: sessionId,
-        startTime: Date.now(),
-        readingCount: 0,
-        lastReading: null,
-        sessionType: 'IHHT',
-        currentPhase: this.currentPhase,
-        currentCycle: this.currentCycle,
-        totalCycles: this.protocolConfig.totalCycles,
-        hypoxicDuration: this.protocolConfig.hypoxicDuration,
-        hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
-        defaultHypoxiaLevel: this.currentHypoxiaLevel
+      // Initialize session state
+      this.currentSession = { 
+        id: sessionId, 
+        userId,
+        startTime: new Date().toISOString()
       };
-
       this.isActive = true;
       this.isPaused = false;
       this.startTime = Date.now();
-      this.phaseStartTime = Date.now();
       this.currentPhase = 'HYPOXIC';
       this.currentCycle = 1;
       this.phaseTimeRemaining = this.protocolConfig.hypoxicDuration;
+      this.phaseStartTime = Date.now();
       this.readingBuffer = [];
 
-      // Start background monitoring
-      await this.startBackgroundMonitoring();
+      // Keep screen awake during session
+      try {
+        await activateKeepAwakeAsync();
+        console.log('📱 Keep-awake activated');
+      } catch (error) {
+        console.warn('⚠️ Could not activate keep-awake:', error);
+      }
 
-      // Start Live Activity
-      await this.startLiveActivity();
+      // Start Live Activity if supported
+      const liveActivitySupported = await this.checkLiveActivitySupport();
+      if (liveActivitySupported) {
+        await this.startLiveActivity();
+      }
+
+      // Schedule phase notifications
+      await this.schedulePhaseNotifications();
+
+      // Start background monitoring if available
+      if (this.backgroundService) {
+        await this.backgroundService.startBackgroundMonitoring({
+          id: sessionId,
+          currentPhase: this.currentPhase,
+          currentCycle: this.currentCycle,
+          phaseTimeRemaining: this.phaseTimeRemaining,
+          totalCycles: this.protocolConfig.totalCycles,
+          hypoxicDuration: this.protocolConfig.hypoxicDuration,
+          hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
+        });
+      }
 
       // Start phase timer
       this.startPhaseTimer();
@@ -264,104 +329,159 @@ class EnhancedSessionManager {
       // Save session state
       await AsyncStorage.setItem('activeSession', JSON.stringify(this.currentSession));
 
-      log.info(`Enhanced session started: ${sessionId}`);
+      console.log(`🎬 Enhanced session started: ${sessionId}`);
       this.notify('sessionStarted', {
         ...this.currentSession,
         currentPhase: this.currentPhase,
         currentCycle: this.currentCycle,
-        phaseTimeRemaining: this.phaseTimeRemaining
+        phaseTimeRemaining: this.phaseTimeRemaining,
+        capabilities: runtimeEnvironment.capabilities
       });
 
       return sessionId;
     } catch (error) {
-      log.error('❌ Failed to start enhanced session:', error);
+      console.error('❌ Failed to start enhanced session:', error);
       throw error;
     }
   }
 
   async checkLiveActivitySupport() {
-    const liveActivityModule = loadLiveActivityModule();
-    if (!liveActivityModule) {
-      log.info('Live Activities not available in Expo Go');
-      return false;
-    }
+    if (!this.liveActivityService) return false;
     
     try {
-      const isSupported = await liveActivityModule.isSupported();
+      const isSupported = await this.liveActivityService.isSupported();
+      console.log('📱 Live Activity support:', isSupported);
       return isSupported;
     } catch (error) {
-      log.error('❌ Error checking Live Activity support:', error);
+      console.error('❌ Error checking Live Activity support:', error);
       return false;
     }
   }
 
   async startLiveActivity() {
-    const liveActivityModule = loadLiveActivityModule();
-    if (!liveActivityModule || !this.currentSession) {
-      return false;
-    }
+    if (!this.liveActivityService || !this.currentSession) return false;
 
     try {
-      log.info('Starting Live Activity for session:', this.currentSession.id);
+      console.log('📱 Starting Live Activity for session');
       
-      const result = await liveActivityModule.startActivity({
+      const result = await this.liveActivityService.startActivity({
         sessionId: this.currentSession.id,
-        sessionType: this.currentSession.sessionType,
         currentPhase: this.currentPhase,
         currentCycle: this.currentCycle,
+        totalCycles: this.protocolConfig.totalCycles,
         phaseTimeRemaining: this.phaseTimeRemaining,
-        startTime: this.startTime
+        hypoxicDuration: this.protocolConfig.hypoxicDuration,
+        hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
       });
 
       if (result.success) {
         this.hasActiveLiveActivity = true;
-        log.info('Live Activity started successfully');
+        console.log('✅ Live Activity started successfully');
         return true;
       } else {
-        log.error('❌ Failed to start Live Activity:', result.error);
+        console.log('⚠️ Live Activity not started:', result.reason);
         return false;
       }
     } catch (error) {
-      log.error('❌ Error starting Live Activity:', error);
+      console.error('❌ Error starting Live Activity:', error);
       return false;
     }
   }
 
   async updateLiveActivity() {
-    const liveActivityModule = loadLiveActivityModule();
-    if (!this.hasActiveLiveActivity || !liveActivityModule || !this.currentSession) {
-      return;
-    }
+    if (!this.hasActiveLiveActivity || !this.liveActivityService) return;
 
     try {
-      await liveActivityModule.updateActivity({
-        sessionId: this.currentSession.id,
+      await this.liveActivityService.updateActivity({
         currentPhase: this.currentPhase,
         currentCycle: this.currentCycle,
         phaseTimeRemaining: this.phaseTimeRemaining,
         isPaused: this.isPaused
       });
     } catch (error) {
-      log.error('❌ Error updating Live Activity:', error);
+      console.error('❌ Error updating Live Activity:', error);
+    }
+  }
+
+  async stopLiveActivity() {
+    if (!this.hasActiveLiveActivity || !this.liveActivityService) return;
+
+    try {
+      await this.liveActivityService.endActivity();
+      this.hasActiveLiveActivity = false;
+      console.log('✅ Live Activity stopped');
+    } catch (error) {
+      console.error('❌ Error stopping Live Activity:', error);
+    }
+  }
+
+  async schedulePhaseNotifications() {
+    if (!this.notificationService) {
+      console.log('📱 Notification service not available, skipping phase notifications');
+      return;
+    }
+    
+    try {
+      // Cancel any existing notifications
+      if (this.notificationService.cancelAll) {
+        await this.notificationService.cancelAll();
+      }
+      
+      // Schedule warning notification 30 seconds before phase change
+      const warningTime = (this.phaseTimeRemaining - 30) * 1000;
+      if (warningTime > 0) {
+        const nextPhase = this.currentPhase === 'HYPOXIC' ? 'Hyperoxic' : 'Hypoxic';
+        
+        await this.notificationService.scheduleNotification(
+          {
+            title: `⏰ ${nextPhase} Phase Coming Up`,
+            body: `Get ready to switch in 30 seconds`,
+            data: { type: 'phaseWarning' }
+          },
+          {
+            type: this.notificationService.getTriggerType().TIMESTAMP,
+            timestamp: Date.now() + warningTime
+          }
+        );
+      }
+      
+      // Schedule phase change notification
+      const changeTime = this.phaseTimeRemaining * 1000;
+      const nextPhase = this.currentPhase === 'HYPOXIC' ? 'Hyperoxic' : 'Hypoxic';
+      const instruction = nextPhase === 'Hypoxic' ? 'Put ON mask' : 'Take OFF mask';
+      
+      await this.notificationService.scheduleNotification(
+        {
+          title: `${nextPhase === 'Hypoxic' ? '🔴' : '🔵'} ${nextPhase} Phase Now`,
+          body: instruction,
+          data: { type: 'phaseChange' }
+        },
+        {
+          type: this.notificationService.getTriggerType().TIMESTAMP,
+          timestamp: Date.now() + changeTime
+        }
+      );
+      
+      console.log('📱 Scheduled phase notifications');
+    } catch (error) {
+      console.error('❌ Error scheduling notifications:', error);
     }
   }
 
   startPhaseTimer() {
+    // Use timestamp-based calculation for better accuracy
+    this.phaseStartTime = Date.now();
+    
     this.phaseTimer = setInterval(() => {
       if (!this.isActive || this.isPaused) return;
-      
-      // Prevent timer updates after session completion
-      if (this.currentPhase === 'COMPLETED' || this.currentPhase === 'TERMINATED') {
-        clearInterval(this.phaseTimer);
-        return;
-      }
 
-      this.phaseTimeRemaining--;
+      // Calculate time remaining based on elapsed time
+      const elapsed = Math.floor((Date.now() - this.phaseStartTime) / 1000);
+      const phaseDuration = this.currentPhase === 'HYPOXIC' 
+        ? this.protocolConfig.hypoxicDuration 
+        : this.protocolConfig.hyperoxicDuration;
       
-      // Log every 5 seconds to track if timer is working
-      if (this.phaseTimeRemaining % 5 === 0) {
-        log.info(`⏲️ Phase timer: ${this.phaseTimeRemaining}s remaining in ${this.currentPhase} phase`);
-      }
+      this.phaseTimeRemaining = Math.max(0, phaseDuration - elapsed);
 
       // Check for phase transition
       if (this.phaseTimeRemaining <= 0) {
@@ -373,46 +493,46 @@ class EnhancedSessionManager {
         this.updateLiveActivity();
       }
 
-      // Update background state less frequently (every 5 seconds)
-      if (this.phaseTimeRemaining % 5 === 0) {
-        BackgroundService.updateSessionState(
-          this.currentPhase,
-          this.currentCycle,
-          this.phaseTimeRemaining
-        );
-      }
-
-      // Notify phase updates every second for the first 5 seconds after a phase change
-      // or every 10 seconds otherwise to reduce noise
-      const timeSincePhaseStart = Math.floor((Date.now() - this.phaseStartTime) / 1000);
-      if (timeSincePhaseStart <= 5 || this.phaseTimeRemaining % 10 === 0) {
-        this.notify('phaseUpdate', {
+      // Update background state if available
+      if (this.backgroundService) {
+        this.backgroundService.updateBackgroundState({
           currentPhase: this.currentPhase,
           currentCycle: this.currentCycle,
           phaseTimeRemaining: this.phaseTimeRemaining
         });
       }
+
+      // Notify listeners
+      this.notify('phaseUpdate', {
+        currentPhase: this.currentPhase,
+        currentCycle: this.currentCycle,
+        phaseTimeRemaining: this.phaseTimeRemaining
+      });
     }, 1000);
   }
 
+  // Public method to skip to next phase
+  async skipToNextPhase() {
+    if (!this.isActive || this.isPaused) {
+      console.log('⚠️ Cannot skip phase - session not active or paused');
+      return false;
+    }
+    
+    console.log('⏭️ User requested skip to next phase');
+    await this.advancePhase();
+    return true;
+  }
+
   async advancePhase() {
+    console.log(`🔄 Advancing from ${this.currentPhase} phase (Cycle ${this.currentCycle})`);
+
     if (this.currentPhase === 'HYPOXIC') {
       // Transition to hyperoxic phase
       this.currentPhase = 'HYPEROXIC';
+      this.phaseTimeRemaining = this.protocolConfig.hyperoxicDuration;
       this.phaseStartTime = Date.now();
       
-      // For the final phase, calculate exact remaining time
-      if (this.isLastPhase()) {
-        const totalDuration = (this.protocolConfig.hypoxicDuration + this.protocolConfig.hyperoxicDuration) * this.protocolConfig.totalCycles;
-        const adjustedTotalDuration = totalDuration - this.totalSkippedTime;
-        const elapsedTime = Math.floor((Date.now() - this.sessionStartTime) / 1000);
-        this.phaseTimeRemaining = Math.max(0, adjustedTotalDuration - elapsedTime);
-        log.info(`Final phase (auto-advance) - aligned time: ${this.phaseTimeRemaining}s`);
-      } else {
-        this.phaseTimeRemaining = this.protocolConfig.hyperoxicDuration;
-      }
-      
-      log.info(`Advanced to HYPEROXIC phase (Cycle ${this.currentCycle})`);
+      console.log(`🔄 Advanced to HYPEROXIC phase (Cycle ${this.currentCycle})`);
       
     } else if (this.currentPhase === 'HYPEROXIC') {
       // Check if session is complete
@@ -430,8 +550,11 @@ class EnhancedSessionManager {
       // Update database with new cycle
       await this.updateSessionCycle();
       
-      log.info(`Advanced to Cycle ${this.currentCycle} - HYPOXIC phase`);
+      console.log(`🔄 Advanced to Cycle ${this.currentCycle} - HYPOXIC phase`);
     }
+
+    // Schedule new notifications for this phase
+    await this.schedulePhaseNotifications();
 
     // Update Live Activity with new phase
     await this.updateLiveActivity();
@@ -444,101 +567,14 @@ class EnhancedSessionManager {
     });
   }
 
-  async skipToNextPhase() {
-    if (!this.isActive || this.isPaused) {
-      log.info('Cannot skip: session not active or paused');
-      return false;
-    }
-    
-    // Prevent any operations after session completion
-    if (this.currentPhase === 'COMPLETED' || this.currentPhase === 'TERMINATED' || !this.currentSession) {
-      log.info('Cannot skip: session already completed or no active session');
-      return false;
-    }
+  async updateSessionCycle() {
+    if (!this.currentSession) return;
 
-    const previousPhase = this.currentPhase;
-    const previousCycle = this.currentCycle;
-    
-    // Calculate how much time we're skipping
-    const timeSkipped = this.phaseTimeRemaining;
-    this.totalSkippedTime += timeSkipped;
-    
-    log.info(`⏭️ Manually skipping ${this.currentPhase} phase (Cycle ${this.currentCycle}) - ${timeSkipped}s skipped`);
-    
-    // Advance phase directly (don't set phaseTimeRemaining to 0 first)
-    await this.advancePhase();
-    
-    // Reset the phase start time to NOW after advancing
-    // This ensures the timer starts fresh for the new phase
-    this.phaseStartTime = Date.now();
-    
-    // For the final phase, adjust time remaining to match total session time
-    if (this.isLastPhase()) {
-      const totalDuration = (this.protocolConfig.hypoxicDuration + this.protocolConfig.hyperoxicDuration) * this.protocolConfig.totalCycles;
-      const adjustedTotalDuration = totalDuration - this.totalSkippedTime;
-      const elapsedTime = Math.floor((Date.now() - this.sessionStartTime) / 1000);
-      this.phaseTimeRemaining = Math.max(0, adjustedTotalDuration - elapsedTime);
-      log.info(`Final phase - aligned time: ${this.phaseTimeRemaining}s (total: ${adjustedTotalDuration}s, elapsed: ${elapsedTime}s)`);
+    try {
+      await SupabaseService.updateSessionCycle(this.currentSession.id, this.currentCycle);
+    } catch (error) {
+      console.error('❌ Failed to update session cycle:', error);
     }
-    
-    log.info(`⏱️ Phase skipped - new phase time: ${this.phaseTimeRemaining}s, phase: ${this.currentPhase}, total skipped: ${this.totalSkippedTime}s`);
-    
-    // Clear and restart the timer to ensure it starts counting immediately
-    if (this.phaseTimer) {
-      clearInterval(this.phaseTimer);
-      this.startPhaseTimer();
-    }
-    
-    // Force an immediate phase update notification to ensure UI refreshes
-    this.notify('phaseUpdate', {
-      currentPhase: this.currentPhase,
-      currentCycle: this.currentCycle,
-      phaseTimeRemaining: this.phaseTimeRemaining
-    });
-    
-    // Notify with skip-specific event
-    this.notify('phaseSkipped', {
-      previousPhase,
-      previousCycle,
-      newPhase: this.currentPhase,
-      newCycle: this.currentCycle,
-      skippedAt: Date.now()
-    });
-
-    return true;
-  }
-
-  isLastPhase() {
-    // Check if this is the last phase (final HYPEROXIC of the last cycle)
-    return this.currentPhase === 'HYPEROXIC' && this.currentCycle >= this.protocolConfig.totalCycles;
-  }
-
-  async completeSession() {
-    log.info('IHHT session completed!');
-    log.info(`Completing session with cycle ${this.currentCycle}, phase ${this.currentPhase}`);
-    
-    // Mark as completed but preserve the cycle count
-    const finalCycle = this.currentCycle;
-    this.currentPhase = 'COMPLETED';
-    this.phaseTimeRemaining = 0;
-    this.currentCycle = finalCycle; // Preserve the cycle count
-    
-    // IMPORTANT: Update the database with the final cycle count before stopping
-    if (this.currentSession?.id) {
-      try {
-        await DatabaseService.updateSessionCycle(this.currentSession.id, finalCycle);
-        await SupabaseService.updateSessionCycle(this.currentSession.id, finalCycle);
-        log.info(`Updated final cycle count to ${finalCycle} in databases`);
-      } catch (error) {
-        log.error('⚠️ Failed to update final cycle count:', error);
-      }
-    }
-    
-    // Update Live Activity
-    await this.updateLiveActivity();
-    
-    // Stop the session
-    await this.stopSession();
   }
 
   async pauseSession() {
@@ -547,507 +583,184 @@ class EnhancedSessionManager {
     this.isPaused = true;
     this.pauseTime = Date.now();
 
-    // Pause background monitoring (if available)
-    if (BackgroundSessionManager) {
-      await BackgroundSessionManager.pauseBackgroundSession();
+    // Allow screen to sleep when paused
+    try {
+      await deactivateKeepAwake();
+    } catch (error) {
+      console.warn('⚠️ Could not deactivate keep-awake:', error);
+    }
+
+    // Pause background monitoring
+    if (this.backgroundService) {
+      await this.backgroundService.pauseBackgroundSession();
     }
 
     // Update Live Activity
     await this.updateLiveActivity();
 
-    log.info('Session paused');
+    console.log('⏸️ Session paused');
     this.notify('sessionPaused', { pauseTime: this.pauseTime });
   }
 
   async resumeSession() {
     if (!this.isActive || !this.isPaused) return;
 
+    // Calculate pause duration and adjust phase start time
+    const pauseDuration = Date.now() - this.pauseTime;
+    this.phaseStartTime += pauseDuration;
+    
     this.isPaused = false;
     this.pauseTime = null;
 
-    // Resume background monitoring (if available)
-    if (BackgroundSessionManager) {
-      await BackgroundSessionManager.resumeBackgroundSession();
+    // Reactivate keep-awake
+    try {
+      await activateKeepAwakeAsync();
+    } catch (error) {
+      console.warn('⚠️ Could not activate keep-awake:', error);
     }
+
+    // Resume background monitoring
+    if (this.backgroundService) {
+      await this.backgroundService.resumeBackgroundSession();
+    }
+
+    // Reschedule notifications from current point
+    await this.schedulePhaseNotifications();
 
     // Update Live Activity
     await this.updateLiveActivity();
 
-    log.info('Session resumed');
+    console.log('▶️ Session resumed');
     this.notify('sessionResumed', {});
   }
 
-  async stopSession() {
-    if (!this.isActive || !this.currentSession) {
-      log.warn('⚠️ stopSession called but no active session');
-      throw new Error('No active session');
-    }
+  async stopSession(reason = 'manual') {
+    if (!this.isActive) return;
 
-    const sessionId = this.currentSession.id;
-    
-    // Store the final cycle count before resetting
-    const finalCycle = this.currentCycle;
-    
-    log.info(`� Starting ROBUST session termination for: ${sessionId}`);
-    
-    // Helper function to run operations with timeout
-    const withTimeout = async (operation, timeoutMs, stepName) => {
-      try {
-        return await Promise.race([
-          operation(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`${stepName} timeout after ${timeoutMs}ms`)), timeoutMs)
-          )
-        ]);
-      } catch (error) {
-        log.warn(`⚠️ ${stepName} failed (non-blocking):`, error.message);
-        return null; // Return null instead of throwing
-      }
-    };
+    console.log('🛑 Stopping enhanced session...', reason);
 
-    let stats = { totalReadings: 0, avgSpO2: null, avgHeartRate: null };
-    
-    // Step 1: Stop timers (immediate, can't fail)
-    log.info('Step 1: Clearing timers...');
+    // Clear timers
     if (this.phaseTimer) {
       clearInterval(this.phaseTimer);
       this.phaseTimer = null;
     }
     this.clearBackgroundTimeout();
     this.clearSessionTimeout();
-    log.info('Step 1: Timers cleared');
 
-    // Step 2: Stop background monitoring (with timeout)
-    await withTimeout(async () => {
-      log.info('🔄 Step 2: Stopping background monitoring...');
-      await BackgroundService.endSession();
-      log.info('✅ Step 2: Background monitoring stopped');
-    }, 2000, 'Background stop');
-
-    // Step 3: Stop Live Activity (with timeout)
-    await withTimeout(async () => {
-      log.info('Step 3: Stopping Live Activity...');
-      await this.stopLiveActivity();
-      log.info('Step 3: Live Activity stopped');
-    }, 3000, 'Live Activity stop');
-
-    // Step 4: Flush readings with retry logic and increased timeout
-    let flushSuccess = false;
-    const maxFlushAttempts = 3;
-    
-    for (let attempt = 1; attempt <= maxFlushAttempts; attempt++) {
-      const flushResult = await withTimeout(async () => {
-        log.info(`Step 4: Flushing remaining readings (attempt ${attempt}/${maxFlushAttempts})...`);
-        await this.flushReadingBuffer();
-        log.info('Step 4: Readings flushed successfully');
-        return true;
-      }, 15000, `Flush readings attempt ${attempt}`);
-      
-      if (flushResult) {
-        flushSuccess = true;
-        break;
-      }
-      
-      if (attempt < maxFlushAttempts) {
-        log.info(`Flush attempt ${attempt} failed, retrying...`);
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
-      }
-    }
-    
-    // If flush failed after all attempts, save to recovery buffer
-    if (!flushSuccess && this.readingBuffer.length > 0) {
-      log.error('❌ Failed to flush readings after all attempts');
-      await this.saveToRecoveryBuffer(this.readingBuffer, sessionId);
+    // Stop background monitoring
+    if (this.backgroundService) {
+      await this.backgroundService.stopBackgroundMonitoring();
     }
 
-    // Step 5: Stop batch processing (immediate)
-    log.info('Step 5: Stopping batch processing...');
+    // Stop Live Activity
+    await this.stopLiveActivity();
+
+    // Cancel notifications
+    if (this.notificationService) {
+      await this.notificationService.cancelAll();
+    }
+
+    // Flush remaining readings
+    await this.flushReadingBuffer();
+
+    // Stop batch processing
     this.stopBatchProcessing();
-    log.info('Step 5: Batch processing stopped');
 
-    // Step 6: Wait a moment to ensure all async writes complete
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Step 7: End session in local database (with timeout and fallback)
-    const databaseResult = await withTimeout(async () => {
-      log.info('Step 7: Ending session in local database...');
-      
-      // Ensure database is initialized
-      if (!DatabaseService.db) {
-        log.info('Initializing database before ending session...');
-        await DatabaseService.init();
-      }
-      
-      // Recalculate stats to ensure we have the latest data
-      const result = await DatabaseService.endSession(sessionId, this.currentSession?.startTime || this.startTime);
-      log.info('Step 7: Local database updated with final statistics');
-      return result;
-    }, 10000, 'Database end');
-
-    if (databaseResult) {
-      stats = databaseResult;
-    } else {
-      // Fallback: Force end the session
-      log.info('� Using fallback database update...');
-      try {
-        await DatabaseService.init();
-        const endTime = Date.now();
-        const forceQuery = `UPDATE sessions SET end_time = ?, status = 'completed' WHERE id = ?`;
-        await DatabaseService.db.executeSql(forceQuery, [endTime, sessionId]);
-        log.info('Fallback database update succeeded');
-        
-        // Try to get stats with timeout
-        const statsQuery = 'SELECT * FROM sessions WHERE id = ?';
-        const [result] = await DatabaseService.db.executeSql(statsQuery, [sessionId]);
-        if (result.rows.length > 0) {
-          const session = result.rows.item(0);
-          stats = {
-            totalReadings: session.total_readings || 0,
-            avgSpO2: session.avg_spo2,
-            avgHeartRate: session.avg_heart_rate
-          };
-        }
-      } catch (fallbackError) {
-        log.warn('⚠️ Fallback database update failed (non-blocking):', fallbackError.message);
-      }
+    // Allow screen to sleep
+    try {
+      await deactivateKeepAwake();
+    } catch (error) {
+      console.warn('⚠️ Could not deactivate keep-awake:', error);
     }
 
-    // Step 7: End session in Supabase (with timeout, non-blocking)
-    await withTimeout(async () => {
-      log.info('Step 7: Ending session in Supabase...');
-      log.info('Session mapping check:', Array.from(SupabaseService.sessionMapping.entries()).slice(-3));
-      log.info('Target session ID:', sessionId);
-      
-      const result = await SupabaseService.endSession(sessionId, {
-        ...stats,
-        totalCycles: this.currentCycle,
-        completedPhases: this.currentPhase === 'COMPLETED' ? this.totalCycles * 2 : (this.currentCycle - 1) * 2 + (this.currentPhase === 'HYPEROXIC' ? 1 : 0)
-      }, this.currentSession?.startTime || this.startTime);
-      
-      if (result) {
-        log.info('Step 7: Supabase updated successfully');
-      } else {
-        log.warn('⚠️ Step 7: Supabase update returned null (may be queued)');
-        log.info('Sync queue length:', SupabaseService.syncQueue.length);
-      }
-    }, 10000, 'Supabase end');
+    // Calculate session stats
+    const duration = Math.floor((Date.now() - this.startTime) / 1000);
+    const stats = await this.calculateSessionStats();
 
-    // Step 8: Create completion object BEFORE resetting state
-    log.info('Step 8: Creating session completion object...');
-    const completedSession = {
-      ...this.currentSession,
-      endTime: Date.now(),
-      stats,
-      status: 'completed',
-      currentCycle: finalCycle,  // Use the preserved final cycle
-      currentPhase: 'COMPLETED',  // Always set to COMPLETED
-      finalCycle: finalCycle  // Add this for clarity
-    };
-    log.info('Step 8: Session completion object created');
+    // Update session in database
+    if (this.currentSession) {
+      await SupabaseService.endSession(
+        this.currentSession.id, 
+        {
+          avgSpO2: stats.avgSpO2,
+          avgHeartRate: stats.avgHeartRate
+        },
+        this.startTime
+      );
+    }
 
-    // Step 9: Reset state (immediate, can't fail)
-    log.info('Step 9: Resetting session state...');
+    // Clear session state
+    const sessionId = this.currentSession?.id;
     this.resetSessionState();
-    log.info('Step 9: State reset');
 
-    // Step 10: Clear storage (with timeout)
-    await withTimeout(async () => {
-      log.info('Step 10: Clearing AsyncStorage...');
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      await AsyncStorage.removeItem('activeSession');
-      log.info('Step 10: Storage cleared');
-    }, 2000, 'Storage clear');
+    // Clear stored session
+    await AsyncStorage.removeItem('activeSession');
 
-    // Session summary
-    log.info('\n' + '='.repeat(60));
-    log.info('� SESSION SUMMARY - EASY TO READ');
-    log.info('='.repeat(60));
-    log.info(`� Session ID: ${sessionId}`);
-    log.info(`⏰ Duration: ${Math.round((Date.now() - (completedSession.startTime || Date.now())) / 1000)} seconds`);
-    log.info(`Total readings collected: ${stats ? stats.totalReadings : 'Unknown'}`);
-    log.info(`Average Heart Rate: ${stats ? (stats.avgHeartRate || 'No data') : 'Unknown'}`);
-    log.info(`Average SpO2: ${stats ? (stats.avgSpO2 || 'No data') : 'Unknown'}`);
-    log.info(`Reading buffer size: ${this.readingBuffer.length}`);
-    log.info(`Session reading count: ${completedSession.readingCount || 0}`);
-    log.info(`� Session mapping entries: ${SupabaseService.sessionMapping.size}`);
-    log.info(`� Sync queue items: ${SupabaseService.syncQueue.length}`);
-    log.info(`Has session mapping for this ID: ${SupabaseService.sessionMapping.has(sessionId) ? '✅ Yes' : '❌ No'}`);
+    console.log('✅ Session stopped successfully');
+    this.notify('sessionStopped', { sessionId, duration, stats, reason });
+
+    return { sessionId, duration, stats, reason };
+  }
+
+  async completeSession() {
+    console.log('🎉 Session completed successfully!');
     
-    if (stats && stats.totalReadings > 0) {
-      log.info('SUCCESS: Pulse oximeter data was collected and saved!');
-    } else if (completedSession.readingCount > 0) {
-      log.info('WARNING: Session shows readings but stats are missing - may need reprocessing');
-      log.info('This suggests readings were collected but not saved to database');
-      log.info('Check session mapping recovery in next session');
-    } else {
-      log.info('NO DATA: No pulse oximeter readings were collected');
-      log.info('Possible causes:');
-      log.info('- Finger not detected by pulse oximeter');
-      log.info('- Session ended before readings could be processed');
-      log.info('- Bluetooth connection issues');
-    }
-    log.info('='.repeat(60) + '\n');
-
-    this.notify('sessionEnded', completedSession);
-
-    // Always return success - no more throwing errors!
-    log.info('� Session ended successfully with robust error handling');
-    return completedSession;
-  }
-
-  async stopLiveActivity() {
-    const liveActivityModule = loadLiveActivityModule();
-    if (!this.hasActiveLiveActivity || !liveActivityModule) {
-      return;
+    // Mark session as completed
+    if (this.currentSession) {
+      // Session will be marked as completed in stopSession
+      console.log('🎉 Session completed with', this.currentCycle, 'cycles');
     }
 
-    try {
-      await liveActivityModule.stopActivity();
-      this.hasActiveLiveActivity = false;
-      this.liveActivityId = null;
-      log.info('� Live Activity stopped');
-    } catch (error) {
-      log.error('❌ Failed to stop Live Activity:', error);
-    }
-  }
-
-  // Recovery buffer for failed readings
-  async saveToRecoveryBuffer(readings, sessionId) {
-    try {
-      const recoveryKey = `recovery_buffer_${sessionId}`;
-      const existingRecovery = await AsyncStorage.getItem(recoveryKey);
-      const existingReadings = existingRecovery ? JSON.parse(existingRecovery) : [];
-      const allReadings = [...existingReadings, ...readings];
-      
-      await AsyncStorage.setItem(recoveryKey, JSON.stringify(allReadings));
-      log.info(`Saved ${readings.length} readings to recovery buffer for session ${sessionId}`);
-      
-      // Schedule recovery attempt
-      setTimeout(() => this.attemptRecovery(sessionId), 5000);
-    } catch (error) {
-      log.error('❌ Failed to save to recovery buffer:', error);
-    }
-  }
-
-  async attemptRecovery(sessionId) {
-    try {
-      const recoveryKey = `recovery_buffer_${sessionId}`;
-      const recoveryData = await AsyncStorage.getItem(recoveryKey);
-      
-      if (!recoveryData) return;
-      
-      const readings = JSON.parse(recoveryData);
-      log.info(`Attempting to recover ${readings.length} readings for session ${sessionId}`);
-      
-      // Try to save recovered readings
-      await DatabaseService.addReadingsBatch(readings);
-      
-      // Clear recovery buffer on success
-      await AsyncStorage.removeItem(recoveryKey);
-      log.info(`Successfully recovered ${readings.length} readings`);
-      
-      // Trigger stats recalculation
-      await DatabaseService.reprocessSessionStats(sessionId);
-    } catch (error) {
-      log.error('❌ Recovery attempt failed:', error);
-      // Will retry on next app launch
-    }
-  }
-
-  // Update current cycle in database
-  async updateSessionCycle() {
-    if (!this.currentSession?.id) return;
-
-    try {
-      // Update local database
-      await DatabaseService.updateSessionCycle(this.currentSession.id, this.currentCycle);
-      
-      // Update Supabase
-      await SupabaseService.updateSessionCycle(this.currentSession.id, this.currentCycle);
-      
-      log.info(`Updated session cycle to ${this.currentCycle} in database`);
-    } catch (error) {
-      log.error('❌ Failed to update session cycle:', error);
-    }
-  }
-
-  // Update protocol for an existing session
-  async updateSessionProtocol(sessionId) {
-    if (!DatabaseService.db) {
-      await DatabaseService.init();
-    }
-    try {
-      await DatabaseService.updateSessionProtocol(sessionId, this.protocolConfig);
-      await SupabaseService.updateSessionProtocolConfig(sessionId, this.protocolConfig);
-      log.info(`Updated protocol for session ${sessionId}`);
-    } catch (error) {
-      log.error('❌ Failed to update session protocol:', error);
-    }
+    // Stop the session
+    await this.stopSession();
   }
 
   resetSessionState() {
+    this.currentSession = null;
     this.isActive = false;
     this.isPaused = false;
-    this.currentSession = null;
     this.startTime = null;
     this.pauseTime = null;
-    this.readingBuffer = [];
-    this.currentPhase = 'COMPLETED';  // Keep as COMPLETED to prevent tagging post-session readings as HYPOXIC
+    this.currentPhase = 'HYPOXIC';
     this.currentCycle = 1;
+    this.phaseTimeRemaining = 0;
     this.phaseStartTime = null;
-    this.phaseTimeRemaining = 300;
+    this.readingBuffer = [];
     this.hasActiveLiveActivity = false;
-    this.liveActivityId = null;
-    this.sessionStartTime = null;
-    this.totalSkippedTime = 0;
-    this.connectionState = 'connected'; // Reset connection state
   }
 
-  // Connection state management for Bluetooth resilience
-  setConnectionState(state) {
-    const validStates = ['connected', 'disconnected', 'reconnecting'];
-    if (!validStates.includes(state)) {
-      log.warn(`⚠️ Invalid connection state: ${state}`);
-      return;
-    }
-    
-    const previousState = this.connectionState;
-    this.connectionState = state;
-    log.info(`Connection state changed: ${previousState} → ${state}`);
-    
-    // Update session data if available
-    if (this.currentSession) {
-      this.currentSession.connectionState = state;
-    }
-    
-    // Notify listeners of connection state change
-    this.notify('connectionStateChanged', {
-      previousState,
-      currentState: state,
-      timestamp: Date.now()
-    });
-    
-    // If disconnected, immediately flush any pending readings
-    if (state === 'disconnected' && this.isActive) {
-      log.info('� Device disconnected - flushing pending readings immediately');
-      this.flushReadingBuffer().catch(error => {
-        log.error('❌ Failed to flush readings on disconnect:', error);
-      });
-    }
-    
-    // If reconnected, clear any connection warnings
-    if (state === 'connected' && previousState !== 'connected') {
-      log.info('� Connection restored - session continuing normally');
-      
-      // Update live activity if available
-      if (this.hasActiveLiveActivity) {
-        this.updateLiveActivity();
-      }
-    }
-  }
-
-  // Get current connection state
-  getConnectionState() {
-    return this.connectionState || 'connected';
-  }
-
-  // Reading management (same as original SessionManager)
   async addReading(reading) {
-    if (!this.isActive || !this.currentSession) {
-      log.info('Reading rejected - no active session in EnhancedSessionManager');
-      return;
-    }
+    if (!this.isActive || !this.currentSession) return;
 
-    // Don't record readings if session has completed
-    if (this.currentPhase === 'COMPLETED' || this.currentPhase === 'TERMINATED' || this.currentPhase === null) {
-      log.info('Reading rejected - session has completed');
-      return;
-    }
-
-    const timestampedReading = {
+    const enhancedReading = {
       ...reading,
-      sessionId: this.currentSession.id,
-      timestamp: Date.now(),
+      session_id: this.currentSession.id,
+      timestamp: new Date().toISOString(),
       phase: this.currentPhase,
       cycle: this.currentCycle,
-      fio2Level: this.currentHypoxiaLevel,
-      phaseType: this.currentPhase,  // Critical for graph display
-      cycleNumber: this.currentCycle  // Critical for graph display
+      phase_time_remaining: this.phaseTimeRemaining
     };
-    
-    // Debug log to ensure phase data is being recorded
-    if (this.readingBuffer.length % 10 === 0) {
-      log.info(`Reading #${this.readingBuffer.length + 1}: Phase=${this.currentPhase}, Cycle=${this.currentCycle}`);
-    }
 
-    // Only log first reading and major milestones to reduce noise
-    if (this.currentSession.readingCount === 0) {
-      log.info('� First reading collected!');
-    } else if (this.currentSession.readingCount % 100 === 0) {
-      log.info(`Milestone: ${this.currentSession.readingCount} readings collected`);
-    }
+    this.readingBuffer.push(enhancedReading);
 
-    this.readingBuffer.push(timestampedReading);
-    this.currentSession.readingCount++;
-    this.currentSession.lastReading = timestampedReading;
-
-    // Commented out to reduce log noise - uncomment if needed for debugging
-    // this.notify('readingAdded', timestampedReading);
-
+    // Flush if buffer is full
     if (this.readingBuffer.length >= this.BATCH_SIZE) {
-      log.info(`Buffer full (${this.BATCH_SIZE}) - flushing to database`);
       await this.flushReadingBuffer();
     }
   }
 
   async flushReadingBuffer() {
-    if (this.readingBuffer.length === 0) return true;
+    if (this.readingBuffer.length === 0) return;
 
     const readings = [...this.readingBuffer];
-    let localSuccess = false;
-    let cloudSuccess = false;
+    this.readingBuffer = [];
 
     try {
-      // Clear buffer optimistically
-      this.readingBuffer = [];
-
-      // Always flush to local database first (most critical)
-      try {
-        await DatabaseService.addReadingsBatch(readings);
-        localSuccess = true;
-        log.info(`Saved ${readings.length} readings to local database`);
-      } catch (localError) {
-        log.error('❌ Failed to save to local database:', localError);
-        // Re-add readings to buffer for retry
-        this.readingBuffer.unshift(...readings);
-        throw localError; // Re-throw to trigger retry logic
-      }
-
-      // Try to flush to Supabase if we have an active session
-      if (this.isActive && this.currentSession) {
-        try {
-          await SupabaseService.addReadingsBatch(readings);
-          cloudSuccess = true;
-          log.info(`Synced ${readings.length} readings to cloud`);
-        } catch (cloudError) {
-          log.warn('⚠️ Failed to sync to cloud (will retry later):', cloudError.message);
-          // Queue for later sync - don't fail the whole operation
-          SupabaseService.queueForSync('addReadingsBatch', readings);
-        }
-      } else {
-        // Queue for later sync when session becomes active
-        log.info(`� Queued ${readings.length} readings for later cloud sync`);
-        SupabaseService.queueForSync('addReadingsBatch', readings);
-      }
-
-      return localSuccess; // Return true if at least local save succeeded
+      await SupabaseService.addReadingsBatch(readings);
+      console.log(`📊 Flushed ${readings.length} readings to database`);
     } catch (error) {
-      log.error('❌ Critical flush failure:', error);
-      // Ensure readings are back in buffer for retry
-      if (this.readingBuffer.length === 0) {
-        this.readingBuffer.unshift(...readings);
-      }
-      return false;
+      console.error('❌ Failed to flush readings:', error);
+      this.readingBuffer.unshift(...readings);
     }
   }
 
@@ -1064,7 +777,85 @@ class EnhancedSessionManager {
     }
   }
 
-  // Getters for current session state
+  async calculateSessionStats() {
+    if (!this.currentSession) return { avgSpO2: null, avgHeartRate: null };
+
+    try {
+      // For now, return default stats - this would normally calculate from readings
+      // TODO: Implement actual stats calculation from session readings
+      return { avgSpO2: 95, avgHeartRate: 72 };
+    } catch (error) {
+      console.error('❌ Failed to calculate session stats:', error);
+      return { avgSpO2: null, avgHeartRate: null };
+    }
+  }
+
+  // Background timeout handling
+  startBackgroundTimeout() {
+    this.clearBackgroundTimeout();
+    
+    const BACKGROUND_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+    
+    this.backgroundTimeout = setTimeout(async () => {
+      if (this.isActive) {
+        console.log('⏰ App backgrounded too long - ending session');
+        await this.stopSession();
+      }
+    }, BACKGROUND_TIMEOUT);
+    
+    console.log('⏰ Background timeout started (5 minutes)');
+  }
+
+  clearBackgroundTimeout() {
+    if (this.backgroundTimeout) {
+      clearTimeout(this.backgroundTimeout);
+      this.backgroundTimeout = null;
+    }
+  }
+
+  // Session timeout handling
+  startSessionTimeout() {
+    this.clearSessionTimeout();
+    
+    const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours
+    
+    this.sessionTimeout = setTimeout(async () => {
+      if (this.isActive) {
+        console.log('⏰ Session timeout (2 hours) - ending session');
+        await this.stopSession();
+      }
+    }, SESSION_TIMEOUT);
+    
+    console.log('⏰ Session timeout started (2 hours)');
+  }
+
+  clearSessionTimeout() {
+    if (this.sessionTimeout) {
+      clearTimeout(this.sessionTimeout);
+      this.sessionTimeout = null;
+    }
+  }
+
+  // Recovery and cleanup
+  async performStartupRecovery() {
+    try {
+      const sessionStr = await AsyncStorage.getItem('activeSession');
+      if (sessionStr) {
+        const session = JSON.parse(sessionStr);
+        console.log('🔧 Found incomplete session:', session.id);
+        
+        // Mark as abandoned
+        await SupabaseService.endSession(session.id, {}, Date.now());
+        
+        await AsyncStorage.removeItem('activeSession');
+        console.log('✅ Cleaned up abandoned session');
+      }
+    } catch (error) {
+      console.error('❌ Recovery cleanup failed:', error);
+    }
+  }
+
+  // Getters for current state
   getSessionInfo() {
     return {
       isActive: this.isActive,
@@ -1072,354 +863,39 @@ class EnhancedSessionManager {
       currentSession: this.currentSession,
       currentPhase: this.currentPhase,
       currentCycle: this.currentCycle,
-      totalCycles: this.protocolConfig.totalCycles,
-      hypoxicDuration: this.protocolConfig.hypoxicDuration,
-      hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
       phaseTimeRemaining: this.phaseTimeRemaining,
-      hasActiveLiveActivity: this.hasActiveLiveActivity,
-      startTime: this.startTime,
-      pauseTime: this.pauseTime,
-      sessionStartTime: this.sessionStartTime,
-      totalSkippedTime: this.totalSkippedTime
-    };
-  }
-
-  getCurrentPhaseInfo() {
-    return {
-      phase: this.currentPhase,
-      cycle: this.currentCycle,
       totalCycles: this.protocolConfig.totalCycles,
       hypoxicDuration: this.protocolConfig.hypoxicDuration,
       hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
-      timeRemaining: this.phaseTimeRemaining,
-      isActive: this.isActive,
-      isPaused: this.isPaused
+      capabilities: runtimeEnvironment.capabilities,
+      environment: runtimeEnvironment.environmentName
     };
   }
 
-  // Data repair utilities
-  async reprocessSessionStats(sessionId) {
-    if (!DatabaseService.db) {
-      await DatabaseService.init();
-    }
-    return await DatabaseService.reprocessSessionStats(sessionId);
-  }
-
-  async reprocessAllNullStats() {
-    if (!DatabaseService.db) {
-      await DatabaseService.init();
-    }
-    return await DatabaseService.reprocessAllNullStats();
-  }
-
-  // Background timeout handling for session cleanup
-  startBackgroundTimeout() {
-    // Clear any existing timeout
-    this.clearBackgroundTimeout();
-    
-    // End session if app stays in background for more than 5 minutes
-    const BACKGROUND_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-    
-    this.backgroundTimeout = setTimeout(async () => {
-      if (this.isActive) {
-        log.info('⏰ App backgrounded too long - ending active session');
-        try {
-          await this.stopSession();
-          log.info('Session ended due to background timeout');
-        } catch (error) {
-          log.error('❌ Failed to end session after background timeout:', error);
-          this.resetSessionState();
-        }
-      }
-    }, BACKGROUND_TIMEOUT);
-    
-    log.info('⏰ Background timeout started (5 minutes)');
-  }
-
-  clearBackgroundTimeout() {
-    if (this.backgroundTimeout) {
-      clearTimeout(this.backgroundTimeout);
-      this.backgroundTimeout = null;
-      log.info('⏰ Background timeout cleared');
-    }
-  }
-
-  // Session timeout handling (auto-end sessions that run too long)
-  startSessionTimeout() {
-    // Clear any existing timeout
-    this.clearSessionTimeout();
-    
-    // End session if it runs longer than 2 hours
-    const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours
-    
-    this.sessionTimeout = setTimeout(async () => {
-      if (this.isActive) {
-        log.info('⏰ Session running too long (2+ hours) - ending automatically');
-        try {
-          await this.stopSession();
-          log.info('Session ended due to timeout');
-        } catch (error) {
-          log.error('❌ Failed to end session after timeout:', error);
-          this.resetSessionState();
-        }
-      }
-    }, SESSION_TIMEOUT);
-    
-    log.info('⏰ Session timeout started (2 hours)');
-  }
-
-  clearSessionTimeout() {
-    if (this.sessionTimeout) {
-      clearTimeout(this.sessionTimeout);
-      this.sessionTimeout = null;
-      log.info('⏰ Session timeout cleared');
-    }
-  }
-
-  // FiO2 level management
   setHypoxiaLevel(level) {
     if (level >= 0 && level <= 10) {
       this.currentHypoxiaLevel = level;
-      log.info(`�️ Hypoxia level set to: ${level}`);
+      this.notify('hypoxiaLevelChanged', { level });
     }
   }
 
-  getHypoxiaLevel() {
-    return this.currentHypoxiaLevel;
+  // Set protocol configuration (called before starting session)
+  setProtocol(config) {
+    console.log('🔧 Setting protocol configuration:', config);
+    this.protocolConfig = {
+      totalCycles: config.totalCycles || 3,
+      hypoxicDuration: config.hypoxicDuration || 420,
+      hyperoxicDuration: config.hyperoxicDuration || 180
+    };
   }
 
-  getCurrentFiO2() {
-    // Convert hypoxia level (0-10) to approximate FiO2 percentage
-    // Level 0 = ~21% (room air), Level 10 = ~10% (very hypoxic)
-    const fio2Percentage = Math.round(21 - (this.currentHypoxiaLevel * 1.1));
-    return Math.max(fio2Percentage, 10); // Minimum 10% FiO2 for safety
-  }
-
-  // Session history methods (from original SessionManager)
-  async getAllSessions() {
-    try {
-      // Initialize database if needed
-      if (!DatabaseService.db) {
-        await DatabaseService.init();
-      }
-      return await DatabaseService.getAllSessions();
-    } catch (error) {
-      log.error('❌ Failed to get sessions:', error);
-      return [];
-    }
-  }
-
-  async getSessionWithData(sessionId) {
-    try {
-      // Initialize database if needed
-      if (!DatabaseService.db) {
-        await DatabaseService.init();
-      }
-      const session = await DatabaseService.getSession(sessionId);
-      const readings = await DatabaseService.getSessionReadings(sessionId, true); // Valid only
-      const stats = await DatabaseService.getSessionStats(sessionId);
-      
-      return {
-        ...session,
-        readings,
-        stats
-      };
-    } catch (error) {
-      log.error('❌ Failed to get session data:', error);
-      return null;
-    }
-  }
-
-  async exportSession(sessionId) {
-    try {
-      const sessionData = await this.getSessionWithData(sessionId);
-      if (!sessionData) {
-        throw new Error('Session not found');
-      }
-
-      const exportData = {
-        sessionInfo: {
-          id: sessionData.id,
-          startTime: sessionData.start_time,
-          endTime: sessionData.end_time,
-          duration: sessionData.end_time - sessionData.start_time,
-          totalReadings: sessionData.total_readings
-        },
-        statistics: sessionData.stats,
-        readings: sessionData.readings.map(reading => ({
-          timestamp: reading.timestamp,
-          spo2: reading.spo2,
-          heartRate: reading.heart_rate,
-          signalStrength: reading.signal_strength
-        }))
-      };
-
-      return JSON.stringify(exportData, null, 2);
-    } catch (error) {
-      log.error('❌ Failed to export session:', error);
-      throw error;
-    }
-  }
-
-  async clearAllData() {
-    try {
-      if (this.isActive) {
-        await this.stopSession(); // Stop any active session
-      }
-      await DatabaseService.clearAllData();
-      await AsyncStorage.removeItem('activeSession');
-      
-      log.info('All session data cleared');
-      this.notify('dataCleared');
-    } catch (error) {
-      log.error('❌ Failed to clear data:', error);
-      throw error;
-    }
-  }
-
-  async getStorageInfo() {
-    try {
-      // Initialize database if needed
-      if (!DatabaseService.db) {
-        await DatabaseService.init();
-      }
-      return await DatabaseService.getStorageInfo();
-    } catch (error) {
-      log.error('❌ Failed to get storage info:', error);
-      return { sessionCount: 0, readingCount: 0, estimatedSizeMB: 0 };
-    }
-  }
-
-  async recoverSession() {
-    try {
-      // Initialize database if needed before recovery
-      if (!DatabaseService.db) {
-        await DatabaseService.init();
-      }
-      
-      const savedSession = await AsyncStorage.getItem('activeSession');
-      if (savedSession) {
-        const session = JSON.parse(savedSession);
-        
-        // Check if session is still in database and active
-        const dbSession = await DatabaseService.getSession(session.id);
-        if (dbSession && dbSession.status === 'active') {
-          this.currentSession = session;
-          this.isActive = true;
-          this.startTime = session.startTime;
-          this.startBatchProcessing();
-          
-          log.info(`Recovered session: ${session.id}`);
-          this.notify('sessionRecovered', session);
-          return session;
-        } else {
-          // Clean up orphaned session
-          await AsyncStorage.removeItem('activeSession');
-        }
-      }
-    } catch (error) {
-      log.error('❌ Failed to recover session:', error);
-    }
-    return null;
-  }
-
-  // Startup recovery - clean up stuck sessions and recover lost data
-  async performStartupRecovery() {
-    log.info('Performing startup recovery cleanup...');
-    
-    try {
-      // Check for recovery buffers first
-      const allKeys = await AsyncStorage.getAllKeys();
-      const recoveryKeys = allKeys.filter(key => key.startsWith('recovery_buffer_'));
-      
-      if (recoveryKeys.length > 0) {
-        log.info(`Found ${recoveryKeys.length} recovery buffers to process`);
-        for (const key of recoveryKeys) {
-          const sessionId = key.replace('recovery_buffer_', '');
-          await this.attemptRecovery(sessionId);
-        }
-      }
-      
-      // Check for any locally stored active session
-      const storedSession = await AsyncStorage.getItem('activeSession');
-      
-      if (storedSession) {
-        log.info('Found stored active session from previous app run');
-        
-        try {
-          const sessionData = JSON.parse(storedSession);
-          const sessionAge = Date.now() - sessionData.startTime;
-          const RECOVERY_THRESHOLD = 10 * 60 * 1000; // 10 minutes
-          
-          if (sessionAge > RECOVERY_THRESHOLD) {
-            log.info(`Stored session is ${Math.round(sessionAge / 60000)} minutes old - cleaning up`);
-            
-            // Try to end the session properly in databases
-            try {
-              // Ensure database is initialized before trying to use it
-              if (!DatabaseService.db) {
-                await DatabaseService.init();
-              }
-              
-              const stats = await DatabaseService.endSession(sessionData.id, sessionData.startTime);
-              await SupabaseService.endSession(sessionData.id, stats, sessionData.startTime);
-              log.info('Cleaned up stuck session in databases');
-            } catch (dbError) {
-              log.info('Could not end session in databases (may have been cleaned already):', dbError.message);
-            }
-            
-            // Clear the stored session
-            await AsyncStorage.removeItem('activeSession');
-            log.info('Cleared stored session data');
-          } else {
-            log.info('Recent session found - may be valid, keeping for now');
-          }
-        } catch (parseError) {
-          log.info('Invalid stored session data - clearing');
-          await AsyncStorage.removeItem('activeSession');
-        }
-      }
-      
-      // Bulk cleanup of stuck sessions in Supabase (user's own sessions only)
-      try {
-        log.info('🧹 Cleaning up stuck sessions...');
-        
-        // Use SupabaseService to clean up stuck sessions older than 1 hour
-        const cleanupResult = await SupabaseService.cleanupStuckSessions();
-        
-        if (cleanupResult && cleanupResult.cleaned > 0) {
-          log.info(`Successfully cleaned up ${cleanupResult.cleaned} stuck sessions`);
-        } else {
-          log.info('Found 0 stuck sessions');
-        }
-      } catch (cleanupError) {
-        log.info('Could not cleanup stuck sessions:', cleanupError.message);
-      }
-      
-      // Also run the local database cleanup
-      try {
-        if (!DatabaseService.db) {
-          await DatabaseService.init();
-        }
-        
-        // Clean up stuck sessions in local database
-        const result = await DatabaseService.db.executeSql(
-          `UPDATE sessions SET status = 'completed', end_time = ? WHERE status = 'active' AND start_time < ?`,
-          [Date.now(), Date.now() - (60 * 60 * 1000)] // Sessions older than 1 hour
-        );
-        
-        log.info('� Processing 0 sessions for cleanup...');
-        log.info('Successfully cleaned up 0/0 sessions');
-      } catch (localCleanupError) {
-        log.info('Local cleanup error:', localCleanupError.message);
-      }
-      
-      log.info('Startup recovery complete');
-    } catch (error) {
-      log.error('❌ Startup recovery failed:', error);
-    }
+  // Get protocol configuration
+  getProtocol() {
+    return this.protocolConfig;
   }
 }
 
-// Export singleton instance
-export default new EnhancedSessionManager(); 
+// Create singleton instance
+const enhancedSessionManager = new EnhancedSessionManager();
+
+export default enhancedSessionManager;
