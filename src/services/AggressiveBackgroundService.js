@@ -48,17 +48,35 @@ export default class AggressiveBackgroundService {
     console.log('🚀 Initializing Aggressive Background Service');
     
     try {
-      // Register background tasks
+      // Register background tasks (this is what was failing before)
+      console.log('📱 Registering background tasks...');
       await this.registerBackgroundTasks();
+      console.log('✅ Background tasks registered');
       
-      // Load native modules
-      this.backgroundTimer = await moduleLoader.loadBackgroundTimer();
+      // Load native modules (graceful fallback if not available)
+      console.log('📱 Loading background timer module...');
+      try {
+        this.backgroundTimer = await moduleLoader.loadBackgroundTimer();
+        console.log('✅ Background timer loaded');
+      } catch (error) {
+        console.warn('⚠️ Background timer not available:', error.message);
+        // Continue without background timer
+      }
       
       // Setup app state monitoring
+      console.log('📱 Setting up app state monitoring...');
       AppState.addEventListener('change', this.handleAppStateChange);
+      console.log('✅ App state monitoring active');
       
-      // Request background permissions
-      await this.requestBackgroundPermissions();
+      // Request background permissions (graceful fallback if denied)
+      console.log('📱 Requesting background permissions...');
+      try {
+        await this.requestBackgroundPermissions();
+        console.log('✅ Background permissions requested');
+      } catch (error) {
+        console.warn('⚠️ Background permissions issue:', error.message);
+        // Continue with reduced functionality
+      }
       
       console.log('✅ Aggressive Background Service initialized');
       return true;
@@ -69,21 +87,34 @@ export default class AggressiveBackgroundService {
   }
 
   async registerBackgroundTasks() {
-    // Define background fetch task
-    TaskManager.defineTask(BACKGROUND_TASK_NAME, this.backgroundFetchTask);
-    
-    // Define keepalive task
-    TaskManager.defineTask(KEEPALIVE_TASK_NAME, this.keepaliveTask);
-    
-    // Register background fetch
-    const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_TASK_NAME);
-    if (!isRegistered) {
-      await BackgroundFetch.registerTaskAsync(BACKGROUND_TASK_NAME, {
-        minimumInterval: 15, // 15 seconds (minimum allowed)
-        stopOnTerminate: false,
-        startOnBoot: false,
-      });
-      console.log('📱 Background fetch task registered');
+    try {
+      // Define background fetch task
+      console.log('📱 Defining background fetch task...');
+      TaskManager.defineTask(BACKGROUND_TASK_NAME, this.backgroundFetchTask);
+      
+      // Define keepalive task
+      console.log('📱 Defining keepalive task...');
+      TaskManager.defineTask(KEEPALIVE_TASK_NAME, this.keepaliveTask);
+      
+      // Register background fetch
+      console.log('📱 Checking if background fetch is already registered...');
+      const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_TASK_NAME);
+      console.log(`📱 Background fetch already registered: ${isRegistered}`);
+      
+      if (!isRegistered) {
+        console.log('📱 Registering background fetch task...');
+        await BackgroundFetch.registerTaskAsync(BACKGROUND_TASK_NAME, {
+          minimumInterval: 15, // 15 seconds (minimum allowed)
+          stopOnTerminate: false,
+          startOnBoot: false,
+        });
+        console.log('✅ Background fetch task registered successfully');
+      } else {
+        console.log('📱 Background fetch task already registered, skipping');
+      }
+    } catch (error) {
+      console.error('❌ Error registering background tasks:', error);
+      throw error; // Re-throw to be caught by initialize()
     }
   }
 
@@ -185,11 +216,13 @@ export default class AggressiveBackgroundService {
     // Silent audio trick to maintain background execution
     // This is a legitimate technique used by meditation/timer apps
     try {
-      const Audio = await moduleLoader.loadAudio();
-      if (Audio) {
-        this.audioContext = await Audio.startSilentAudio();
-        console.log('🔇 Silent audio started for background persistence');
-      }
+      // For now, skip silent audio - can be added later with expo-av
+      console.log('🔇 Silent audio not implemented yet (can add expo-av later)');
+      // const { Audio } = await import('expo-av');
+      // if (Audio) {
+      //   this.audioContext = await Audio.startSilentAudio();
+      //   console.log('🔇 Silent audio started for background persistence');
+      // }
     } catch (error) {
       console.warn('⚠️ Could not start silent audio:', error);
     }
@@ -476,8 +509,9 @@ export default class AggressiveBackgroundService {
     // Stop silent audio
     if (this.audioContext) {
       try {
-        await this.audioContext.stop();
+        // await this.audioContext.stop();
         this.audioContext = null;
+        console.log('🔇 Silent audio context cleared');
       } catch (error) {
         console.warn('⚠️ Error stopping silent audio:', error);
       }

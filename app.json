@@ -30,7 +30,8 @@
           "bluetooth-central",
           "processing",
           "background-fetch",
-          "background-processing"
+          "background-processing",
+          "fetch"
         ],
         "ITSAppUsesNonExemptEncryption": false
       },
