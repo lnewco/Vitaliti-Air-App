@@ -1,9 +1,18 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Image } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import OnboardingProgressIndicator from '../../components/OnboardingProgressIndicator';
 
 const WelcomeScreen = ({ navigation }) => {
-  const handleGetStarted = () => {
+  const handleGetStarted = async () => {
+    // Mark onboarding as in progress
+    try {
+      await AsyncStorage.setItem('onboarding_state', 'in_progress');
+      console.log('📝 Onboarding state set to: in_progress');
+    } catch (error) {
+      console.error('Failed to save onboarding state:', error);
+    }
+    
     navigation.navigate('BasicInfo');
   };
 

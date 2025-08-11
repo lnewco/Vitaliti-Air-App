@@ -210,10 +210,12 @@ const CompletionScreen = ({ navigation }) => {
       
       console.log('✅ Health data saved successfully:', healthResult);
 
-      // Mark onboarding as completed in AsyncStorage
-      await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
+      // Mark onboarding as completed in AsyncStorage (both new and legacy keys for compatibility)
+      await AsyncStorage.setItem('onboarding_state', 'completed');
+      await AsyncStorage.setItem('hasCompletedOnboarding', 'true'); // Keep for backwards compatibility
       
       console.log('✅ All onboarding data saved successfully!');
+      console.log('📝 Onboarding state set to: completed');
       
       // Clear onboarding data from memory
       clearOnboardingData();

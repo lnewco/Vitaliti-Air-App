@@ -15,7 +15,7 @@ const Stack = createStackNavigator();
 
 const AppNavigator = () => {
   const { isAuthenticated, isLoading, user } = useAuth();
-  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(null);
+  const [onboardingState, setOnboardingState] = useState(null); // 'not_started' | 'in_progress' | 'completed'
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
   const navigationRef = useRef();
   const routeNameRef = useRef();
@@ -39,10 +39,15 @@ const AppNavigator = () => {
 
   // Separate effect for navigation based on state changes
   useEffect(() => {
-    if (!isLoading && !isCheckingOnboarding && hasSeenOnboarding !== null) {
-      navigateBasedOnAuthAndOnboarding();
+    if (!isLoading && !isCheckingOnboarding && onboardingState !== null) {
+      // Only navigate if onboarding is not in progress
+      if (onboardingState !== 'in_progress') {
+        navigateBasedOnAuthAndOnboarding();
+      } else {
+        console.log('🔄 Skipping navigation - onboarding is in progress');
+      }
     }
-  }, [isLoading, isCheckingOnboarding, hasSeenOnboarding]); // No isAuthenticated dependency here
+  }, [isLoading, isCheckingOnboarding, onboardingState]); // No isAuthenticated dependency here
 
   // Listen for app state changes to re-check onboarding status
   useEffect(() => {
@@ -64,16 +69,17 @@ const AppNavigator = () => {
     try {
       // Set loading state when checking onboarding status
       setIsCheckingOnboarding(true);
-      const onboardingStatus = await AsyncStorage.getItem('hasCompletedOnboarding');
-      console.log('🔄 AppNavigator: Raw onboarding status from AsyncStorage:', onboardingStatus);
       
-      const previousStatus = hasSeenOnboarding;
+      // Check new onboarding_state first, fallback to old hasCompletedOnboarding for backwards compatibility
+      const state = await AsyncStorage.getItem('onboarding_state');
+      const oldStatus = await AsyncStorage.getItem('hasCompletedOnboarding');
       
-      // For returning users, trust AsyncStorage primarily
-      // Only verify with Supabase if user is currently authenticated AND we have concerns about data integrity
-      if (onboardingStatus === 'true') {
-        // User has completed onboarding according to AsyncStorage
-        setHasSeenOnboarding(true);
+      console.log('🔄 AppNavigator: Onboarding state from AsyncStorage:', state || 'not set');
+      console.log('🔄 AppNavigator: Legacy onboarding status:', oldStatus || 'not set');
+      
+      // Determine actual onboarding state
+      if (state === 'completed' || oldStatus === 'true') {
+        setOnboardingState('completed');
         
         // Optional: Double-check with Supabase only if user is currently authenticated
         // This prevents false negatives for returning users who need to log in first
@@ -98,15 +104,18 @@ const AppNavigator = () => {
             // Don't reset onboarding status due to network/DB errors
           }
         }
+      } else if (state === 'in_progress') {
+        setOnboardingState('in_progress');
+        console.log('🔄 AppNavigator: Onboarding is in progress, will not reset navigation');
       } else {
-        // User hasn't completed onboarding
-        setHasSeenOnboarding(false);
+        // User hasn't started or completed onboarding
+        setOnboardingState('not_started');
       }
       
       // No need to navigate here - CompletionScreen handles navigation directly
     } catch (error) {
       console.error('Error checking onboarding status:', error);
-      setHasSeenOnboarding(false); // Default to showing onboarding
+      setOnboardingState('not_started'); // Default to showing onboarding
     } finally {
       setIsCheckingOnboarding(false);
     }
@@ -177,6 +186,12 @@ const AppNavigator = () => {
       return;
     }
 
+    // Skip navigation if onboarding is in progress
+    if (onboardingState === 'in_progress') {
+      console.log('🔄 Onboarding in progress - skipping navigation reset');
+      return;
+    }
+
     const flow = getInitialFlow();
     const targetScreen = flow === 'onboarding' ? 'Onboarding' : flow === 'auth' ? 'Auth' : 'Main';
     const currentRoute = navigationRef.current.getCurrentRoute();
@@ -210,22 +225,27 @@ const AppNavigator = () => {
   const getInitialFlow = () => {
     console.log('🔄 AppNavigator: Determining flow...');
     console.log('🔄 isAuthenticated:', isAuthenticated);
-    console.log('🔄 hasSeenOnboarding:', hasSeenOnboarding);
+    console.log('🔄 onboardingState:', onboardingState);
     
-    // Priority 1: If user hasn't completed onboarding, always show onboarding flow
-    // (even if they're authenticated - they might be mid-onboarding)
-    if (!hasSeenOnboarding) {
+    // Priority 1: If onboarding is in progress, stay in onboarding flow
+    if (onboardingState === 'in_progress') {
+      console.log('🔄 Flow: onboarding (continuing in-progress onboarding)');
+      return 'onboarding';
+    }
+    
+    // Priority 2: If user hasn't completed onboarding, show onboarding flow
+    if (onboardingState !== 'completed') {
       console.log('🔄 Flow: onboarding (user needs to complete onboarding)');
       return 'onboarding';
     }
     
-    // Priority 2: If onboarding is complete but not authenticated, show auth flow
+    // Priority 3: If onboarding is complete but not authenticated, show auth flow
     if (!isAuthenticated) {
       console.log('🔄 Flow: auth (returning user needs to log in)');
       return 'auth';
     }
     
-    // Priority 3: If onboarding complete AND authenticated, show main app
+    // Priority 4: If onboarding complete AND authenticated, show main app
     console.log('🔄 Flow: main (completed user, authenticated)');
     return 'main';
   };
