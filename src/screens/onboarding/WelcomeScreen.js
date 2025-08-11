@@ -16,6 +16,12 @@ const WelcomeScreen = ({ navigation }) => {
     navigation.navigate('BasicInfo');
   };
 
+  const handleSignIn = () => {
+    // Navigate to Auth stack for existing users
+    console.log('🔑 Navigating to sign in for existing user');
+    navigation.navigate('Auth', { screen: 'LoginScreen' });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <OnboardingProgressIndicator currentStep={1} totalSteps={5} />
@@ -41,6 +47,13 @@ const WelcomeScreen = ({ navigation }) => {
             onPress={handleGetStarted}
           >
             <Text style={styles.getStartedButtonText}>Get Started</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.signInButton}
+            onPress={handleSignIn}
+          >
+            <Text style={styles.signInButtonText}>Already have an account? Sign In</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -118,6 +131,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
+  },
+  signInButton: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 12,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  signInButtonText: {
+    color: '#3B82F6',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 
