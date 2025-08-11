@@ -28,7 +28,9 @@
         "NSSupportsLiveActivities": true,
         "UIBackgroundModes": [
           "bluetooth-central",
-          "processing"
+          "processing",
+          "background-fetch",
+          "background-processing"
         ],
         "ITSAppUsesNonExemptEncryption": false
       },
@@ -66,7 +68,13 @@
     },
     "plugins": [
       "expo-background-task",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-background-fetch",
+        {
+          "backgroundFetchInterval": 15
+        }
+      ]
     ]
   }
 }

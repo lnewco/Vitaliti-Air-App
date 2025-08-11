@@ -14,6 +14,7 @@ import DatabaseService from './DatabaseService';
 import SupabaseService from './SupabaseService';
 import serviceFactory from './ServiceFactory';
 import runtimeEnvironment from '../utils/RuntimeEnvironment';
+import AggressiveBackgroundService from './AggressiveBackgroundService';
 
 // Configure notification handling
 Notifications.setNotificationHandler({
@@ -52,6 +53,7 @@ class EnhancedSessionManager {
     
     // Service references (will be loaded based on environment)
     this.backgroundService = null;
+    this.aggressiveBackgroundService = null;
     this.liveActivityService = null;
     this.notificationService = null;
     
@@ -97,6 +99,8 @@ class EnhancedSessionManager {
       
       // Create services based on environment
       this.backgroundService = await serviceFactory.createBackgroundService();
+      this.aggressiveBackgroundService = new AggressiveBackgroundService();
+      await this.aggressiveBackgroundService.initialize();
       this.liveActivityService = await serviceFactory.createLiveActivityService();
       this.notificationService = await serviceFactory.createNotificationService();
       
@@ -339,7 +343,21 @@ class EnhancedSessionManager {
       // Schedule phase notifications
       await this.schedulePhaseNotifications();
 
-      // Start background monitoring if available
+      // Start AGGRESSIVE background monitoring for maximum persistence
+      if (this.aggressiveBackgroundService) {
+        console.log('🔥 Starting AGGRESSIVE background monitoring');
+        await this.aggressiveBackgroundService.startAggressiveBackgroundMonitoring({
+          id: sessionId,
+          currentPhase: this.currentPhase,
+          currentCycle: this.currentCycle,
+          phaseTimeRemaining: this.phaseTimeRemaining,
+          totalCycles: this.protocolConfig.totalCycles,
+          hypoxicDuration: this.protocolConfig.hypoxicDuration,
+          hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
+        });
+      }
+      
+      // Also start basic background monitoring as fallback
       if (this.backgroundService) {
         await this.backgroundService.startBackgroundMonitoring({
           id: sessionId,
@@ -725,7 +743,13 @@ class EnhancedSessionManager {
     this.clearBackgroundTimeout();
     this.clearSessionTimeout();
 
-    // Stop background monitoring
+    // Stop AGGRESSIVE background monitoring
+    if (this.aggressiveBackgroundService) {
+      console.log('🔥 Stopping AGGRESSIVE background monitoring');
+      await this.aggressiveBackgroundService.stopAggressiveBackgroundMonitoring();
+    }
+    
+    // Stop basic background monitoring
     if (this.backgroundService) {
       await this.backgroundService.stopBackgroundMonitoring();
     }
