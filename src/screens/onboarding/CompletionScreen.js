@@ -245,10 +245,14 @@ const CompletionScreen = ({ navigation }) => {
     // Clear onboarding data from memory
     clearOnboardingData();
     
-    console.log('Onboarding completed - AppNavigator periodic check will detect this within 2 seconds');
+    console.log('Onboarding completed - navigating directly to Main app');
     
-    // The AppNavigator has a periodic check that will detect the AsyncStorage change
-    // and automatically transition to the main app within 2 seconds
+    // Navigate directly to the Main app with a reset action
+    // This ensures we clear the onboarding stack and can't go back
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Main' }],
+    });
   };
 
   return (

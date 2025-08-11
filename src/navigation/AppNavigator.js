@@ -48,25 +48,13 @@ const AppNavigator = () => {
     return () => subscription?.remove();
   }, []);
 
-  // Periodic check for onboarding completion (useful when onboarding completes)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Check if we're in onboarding mode (regardless of auth status)
-      if (!hasSeenOnboarding) {
-        console.log('🔄 Periodic check - looking for onboarding completion');
-        checkOnboardingStatus();
-      }
-    }, 2000); // Check every 2 seconds when in onboarding mode
-
-    return () => clearInterval(interval);
-  }, [hasSeenOnboarding]);
+  // Removed periodic check - CompletionScreen now handles navigation directly
+  // This prevents the loop issue and makes navigation more predictable
 
   const checkOnboardingStatus = async () => {
     try {
-      // Don't set isCheckingOnboarding if we're doing periodic checks
-      if (hasSeenOnboarding === null) {
-        setIsCheckingOnboarding(true);
-      }
+      // Set loading state when checking onboarding status
+      setIsCheckingOnboarding(true);
       const onboardingStatus = await AsyncStorage.getItem('hasCompletedOnboarding');
       console.log('🔄 AppNavigator: Raw onboarding status from AsyncStorage:', onboardingStatus);
       
@@ -106,14 +94,7 @@ const AppNavigator = () => {
         setHasSeenOnboarding(false);
       }
       
-      // If onboarding status changed and navigation is ready, navigate accordingly
-      if (previousStatus !== null && previousStatus !== (onboardingStatus === 'true')) {
-        console.log('🔄 Onboarding status changed from', previousStatus, 'to', onboardingStatus === 'true');
-        // Delay navigation slightly to ensure navigation is ready
-        setTimeout(() => {
-          navigateBasedOnStatus();
-        }, 100);
-      }
+      // No need to navigate here - CompletionScreen handles navigation directly
     } catch (error) {
       console.error('Error checking onboarding status:', error);
       setHasSeenOnboarding(false); // Default to showing onboarding
