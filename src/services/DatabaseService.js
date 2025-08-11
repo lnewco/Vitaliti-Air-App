@@ -62,7 +62,11 @@ class DatabaseService {
         actual_cycles_completed INTEGER DEFAULT 0,
         actual_hypoxic_time INTEGER DEFAULT 0,
         actual_hyperoxic_time INTEGER DEFAULT 0,
-        completion_percentage REAL
+        completion_percentage REAL,
+        baseline_hrv_rmssd REAL,
+        baseline_hrv_confidence REAL,
+        baseline_hrv_interval_count INTEGER,
+        baseline_hrv_duration_seconds INTEGER
       );
     `;
 
@@ -174,7 +178,11 @@ class DatabaseService {
         'actual_cycles_completed INTEGER DEFAULT 0',
         'actual_hypoxic_time INTEGER DEFAULT 0',
         'actual_hyperoxic_time INTEGER DEFAULT 0',
-        'completion_percentage REAL'
+        'completion_percentage REAL',
+        'baseline_hrv_rmssd REAL',
+        'baseline_hrv_confidence REAL',
+        'baseline_hrv_interval_count INTEGER',
+        'baseline_hrv_duration_seconds INTEGER'
       ];
       
       for (const column of readingsColumns) {
@@ -377,7 +385,7 @@ class DatabaseService {
       reading.fio2Level || null,
       reading.phaseType || null,
       reading.cycleNumber || null,
-      reading.hrv?.rmssd || null,
+      reading.hrv?.rmssd || reading.hrv_rmssd || null,
       reading.hrv?.type || null,
       reading.hrv?.intervalCount || null,
       reading.hrv?.dataQuality || null,
@@ -408,7 +416,7 @@ class DatabaseService {
           reading.fio2Level || null,
           reading.phaseType || null,
           reading.cycleNumber || null,
-          reading.hrv?.rmssd || null,
+          reading.hrv?.rmssd || reading.hrv_rmssd || null,
           reading.hrv?.type || null,
           reading.hrv?.intervalCount || null,
           reading.hrv?.dataQuality || null,
@@ -433,6 +441,95 @@ class DatabaseService {
       readings.push(result.rows.item(i));
     }
     return readings;
+  }
+
+  async updateSessionBaselineHRV(sessionId, rmssd, confidence, intervalCount, durationSeconds) {
+    try {
+      const query = `
+        UPDATE sessions 
+        SET baseline_hrv_rmssd = ?, 
+            baseline_hrv_confidence = ?, 
+            baseline_hrv_interval_count = ?,
+            baseline_hrv_duration_seconds = ?,
+            updated_at = strftime('%s', 'now')
+        WHERE id = ?
+      `;
+      
+      await this.db.executeSql(query, [
+        rmssd,
+        confidence,
+        intervalCount,
+        durationSeconds,
+        sessionId
+      ]);
+      
+      log.info(`✅ Updated baseline HRV for session ${sessionId}: ${rmssd}ms (${Math.round(confidence * 100)}% confidence)`);
+      return { success: true };
+    } catch (error) {
+      log.error('❌ Failed to update baseline HRV:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getSessionBaselineHRV(sessionId) {
+    try {
+      const query = `
+        SELECT baseline_hrv_rmssd, baseline_hrv_confidence, 
+               baseline_hrv_interval_count, baseline_hrv_duration_seconds
+        FROM sessions 
+        WHERE id = ?
+      `;
+      
+      const [result] = await this.db.executeSql(query, [sessionId]);
+      
+      if (result.rows.length > 0) {
+        const row = result.rows.item(0);
+        return {
+          rmssd: row.baseline_hrv_rmssd,
+          confidence: row.baseline_hrv_confidence,
+          intervalCount: row.baseline_hrv_interval_count,
+          durationSeconds: row.baseline_hrv_duration_seconds
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      log.error('❌ Failed to get baseline HRV:', error);
+      return null;
+    }
+  }
+
+  async getSessionHRVStats(sessionId) {
+    try {
+      const query = `
+        SELECT 
+          AVG(hrv_rmssd) as avgHRV,
+          MIN(hrv_rmssd) as minHRV,
+          MAX(hrv_rmssd) as maxHRV,
+          COUNT(CASE WHEN hrv_rmssd IS NOT NULL THEN 1 END) as hrvReadingCount
+        FROM readings 
+        WHERE session_id = ? AND hrv_rmssd IS NOT NULL AND hrv_rmssd > 0
+      `;
+      
+      const [result] = await this.db.executeSql(query, [sessionId]);
+      
+      if (result.rows.length > 0) {
+        const row = result.rows.item(0);
+        if (row.hrvReadingCount > 0) {
+          return {
+            avgHRV: row.avgHRV,
+            minHRV: row.minHRV,
+            maxHRV: row.maxHRV,
+            readingCount: row.hrvReadingCount
+          };
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      log.error('❌ Failed to get session HRV stats:', error);
+      return null;
+    }
   }
 
   async getSessionStats(sessionId) {

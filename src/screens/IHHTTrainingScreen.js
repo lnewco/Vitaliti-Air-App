@@ -69,19 +69,21 @@ const PHASE_TYPES = {
 };
 
 const IHHTTrainingScreen = ({ navigation, route }) => {
-  // Extract protocol configuration from navigation params
+  // Extract protocol configuration and baseline HRV from navigation params
   const protocolConfig = route?.params?.protocolConfig || {
     totalCycles: 5,
     hypoxicDuration: 5,     // in minutes
     hyperoxicDuration: 2    // in minutes
   };
+  const baselineHRV = route?.params?.baselineHRV || null;
   
   // Log route params only once on mount
   React.useEffect(() => {
     console.log('🔍 IHHTTrainingScreen initialized with:', {
       sessionId: route?.params?.sessionId,
       totalCycles: protocolConfig.totalCycles,
-      usingDefaultConfig: !route?.params?.protocolConfig
+      usingDefaultConfig: !route?.params?.protocolConfig,
+      hasBaselineHRV: !!baselineHRV
     });
   }, []);
 
@@ -107,6 +109,10 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   
   // Safety state
   const [warningActive, setWarningActive] = useState(false);
+  
+  // HRV tracking state - for continuous baseline updates
+  const [currentBaselineHRV, setCurrentBaselineHRV] = useState(baselineHRV?.rmssd || null);
+  const [hrvReadings, setHrvReadings] = useState([]);
 
   // Load saved hypoxia level on mount
   useEffect(() => {
@@ -271,9 +277,47 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       setWarningActive(false);
     }
     
-    // Add reading to enhanced session
-    EnhancedSessionManager.addReading(pulseOximeterData);
-  }, [pulseOximeterData, sessionInfo.isActive, sessionStarted, sessionCompleted]);
+    // Add reading to enhanced session with HRV data if available
+    const readingWithHRV = {
+      ...pulseOximeterData,
+      hrv_rmssd: currentBaselineHRV // Include current HRV value
+    };
+    EnhancedSessionManager.addReading(readingWithHRV);
+  }, [pulseOximeterData, sessionInfo.isActive, sessionStarted, sessionCompleted, currentBaselineHRV]);
+
+  // Monitor HRV data and update baseline continuously
+  useEffect(() => {
+    if (!heartRateData || !sessionInfo.isActive) return;
+    
+    // Use the most reliable HRV available (prefer real over quick)
+    const hrvData = heartRateData.realHRV || heartRateData.quickHRV;
+    
+    if (hrvData && hrvData.rmssd) {
+      // Collect HRV readings for averaging
+      setHrvReadings(prev => {
+        const newReadings = [...prev, {
+          rmssd: hrvData.rmssd,
+          confidence: hrvData.confidence || 0.5,
+          timestamp: Date.now()
+        }];
+        
+        // Keep only last 30 readings for moving average
+        return newReadings.slice(-30);
+      });
+    }
+  }, [heartRateData, sessionInfo.isActive]);
+  
+  // Calculate baseline HRV from collected readings
+  useEffect(() => {
+    if (hrvReadings.length > 0) {
+      // Calculate weighted average based on confidence
+      const totalWeight = hrvReadings.reduce((sum, r) => sum + r.confidence, 0);
+      const weightedSum = hrvReadings.reduce((sum, r) => sum + r.rmssd * r.confidence, 0);
+      const avgRmssd = Math.round(weightedSum / totalWeight);
+      
+      setCurrentBaselineHRV(avgRmssd);
+    }
+  }, [hrvReadings]);
 
   const startSession = async () => {
     try {
@@ -284,7 +328,8 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
         console.log('🔧 Setting protocol config for existing session:', {
           sessionId: existingSessionId,
           protocolConfig: protocolConfig,
-          totalCycles: protocolConfig.totalCycles
+          totalCycles: protocolConfig.totalCycles,
+          hasBaselineHRV: !!baselineHRV
         });
         
         // Convert minutes to seconds for EnhancedSessionManager
@@ -296,8 +341,11 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
         
         console.log('🔧 Setting protocol configuration:', protocolInSeconds);
         EnhancedSessionManager.setProtocol(protocolInSeconds);
+        if (baselineHRV) {
+          EnhancedSessionManager.setBaselineHRV(baselineHRV);
+        }
         console.log('✅ Protocol set. Actual cycles in manager:', EnhancedSessionManager.protocolConfig.totalCycles);
-        await EnhancedSessionManager.startSession(existingSessionId);
+        await EnhancedSessionManager.startSession(existingSessionId, baselineHRV);
       } else {
         // Support legacy single parameter (either sessionId or protocolConfig)
         console.log('⚠️ Using legacy session start with:', existingSessionId || protocolConfig);
@@ -313,7 +361,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           console.log('🔧 Converted legacy protocol to seconds:', paramToPass);
         }
         
-        await EnhancedSessionManager.startSession(paramToPass);
+        await EnhancedSessionManager.startSession(paramToPass, baselineHRV);
       }
       
       setSessionInfo(EnhancedSessionManager.getSessionInfo());
@@ -564,42 +612,33 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
            )}
         </View>
 
-        {/* Live Data Display */}
+        {/* Live Data Display - Three Cards */}
         <View style={styles.dataContainer}>
+          {/* SpO2 Card */}
           <View style={[styles.dataCard, warningActive && styles.warningBorder]}>
-            <View style={styles.spo2Container}>
-              <Text style={[styles.spo2Value, { color: spo2Status.color }]}>{currentSpo2}%</Text>
-              <Text style={styles.spo2Icon}>{spo2Status.icon}</Text>
-            </View>
-            <Text style={[styles.spo2Label, { color: spo2Status.color }]}>{spo2Status.label}</Text>
-            {spo2Status.message ? <Text style={styles.spo2Message}>{spo2Status.message}</Text> : null}
+            <Text style={[styles.cardValue, { color: spo2Status.color }]}>{currentSpo2}%</Text>
+            <Text style={styles.cardLabel}>SpO2</Text>
+            <Text style={styles.cardSubtext}>
+              {sessionInfo.currentPhase === 'HYPOXIC' ? '82-87%' : '95%+'}
+            </Text>
           </View>
 
+          {/* Heart Rate Card */}
           <View style={styles.dataCard}>
-            <Text style={styles.hrValue}>{currentHR} bpm</Text>
-            <Text style={styles.hrLabel}>❤️ Heart Rate ({hrSource})</Text>
-            {isHRConnected && (heartRateData?.quickHRV || heartRateData?.realHRV) && (
-              <View style={styles.hrvContainer}>
-                {heartRateData.realHRV ? (
-                  <Text style={styles.hrvLabel}>🎯 Real HRV: {heartRateData.realHRV.rmssd}ms</Text>
-                ) : heartRateData.quickHRV ? (
-                  <Text style={styles.hrvLabel}>⚡ Quick HRV: {heartRateData.quickHRV.rmssd}ms</Text>
-                ) : null}
-              </View>
-            )}
-            {isHRConnected && heartRateData && (
-              <Text style={styles.contactLabel}>
-                Contact: {heartRateData.sensorContactDetected ? '✅' : '❌'}
-              </Text>
-            )}
+            <Text style={styles.cardValue}>{currentHR}</Text>
+            <Text style={styles.cardLabel}>Heart Rate</Text>
+            <Text style={styles.cardSubtext}>bpm</Text>
           </View>
-        </View>
 
-        {/* Phase Target */}
-        <View style={styles.targetContainer}>
-          <Text style={styles.targetText}>
-            🎯 {sessionInfo.currentPhase === 'HYPOXIC' ? 'Target Range: 82-87% SpO2' : 'Recovering to 95%+ SpO2'}
-          </Text>
+          {/* HRV Card */}
+          <View style={styles.dataCard}>
+            <Text style={styles.cardValue}>
+              {currentBaselineHRV || '--'}
+            </Text>
+            <Text style={styles.cardLabel}>Heart Rate</Text>
+            <Text style={styles.cardLabel}>Variability</Text>
+            <Text style={styles.cardSubtext}>ms</Text>
+          </View>
         </View>
 
         {/* Progress Bar */}
@@ -807,9 +846,11 @@ const styles = StyleSheet.create({
   dataCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    padding: 20,
+    padding: 15,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 110,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -820,68 +861,23 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FF9800',
   },
-  spo2Container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  spo2Value: {
-    fontSize: 32,
+  cardValue: {
+    fontSize: 28,
     fontWeight: 'bold',
-    marginRight: 10,
+    color: '#333333',
+    marginBottom: 4,
   },
-  spo2Icon: {
-    fontSize: 24,
-  },
-  spo2Label: {
-    fontSize: 14,
+  cardLabel: {
+    fontSize: 11,
     fontWeight: '600',
-    marginBottom: 2,
-  },
-  spo2Message: {
-    fontSize: 12,
     color: '#666666',
     textAlign: 'center',
+    lineHeight: 14,
   },
-  hrValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 5,
-  },
-  hrLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666666',
-  },
-  hrvContainer: {
-    marginTop: 8,
-    alignItems: 'center',
-  },
-  hrvLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  contactLabel: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    marginTop: 4,
-  },
-  targetContainer: {
-    marginHorizontal: 20,
-    marginTop: 15,
-    marginBottom: 5,
-    padding: 15,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  targetText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333333',
+  cardSubtext: {
+    fontSize: 10,
+    color: '#999999',
+    marginTop: 2,
   },
   progressContainer: {
     marginHorizontal: 20,

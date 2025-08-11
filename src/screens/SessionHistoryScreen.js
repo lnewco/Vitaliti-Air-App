@@ -638,6 +638,7 @@ const SessionHistoryScreen = ({ route, navigation }) => {
   const renderSessionModal = () => {
     const spo2ChartData = sessionData ? prepareChartData(sessionData.readings, 'spo2', sessionData.start_time) : null;
     const hrChartData = sessionData ? prepareChartData(sessionData.readings, 'heart_rate', sessionData.start_time) : null;
+    const hrvChartData = sessionData ? prepareChartData(sessionData.readings, 'hrv_rmssd', sessionData.start_time) : null;
 
     return (
       <Modal
@@ -808,6 +809,70 @@ const SessionHistoryScreen = ({ route, navigation }) => {
                 segments={4}
                 formatYLabel={(value) => `${value}`}
               />
+              {/* Phase legend */}
+              <View style={styles.phaseLegend}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
+                  <Text style={styles.legendText}>Hypoxic</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+                  <Text style={styles.legendText}>Hyperoxic</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {hrvChartData && (
+            <View style={styles.chartSection}>
+              <Text style={styles.chartTitle}>Heart Rate Variability Over Time</Text>
+              <LineChart
+                data={hrvChartData}
+                width={CHART_WIDTH}
+                height={220}
+                chartConfig={{
+                  backgroundColor: '#ffffff',
+                  backgroundGradientFrom: '#ffffff',
+                  backgroundGradientTo: '#ffffff',
+                  decimalPlaces: 0,
+                  color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(102, 102, 102, ${opacity})`,
+                  style: {
+                    borderRadius: 8
+                  },
+                  propsForLabels: {
+                    fontSize: 10
+                  }
+                }}
+                getDotColor={(dataPoint, dataPointIndex) => {
+                  // Get the phase for this data point
+                  const phase = hrvChartData.phaseData?.[dataPointIndex];
+                  if (phase === 'HYPOXIC') return '#FF9800'; // Orange
+                  if (phase === 'HYPEROXIC') return '#4CAF50'; // Green
+                  return '#999999'; // Gray for no phase/completed
+                }}
+                bezier
+                style={{
+                  marginVertical: 8,
+                  borderRadius: 8
+                }}
+                withInnerLines={true}
+                withOuterLines={true}
+                withVerticalLines={false}
+                withHorizontalLines={true}
+                withDots={true}
+                dotSize={4}
+                segments={4}
+                formatYLabel={(value) => `${value}ms`}
+              />
+              {/* Baseline reference if available */}
+              {sessionData?.baseline_hrv_rmssd && (
+                <View style={styles.baselineReference}>
+                  <Text style={styles.baselineText}>
+                    Baseline HRV: {Math.round(sessionData.baseline_hrv_rmssd)}ms
+                  </Text>
+                </View>
+              )}
               {/* Phase legend */}
               <View style={styles.phaseLegend}>
                 <View style={styles.legendItem}>
@@ -1056,6 +1121,18 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     marginRight: 5,
+  },
+  baselineReference: {
+    alignItems: 'center',
+    marginTop: 5,
+    paddingVertical: 5,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 4,
+  },
+  baselineText: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: '500',
   },
   legendText: {
     fontSize: 12,
