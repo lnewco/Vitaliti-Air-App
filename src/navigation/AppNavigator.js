@@ -112,6 +112,21 @@ const AppNavigator = () => {
     );
   }
 
+  // Helper function to check if current screen belongs to a specific stack
+  const isInStack = (currentRouteName, targetStack) => {
+    const onboardingScreens = ['Welcome', 'BasicInfo', 'Consent', 'HealthSafety', 'PhoneVerification', 'Completion'];
+    const authScreens = ['SignIn', 'SignUp', 'ForgotPassword'];
+    
+    if (targetStack === 'Onboarding') {
+      return currentRouteName === 'Onboarding' || onboardingScreens.includes(currentRouteName);
+    } else if (targetStack === 'Auth') {
+      return currentRouteName === 'Auth' || authScreens.includes(currentRouteName);
+    } else if (targetStack === 'Main') {
+      return currentRouteName === 'Main' || (!onboardingScreens.includes(currentRouteName) && !authScreens.includes(currentRouteName));
+    }
+    return false;
+  };
+
   // Navigate based on current status
   const navigateBasedOnStatus = () => {
     if (!navigationRef.current || !navigationRef.current.isReady()) {
@@ -131,10 +146,13 @@ const AppNavigator = () => {
       const currentRoute = navigationRef.current.getCurrentRoute();
       console.log('🔄 Current route:', currentRoute?.name);
       
-      // Only navigate if we're not already on the target screen
-      if (currentRoute?.name !== targetScreen) {
+      // Check if we're already in the target stack
+      if (!isInStack(currentRoute?.name, targetScreen)) {
+        console.log('🔄 Not in target stack, navigating to:', targetScreen);
         // Use navigate instead of reset to avoid crashes
         navigationRef.current.navigate(targetScreen);
+      } else {
+        console.log('🔄 Already in target stack, skipping navigation');
       }
     } catch (error) {
       console.error('Navigation failed:', error);
@@ -154,9 +172,11 @@ const AppNavigator = () => {
     const targetScreen = flow === 'onboarding' ? 'Onboarding' : flow === 'auth' ? 'Auth' : 'Main';
     const currentRoute = navigationRef.current.getCurrentRoute();
     
-    console.log('🔄 Auth state changed - navigating from', currentRoute?.name, 'to', targetScreen);
+    console.log('🔄 Auth state changed - current screen:', currentRoute?.name, ', target stack:', targetScreen);
     
-    if (currentRoute?.name !== targetScreen) {
+    // Check if we're already in the correct stack
+    if (!isInStack(currentRoute?.name, targetScreen)) {
+      console.log('🔄 Navigating from', currentRoute?.name, 'to', targetScreen);
       try {
         // Use reset for auth state changes to ensure clean navigation stack
         navigationRef.current.reset({
@@ -172,6 +192,8 @@ const AppNavigator = () => {
           console.error('Fallback navigation also failed:', navError);
         }
       }
+    } else {
+      console.log('🔄 Already in correct stack (', targetScreen, '), skipping navigation');
     }
   };
 
