@@ -1,7 +1,7 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import LoginScreen from '../auth/screens/LoginScreen';
-import OTPScreen from '../auth/screens/OTPScreen';
+import PhoneVerificationScreen from '../components/PhoneVerificationScreen';
 
 const Stack = createStackNavigator();
 
@@ -36,10 +36,11 @@ const AuthNavigator = () => {
       />
       <Stack.Screen 
         name="OTPScreen" 
-        component={OTPScreen}
+        component={PhoneVerificationScreen}
         options={{
           title: 'Verify Phone',
         }}
+        initialParams={{ isOnboarding: false }}
       />
     </Stack.Navigator>
   );
