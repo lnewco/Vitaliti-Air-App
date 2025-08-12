@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaView, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import DashboardScreen from './DashboardScreen';
 import SessionHistoryScreen from './SessionHistoryScreen';
@@ -10,8 +11,7 @@ import SessionSetupScreen from './SessionSetupScreen';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import ProfileScreen from './ProfileScreen';
-import SessionRecoveryModal from '../components/SessionRecoveryModal';
-import EnhancedSessionManager from '../services/EnhancedSessionManager';
+import SessionRecoveryManager from '../components/SessionRecoveryManager';
 
 
 const Tab = createBottomTabNavigator();
@@ -83,66 +83,6 @@ function TabNavigator() {
 // Main App Content with Stack Navigator (authenticated users only)
 const MainAppContent = () => {
   const { signOut } = useAuth();
-  const [recoveryData, setRecoveryData] = useState(null);
-  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
-  const [isRecovering, setIsRecovering] = useState(false);
-
-  // Check for recoverable session on mount
-  useEffect(() => {
-    checkForRecoverableSession();
-  }, []);
-
-  const checkForRecoverableSession = async () => {
-    try {
-      const recovery = await EnhancedSessionManager.getRecoverableSession();
-      if (recovery) {
-        console.log('🔄 Found recoverable session:', recovery);
-        setRecoveryData(recovery);
-        setShowRecoveryModal(true);
-      }
-    } catch (error) {
-      console.error('❌ Error checking for recoverable session:', error);
-    }
-  };
-
-  const handleResumeSession = async () => {
-    if (!recoveryData) return;
-
-    try {
-      setIsRecovering(true);
-      console.log('🔄 User chose to resume session');
-      
-      await EnhancedSessionManager.resumeSession(recoveryData);
-      
-      setShowRecoveryModal(false);
-      setRecoveryData(null);
-      
-      // Note: The user will need to navigate to the session screen manually
-      // or we could add automatic navigation here
-      console.log('✅ Session resumed successfully');
-      
-    } catch (error) {
-      console.error('❌ Failed to resume session:', error);
-      setShowRecoveryModal(false);
-      setRecoveryData(null);
-    } finally {
-      setIsRecovering(false);
-    }
-  };
-
-  const handleDeclineRecovery = async () => {
-    try {
-      console.log('🗑️ User declined session recovery');
-      
-      await EnhancedSessionManager.declineSessionRecovery();
-      
-      setShowRecoveryModal(false);
-      setRecoveryData(null);
-      
-    } catch (error) {
-      console.error('❌ Error declining session recovery:', error);
-    }
-  };
 
   const handleSignOut = async () => {
     try {
@@ -185,13 +125,7 @@ const MainAppContent = () => {
         />
       </Stack.Navigator>
 
-      <SessionRecoveryModal
-        visible={showRecoveryModal}
-        recoveryData={recoveryData}
-        onResume={handleResumeSession}
-        onDecline={handleDeclineRecovery}
-        isLoading={isRecovering}
-      />
+      <SessionRecoveryManager />
     </>
   );
 };

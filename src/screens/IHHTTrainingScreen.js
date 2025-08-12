@@ -10,6 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useBluetooth } from '../context/BluetoothContext';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import SafetyIndicator from '../components/SafetyIndicator';
@@ -156,6 +157,11 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
 
   // Set up session event listeners (session will start on first reading)
   useEffect(() => {
+    // Activate screen wake lock immediately when component mounts
+    activateKeepAwakeAsync()
+      .then(() => console.log('📱 Screen wake lock activated on mount'))
+      .catch(error => console.warn('⚠️ Failed to activate screen wake lock:', error));
+
     // Check if there's already an active session (from recovery)
     const currentSessionInfo = EnhancedSessionManager.getSessionInfo();
     if (currentSessionInfo.isActive) {
@@ -172,6 +178,10 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
         case 'sessionStarted':
           setSessionInfo(EnhancedSessionManager.getSessionInfo());
           setSessionStarted(true);
+          // Ensure screen stays awake during session
+          activateKeepAwakeAsync()
+            .then(() => console.log('📱 Screen wake lock reinforced on session start'))
+            .catch(error => console.warn('⚠️ Failed to reinforce screen wake lock:', error));
           break;
         case 'phaseUpdate':
         case 'phaseAdvanced':
@@ -187,6 +197,10 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           handleSessionComplete(data);
           setSessionStarted(false);
           setSessionCompleted(true); // Mark session as completed
+          // Deactivate screen wake lock when session ends
+          deactivateKeepAwake()
+            .then(() => console.log('📱 Screen wake lock deactivated on session end'))
+            .catch(error => console.warn('⚠️ Failed to deactivate screen wake lock:', error));
           break;
       }
     });
@@ -199,6 +213,11 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
         EnhancedSessionManager.stopSession().catch(console.error);
       }
       setSessionStarted(false);
+      
+      // Always deactivate screen wake lock on cleanup
+      deactivateKeepAwake()
+        .then(() => console.log('📱 Screen wake lock deactivated on cleanup'))
+        .catch(error => console.warn('⚠️ Failed to deactivate screen wake lock on cleanup:', error));
     };
   }, []);
 
@@ -352,6 +371,11 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     try {
       await EnhancedSessionManager.pauseSession();
       setSessionInfo(EnhancedSessionManager.getSessionInfo());
+      
+      // Allow screen to sleep when paused
+      deactivateKeepAwake()
+        .then(() => console.log('📱 Screen wake lock deactivated on pause'))
+        .catch(error => console.warn('⚠️ Failed to deactivate screen wake lock on pause:', error));
     } catch (error) {
       console.error('Failed to pause session:', error);
     }
@@ -361,6 +385,11 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     try {
       await EnhancedSessionManager.resumeSession();
       setSessionInfo(EnhancedSessionManager.getSessionInfo());
+      
+      // Reactivate screen wake lock when resumed
+      activateKeepAwakeAsync()
+        .then(() => console.log('📱 Screen wake lock reactivated on resume'))
+        .catch(error => console.warn('⚠️ Failed to reactivate screen wake lock on resume:', error));
     } catch (error) {
       console.error('Failed to resume session:', error);
     }
@@ -369,6 +398,11 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const terminateSession = async () => {
     try {
       Vibration.cancel();
+      
+      // Deactivate screen wake lock when manually ending session
+      deactivateKeepAwake()
+        .then(() => console.log('📱 Screen wake lock deactivated on manual termination'))
+        .catch(error => console.warn('⚠️ Failed to deactivate screen wake lock on termination:', error));
       
       // Mark the session as completed before stopping to prevent extra phase recordings
       EnhancedSessionManager.currentPhase = 'COMPLETED';
@@ -383,6 +417,11 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       
     } catch (error) {
       console.error('Failed to terminate session:', error);
+      
+      // Always deactivate screen wake lock on error
+      deactivateKeepAwake()
+        .then(() => console.log('📱 Screen wake lock deactivated on error'))
+        .catch(err => console.warn('⚠️ Failed to deactivate screen wake lock on error:', err));
       
       // Check if session was already ended (common case)
       if (error.message.includes('No active session')) {
