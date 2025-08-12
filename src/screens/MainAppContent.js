@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 import DashboardScreen from './DashboardScreen';
 import SessionHistoryScreen from './SessionHistoryScreen';
 import SessionSetupScreen from './SessionSetupScreen';
+import HRVCalibrationScreen from './HRVCalibrationScreen';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import ProfileScreen from './ProfileScreen';
@@ -103,6 +104,15 @@ const MainAppContent = () => {
         component={SessionSetupScreen}
         options={{
           presentation: 'card',
+        }}
+      />
+
+      <Stack.Screen 
+        name="HRVCalibration" 
+        component={HRVCalibrationScreen}
+        options={{
+          presentation: 'card',
+          title: 'HRV Calibration',
         }}
       />
 

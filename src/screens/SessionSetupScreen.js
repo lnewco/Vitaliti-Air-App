@@ -234,8 +234,8 @@ const SessionSetupScreen = ({ navigation }) => {
   };
 
   const handleDirectStartTraining = () => {
-    console.log('🚀 Starting training directly from Ready to Begin step with sessionId:', sessionId);
-    navigation.navigate('AirSession', { 
+    console.log('📊 Moving to HRV calibration from Ready to Begin step with sessionId:', sessionId);
+    navigation.navigate('HRVCalibration', { 
       sessionId: sessionId,
       protocolConfig: protocolConfig 
     });
@@ -584,7 +584,7 @@ const SessionSetupScreen = ({ navigation }) => {
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.startSessionButton} onPress={handleDirectStartTraining}>
-            <Text style={styles.startSessionButtonText}>Start Training</Text>
+            <Text style={styles.startSessionButtonText}>Continue</Text>
           </TouchableOpacity>
         </View>
       </View>

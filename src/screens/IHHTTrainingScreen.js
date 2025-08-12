@@ -102,6 +102,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const [sessionInfo, setSessionInfo] = useState(EnhancedSessionManager.getSessionInfo());
   const [sessionStarted, setSessionStarted] = useState(false);
   const [sessionCompleted, setSessionCompleted] = useState(false);
+  const [isSkipping, setIsSkipping] = useState(false); // Prevent double skip
   
   // Hypoxia level state
   const [hypoxiaLevel, setHypoxiaLevel] = useState(5);
@@ -190,9 +191,18 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           setSessionInfo(updatedInfo);
           break;
         case 'sessionEnded':
+        case 'sessionStopped':
+          console.log('📱 Session ended/stopped event received');
           handleSessionComplete(data);
           setSessionStarted(false);
           setSessionCompleted(true); // Mark session as completed
+          setIsSkipping(false); // Clear skipping flag
+          // Update session info to reflect ended state
+          setSessionInfo({
+            ...sessionInfo,
+            isActive: false,
+            currentPhase: 'COMPLETED'
+          });
           break;
       }
     });
@@ -341,11 +351,9 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
         
         console.log('🔧 Setting protocol configuration:', protocolInSeconds);
         EnhancedSessionManager.setProtocol(protocolInSeconds);
-        if (baselineHRV) {
-          EnhancedSessionManager.setBaselineHRV(baselineHRV);
-        }
+        // Note: baselineHRV is tracked in the component state for HRV card display
         console.log('✅ Protocol set. Actual cycles in manager:', EnhancedSessionManager.protocolConfig.totalCycles);
-        await EnhancedSessionManager.startSession(existingSessionId, baselineHRV);
+        await EnhancedSessionManager.startSession(existingSessionId);
       } else {
         // Support legacy single parameter (either sessionId or protocolConfig)
         console.log('⚠️ Using legacy session start with:', existingSessionId || protocolConfig);
@@ -361,7 +369,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           console.log('🔧 Converted legacy protocol to seconds:', paramToPass);
         }
         
-        await EnhancedSessionManager.startSession(paramToPass, baselineHRV);
+        await EnhancedSessionManager.startSession(paramToPass);
       }
       
       setSessionInfo(EnhancedSessionManager.getSessionInfo());
@@ -469,18 +477,38 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   };
 
   const handleSkipToNext = async () => {
-    // Prevent skip if session is completed or not started
-    if (!sessionInfo.isActive || sessionCompleted || sessionInfo.currentPhase === 'COMPLETED') {
-      console.log(`❌ Cannot skip - session not active or already completed`);
+    // Prevent skip if already skipping (debounce)
+    if (isSkipping) {
+      console.log(`⏳ Skip already in progress`);
       return;
     }
     
-    const success = await EnhancedSessionManager.skipToNextPhase();
-    if (success) {
-      Vibration.vibrate(100); // Brief feedback
-      console.log(`✅ Successfully skipped to next phase`);
-    } else {
-      console.log(`❌ Could not skip phase - session may be paused or inactive`);
+    // Prevent skip if session is completed, not started, or paused
+    if (!sessionInfo.isActive || sessionCompleted || sessionInfo.currentPhase === 'COMPLETED' || sessionInfo.isPaused) {
+      console.log(`❌ Cannot skip - session not active, paused, or already completed`);
+      return;
+    }
+    
+    // Double-check session manager state directly
+    const currentSessionInfo = EnhancedSessionManager.getSessionInfo();
+    if (!currentSessionInfo.isActive || currentSessionInfo.currentPhase === 'COMPLETED') {
+      console.log(`❌ Cannot skip - session manager reports inactive or completed`);
+      return;
+    }
+    
+    setIsSkipping(true); // Set skipping flag
+    
+    try {
+      const success = await EnhancedSessionManager.skipToNextPhase();
+      if (success) {
+        Vibration.vibrate(100); // Brief feedback
+        console.log(`✅ Successfully skipped to next phase`);
+      } else {
+        console.log(`❌ Could not skip phase - session may be paused or inactive`);
+      }
+    } finally {
+      // Clear skipping flag after a delay to prevent rapid clicks
+      setTimeout(() => setIsSkipping(false), 500);
     }
   };
 
@@ -677,12 +705,12 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
         
         {/* Skip Button */}
         <TouchableOpacity 
-          style={[styles.skipButton, sessionInfo.isPaused && styles.skipButtonDisabled]} 
+          style={[styles.skipButton, (sessionInfo.isPaused || !sessionInfo.isActive || sessionCompleted || isSkipping) && styles.skipButtonDisabled]} 
           onPress={handleSkipToNext}
-          disabled={sessionInfo.isPaused}
+          disabled={sessionInfo.isPaused || !sessionInfo.isActive || sessionCompleted || isSkipping}
         >
-          <Text style={[styles.skipButtonText, sessionInfo.isPaused && styles.skipButtonTextDisabled]}>
-            {getSkipButtonText()}
+          <Text style={[styles.skipButtonText, (sessionInfo.isPaused || !sessionInfo.isActive || sessionCompleted || isSkipping) && styles.skipButtonTextDisabled]}>
+            {isSkipping ? 'Skipping...' : getSkipButtonText()}
           </Text>
         </TouchableOpacity>
       </View>

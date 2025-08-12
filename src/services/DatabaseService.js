@@ -965,6 +965,67 @@ class DatabaseService {
     }
   }
 
+  /**
+   * Get complete session data including readings, stats, and survey
+   * This method combines multiple queries to provide all session data in one call
+   */
+  async getSessionWithData(sessionId) {
+    try {
+      log.info(`Fetching complete data for session: ${sessionId}`);
+      
+      // Get base session data
+      const session = await this.getSession(sessionId);
+      if (!session) {
+        log.warn(`Session not found: ${sessionId}`);
+        return null;
+      }
+      
+      // Get session readings
+      const readings = await this.getSessionReadings(sessionId);
+      
+      // Get session statistics
+      const stats = await this.getSessionStats(sessionId);
+      
+      // Get survey data if available
+      let surveyData = null;
+      try {
+        surveyData = await this.getSessionSurveyData(sessionId);
+      } catch (error) {
+        log.warn('Survey data not available for session:', sessionId);
+      }
+      
+      // Get baseline HRV if available
+      let baselineHRV = null;
+      try {
+        baselineHRV = await this.getSessionBaselineHRV(sessionId);
+      } catch (error) {
+        log.warn('Baseline HRV not available for session:', sessionId);
+      }
+      
+      // Get HRV stats if available
+      let hrvStats = null;
+      try {
+        hrvStats = await this.getSessionHRVStats(sessionId);
+      } catch (error) {
+        log.warn('HRV stats not available for session:', sessionId);
+      }
+      
+      // Combine all data
+      return {
+        ...session,
+        readings: readings || [],
+        stats: stats || {},
+        survey: surveyData,
+        baselineHRV: baselineHRV,
+        hrvStats: hrvStats,
+        total_readings: readings ? readings.length : 0
+      };
+    } catch (error) {
+      log.error('Failed to get session with data:', error);
+      throw error;
+    }
+  }
+
   async close() {
     if (this.db) {
       await this.db.close();

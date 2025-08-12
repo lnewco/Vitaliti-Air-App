@@ -90,7 +90,8 @@ const HRVCalibrationScreen = ({ navigation, route }) => {
   
   // Reset HRV session on mount
   useEffect(() => {
-    BluetoothService.resetHRVSession();
+    // Note: HRV windows are automatically managed by BluetoothService
+    // No need to manually reset as fresh data will be collected
     log.info('Started HRV calibration - 30s stabilization period active');
   }, []);
   
@@ -191,7 +192,7 @@ const HRVCalibrationScreen = ({ navigation, route }) => {
     }
     
     // Navigate to IHHT Training with baseline data
-    navigation.replace('IHHTTraining', {
+    navigation.replace('AirSession', {
       sessionId,
       protocolConfig,
       baselineHRV: baselineHRV || null
