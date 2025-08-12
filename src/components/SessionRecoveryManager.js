@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import SessionRecoveryModal from './SessionRecoveryModal';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 
-const SessionRecoveryManager = () => {
+const SessionRecoveryManager = ({ onNavigateToSession }) => {
   const navigation = useNavigation();
   const [recoveryData, setRecoveryData] = useState(null);
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
@@ -45,7 +45,26 @@ const SessionRecoveryManager = () => {
       
       // Navigate to the session screen
       console.log('🔄 Navigating to session screen after recovery');
-      navigation.navigate('AirSession');
+      
+      // Let's try navigating up to Main stack, then down to AirSession
+      console.log('🔄 Using parent navigation with explicit route path');
+      try {
+        // Navigate to the main stack, then to the specific screen
+        navigation.navigate('Main', {
+          screen: 'AirSession'
+        });
+        console.log('✅ Navigation to Main->AirSession successful');
+      } catch (error) {
+        console.error('❌ Navigation to Main->AirSession failed:', error);
+        
+        // Final fallback: just navigate to Main and let user click continue
+        try {
+          navigation.navigate('Main');
+          console.log('✅ Fallback navigation to Main successful');
+        } catch (fallbackError) {
+          console.error('❌ Fallback navigation to Main failed:', fallbackError);
+        }
+      }
       
       console.log('✅ Session resumed and navigated successfully');
       

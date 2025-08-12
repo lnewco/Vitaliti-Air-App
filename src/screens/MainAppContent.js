@@ -81,6 +81,51 @@ function TabNavigator() {
   );
 }
 
+// Stack Navigator Component with navigation handling
+const MainStack = ({ onNavigateToSession }) => {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="MainTabs" component={TabNavigator} />
+      <Stack.Screen 
+        name="SessionSetup" 
+        component={SessionSetupScreen}
+        options={{
+          presentation: 'card',
+        }}
+      />
+
+      <Stack.Screen 
+        name="HRVCalibration" 
+        component={HRVCalibrationScreen}
+        options={{
+          presentation: 'card',
+          title: 'HRV Calibration',
+        }}
+      />
+
+      <Stack.Screen 
+        name="AirSession" 
+        component={IHHTTrainingScreen}
+        options={{
+          presentation: 'card',
+        }}
+      />
+      
+      <Stack.Screen 
+        name="PostSessionSurvey" 
+        component={PostSessionSurveyScreen}
+        options={{
+          presentation: 'card',
+        }}
+      />
+    </Stack.Navigator>
+  );
+};
+
 // Main App Content with Stack Navigator (authenticated users only)
 const MainAppContent = () => {
   const { signOut } = useAuth();
@@ -94,49 +139,15 @@ const MainAppContent = () => {
     }
   };
 
+  // Create a navigation callback - but let's just remove this and fix the real issue
+  const handleNavigateToSession = () => {
+    console.log('🔄 MainAppContent - This approach won\'t work');
+  };
+
   return (
     <>
-      <Stack.Navigator
-        screenOptions={{
-          headerShown: false,
-        }}
-      >
-        <Stack.Screen name="MainTabs" component={TabNavigator} />
-        <Stack.Screen 
-          name="SessionSetup" 
-          component={SessionSetupScreen}
-          options={{
-            presentation: 'card',
-          }}
-        />
-
-        <Stack.Screen 
-          name="HRVCalibration" 
-          component={HRVCalibrationScreen}
-          options={{
-            presentation: 'card',
-            title: 'HRV Calibration',
-          }}
-        />
-
-        <Stack.Screen 
-          name="AirSession" 
-          component={IHHTTrainingScreen}
-          options={{
-            presentation: 'card',
-          }}
-        />
-        
-        <Stack.Screen 
-          name="PostSessionSurvey" 
-          component={PostSessionSurveyScreen}
-          options={{
-            presentation: 'card',
-          }}
-        />
-      </Stack.Navigator>
-
-      <SessionRecoveryManager />
+      <MainStack />
+      <SessionRecoveryManager onNavigateToSession={handleNavigateToSession} />
     </>
   );
 };

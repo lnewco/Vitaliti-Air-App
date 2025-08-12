@@ -19,7 +19,8 @@ import AggressiveBackgroundService from './AggressiveBackgroundService';
 // Configure notification handling
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -1144,6 +1145,9 @@ class EnhancedSessionManager {
       // Clear recovery data
       await AsyncStorage.removeItem('sessionRecovery');
       
+      // Automatically reconnect to previously connected devices
+      await this.reconnectBluetoothDevices();
+      
       console.log(`✅ Session resumed successfully: ${recoveryData.currentPhase} phase, Cycle ${recoveryData.currentCycle}, ${recoveryData.phaseTimeRemaining}s remaining`);
       
       // Notify listeners
@@ -1217,6 +1221,38 @@ class EnhancedSessionManager {
   // Get protocol configuration
   getProtocol() {
     return this.protocolConfig;
+  }
+
+  // Automatically reconnect to Bluetooth devices after session recovery
+  async reconnectBluetoothDevices() {
+    try {
+      console.log('🔄 Attempting to reconnect Bluetooth devices...');
+      
+      // Import BluetoothService to avoid circular dependencies
+      const { default: BluetoothService } = await import('./BluetoothService.js');
+      
+      // Check if any devices are already connected
+      if (BluetoothService.isAnyDeviceConnected) {
+        console.log('✅ Bluetooth devices already connected');
+        return;
+      }
+      
+      // Start scanning for pulse oximeter (most critical device for sessions)
+      console.log('🔍 Starting pulse-ox scan for reconnection...');
+      await BluetoothService.startScanning('pulse-ox');
+      
+      // Give it a few seconds to find and connect
+      setTimeout(async () => {
+        if (!BluetoothService.isPulseOxConnected) {
+          console.log('⚠️ Pulse oximeter not reconnected automatically - user may need to manually reconnect');
+        } else {
+          console.log('✅ Pulse oximeter reconnected successfully');
+        }
+      }, 5000);
+      
+    } catch (error) {
+      console.error('❌ Failed to reconnect Bluetooth devices:', error);
+    }
   }
 }
 

@@ -169,12 +169,23 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       .then(() => console.log('📱 Screen wake lock activated on mount'))
       .catch(error => console.warn('⚠️ Failed to activate screen wake lock:', error));
 
-    // Check if there's already an active session (from recovery)
-    const currentSessionInfo = EnhancedSessionManager.getSessionInfo();
-    if (currentSessionInfo.isActive) {
-      console.log('📱 Found existing active session, continuing...');
-      setSessionStarted(true);
-      setSessionInfo(currentSessionInfo);
+    // Check if we have a new session ID from setup flow
+    if (existingSessionId) {
+      console.log('📱 New session from setup flow, terminating any existing session');
+      // If there's an active session, terminate it to start the new one
+      const currentSessionInfo = EnhancedSessionManager.getSessionInfo();
+      if (currentSessionInfo.isActive) {
+        console.log('📱 Terminating existing session to start new one');
+        EnhancedSessionManager.terminateSession('new_session_requested');
+      }
+    } else {
+      // Only continue existing session if no new session was requested
+      const currentSessionInfo = EnhancedSessionManager.getSessionInfo();
+      if (currentSessionInfo.isActive) {
+        console.log('📱 Found existing active session, continuing...');
+        setSessionStarted(true);
+        setSessionInfo(currentSessionInfo);
+      }
     }
     
     // Set up session event listeners
