@@ -28,7 +28,10 @@
         "NSSupportsLiveActivities": true,
         "UIBackgroundModes": [
           "bluetooth-central",
-          "processing"
+          "processing",
+          "background-fetch",
+          "background-processing",
+          "fetch"
         ],
         "ITSAppUsesNonExemptEncryption": false
       },

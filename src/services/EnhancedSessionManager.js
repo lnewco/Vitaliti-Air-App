@@ -14,6 +14,7 @@ import DatabaseService from './DatabaseService';
 import SupabaseService from './SupabaseService';
 import serviceFactory from './ServiceFactory';
 import runtimeEnvironment from '../utils/RuntimeEnvironment';
+import AggressiveBackgroundService from './AggressiveBackgroundService';
 
 // Configure notification handling
 Notifications.setNotificationHandler({
@@ -52,6 +53,7 @@ class EnhancedSessionManager {
     
     // Service references (will be loaded based on environment)
     this.backgroundService = null;
+    this.aggressiveBackgroundService = null;
     this.liveActivityService = null;
     this.notificationService = null;
     
@@ -97,6 +99,8 @@ class EnhancedSessionManager {
       
       // Create services based on environment
       this.backgroundService = await serviceFactory.createBackgroundService();
+      this.aggressiveBackgroundService = new AggressiveBackgroundService();
+      await this.aggressiveBackgroundService.initialize();
       this.liveActivityService = await serviceFactory.createLiveActivityService();
       this.notificationService = await serviceFactory.createNotificationService();
       
@@ -118,7 +122,7 @@ class EnhancedSessionManager {
           console.warn('⚠️ Notification permission error:', error.message);
         }
       }
-      
+
       // Perform startup recovery cleanup
       setTimeout(() => this.performStartupRecovery(), 1000);
       
@@ -315,8 +319,8 @@ class EnhancedSessionManager {
       }
 
       // Initialize session state
-      this.currentSession = { 
-        id: sessionId, 
+      this.currentSession = {
+        id: sessionId,
         userId,
         startTime: new Date().toISOString()
       };
@@ -340,13 +344,27 @@ class EnhancedSessionManager {
       // Start Live Activity if supported
       const liveActivitySupported = await this.checkLiveActivitySupport();
       if (liveActivitySupported) {
-        await this.startLiveActivity();
+      await this.startLiveActivity();
       }
 
       // Schedule phase notifications
       await this.schedulePhaseNotifications();
 
-      // Start background monitoring if available
+      // Start AGGRESSIVE background monitoring for maximum persistence
+      if (this.aggressiveBackgroundService) {
+        console.log('🔥 Starting AGGRESSIVE background monitoring');
+        await this.aggressiveBackgroundService.startAggressiveBackgroundMonitoring({
+          id: sessionId,
+          currentPhase: this.currentPhase,
+          currentCycle: this.currentCycle,
+          phaseTimeRemaining: this.phaseTimeRemaining,
+          totalCycles: this.protocolConfig.totalCycles,
+          hypoxicDuration: this.protocolConfig.hypoxicDuration,
+          hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
+        });
+      }
+      
+      // Also start basic background monitoring as fallback
       if (this.backgroundService) {
         await this.backgroundService.startBackgroundMonitoring({
           id: sessionId,
@@ -494,7 +512,7 @@ class EnhancedSessionManager {
         console.log('📱 Notification permission not granted');
         return;
       }
-      
+
       // Don't schedule notifications at session start (when phase just started)
       // Only schedule when we're mid-phase and have enough time remaining
       const warningTime = (this.phaseTimeRemaining - 30) * 1000;
@@ -581,11 +599,11 @@ class EnhancedSessionManager {
       }
 
       // Notify listeners
-      this.notify('phaseUpdate', {
-        currentPhase: this.currentPhase,
-        currentCycle: this.currentCycle,
-        phaseTimeRemaining: this.phaseTimeRemaining
-      });
+        this.notify('phaseUpdate', {
+          currentPhase: this.currentPhase,
+          currentCycle: this.currentCycle,
+          phaseTimeRemaining: this.phaseTimeRemaining
+        });
     }, 1000);
   }
 
@@ -667,7 +685,7 @@ class EnhancedSessionManager {
 
     try {
       await SupabaseService.updateSessionCycle(this.currentSession.id, this.currentCycle);
-    } catch (error) {
+      } catch (error) {
       console.error('❌ Failed to update session cycle:', error);
     }
   }
@@ -703,7 +721,7 @@ class EnhancedSessionManager {
     // Calculate pause duration and adjust phase start time
     const pauseDuration = Date.now() - this.pauseTime;
     this.phaseStartTime += pauseDuration;
-    
+
     this.isPaused = false;
     this.pauseTime = null;
 
@@ -742,7 +760,13 @@ class EnhancedSessionManager {
     this.clearBackgroundTimeout();
     this.clearSessionTimeout();
 
-    // Stop background monitoring
+    // Stop AGGRESSIVE background monitoring
+    if (this.aggressiveBackgroundService) {
+      console.log('🔥 Stopping AGGRESSIVE background monitoring');
+      await this.aggressiveBackgroundService.stopAggressiveBackgroundMonitoring();
+    }
+    
+    // Stop basic background monitoring
     if (this.backgroundService) {
       await this.backgroundService.stopBackgroundMonitoring();
     }
@@ -792,7 +816,7 @@ class EnhancedSessionManager {
     this.resetSessionState();
 
     // Clear stored session
-    await AsyncStorage.removeItem('activeSession');
+      await AsyncStorage.removeItem('activeSession');
 
     console.log('✅ Session stopped successfully');
     
@@ -858,14 +882,14 @@ class EnhancedSessionManager {
     if (this.readingBuffer.length === 0) return;
 
     const readings = [...this.readingBuffer];
-    this.readingBuffer = [];
+      this.readingBuffer = [];
 
-    try {
-      await SupabaseService.addReadingsBatch(readings);
+        try {
+          await SupabaseService.addReadingsBatch(readings);
       console.log(`📊 Flushed ${readings.length} readings to database`);
     } catch (error) {
       console.error('❌ Failed to flush readings:', error);
-      this.readingBuffer.unshift(...readings);
+        this.readingBuffer.unshift(...readings);
     }
   }
 
@@ -904,7 +928,7 @@ class EnhancedSessionManager {
     this.backgroundTimeout = setTimeout(async () => {
       if (this.isActive) {
         console.log('⏰ App backgrounded too long - ending session');
-        await this.stopSession();
+          await this.stopSession();
       }
     }, BACKGROUND_TIMEOUT);
     
@@ -927,7 +951,7 @@ class EnhancedSessionManager {
     this.sessionTimeout = setTimeout(async () => {
       if (this.isActive) {
         console.log('⏰ Session timeout (2 hours) - ending session');
-        await this.stopSession();
+          await this.stopSession();
       }
     }, SESSION_TIMEOUT);
     
@@ -944,19 +968,214 @@ class EnhancedSessionManager {
   // Recovery and cleanup
   async performStartupRecovery() {
     try {
+      // Check for incomplete session
       const sessionStr = await AsyncStorage.getItem('activeSession');
       if (sessionStr) {
         const session = JSON.parse(sessionStr);
         console.log('🔧 Found incomplete session:', session.id);
         
-        // Mark as abandoned
-        await SupabaseService.endSession(session.id, {}, Date.now());
+        // Check if session was recently active (within last 10 minutes)
+        const sessionAge = Date.now() - new Date(session.startTime).getTime();
+        const tenMinutes = 10 * 60 * 1000;
         
-        await AsyncStorage.removeItem('activeSession');
-        console.log('✅ Cleaned up abandoned session');
+        if (sessionAge < tenMinutes) {
+          console.log('🔄 Recent session found - preparing recovery data');
+          
+          // Get any background state from aggressive service
+          const backgroundState = await this.getBackgroundSessionState();
+          
+          // Store recovery data for UI to access
+          const recoveryData = {
+            sessionId: session.id,
+            currentPhase: backgroundState?.currentPhase || session.currentPhase || 'HYPOXIC',
+            currentCycle: backgroundState?.currentCycle || session.currentCycle || 1,
+            phaseTimeRemaining: backgroundState?.phaseTimeRemaining || session.phaseTimeRemaining || 180,
+            totalCycles: session.totalCycles || 3,
+            hypoxicDuration: session.hypoxicDuration || 420,
+            hyperoxicDuration: session.hyperoxicDuration || 180,
+            startTime: session.startTime,
+            sessionAge: Math.round(sessionAge / 1000), // seconds
+            backgroundTime: backgroundState?.totalBackgroundTime || 0,
+            canRecover: true
+          };
+          
+          await AsyncStorage.setItem('sessionRecovery', JSON.stringify(recoveryData));
+          console.log(`🔄 Session recovery prepared: ${recoveryData.currentPhase} phase, Cycle ${recoveryData.currentCycle}, ${recoveryData.phaseTimeRemaining}s remaining`);
+          
+          // Don't auto-cleanup - let user decide
+          return recoveryData;
+        } else {
+          console.log('🗑️ Old session found - cleaning up');
+          await this.cleanupAbandonedSession(session);
+        }
+      }
+      
+      // Check for background state without active session (edge case)
+      const backgroundState = await this.getBackgroundSessionState();
+      if (backgroundState && backgroundState.isActive) {
+        console.log('🔧 Found orphaned background state - cleaning up');
+        await AsyncStorage.removeItem('@aggressive_session_state');
+      }
+      
+    } catch (error) {
+      console.error('❌ Recovery check failed:', error);
+    }
+    
+    return null;
+  }
+
+  async getBackgroundSessionState() {
+    try {
+      const stateStr = await AsyncStorage.getItem('@aggressive_session_state');
+      return stateStr ? JSON.parse(stateStr) : null;
+    } catch (error) {
+      console.warn('⚠️ Could not read background session state:', error);
+      return null;
+    }
+  }
+
+  async cleanupAbandonedSession(session) {
+    try {
+      // Mark session as abandoned in Supabase
+      await SupabaseService.endSession(session.id, { 
+        endReason: 'abandoned',
+        avgSpO2: null,
+        avgHeartRate: null 
+      }, Date.now());
+      
+      // Clean up local storage
+      await AsyncStorage.removeItem('activeSession');
+      await AsyncStorage.removeItem('sessionRecovery');
+      await AsyncStorage.removeItem('@aggressive_session_state');
+      
+      console.log('✅ Cleaned up abandoned session:', session.id);
+    } catch (error) {
+      console.error('❌ Failed to cleanup abandoned session:', error);
+    }
+  }
+
+  // Check if there's a recoverable session
+  async getRecoverableSession() {
+    try {
+      const recoveryStr = await AsyncStorage.getItem('sessionRecovery');
+      return recoveryStr ? JSON.parse(recoveryStr) : null;
+    } catch (error) {
+      console.error('❌ Failed to get recoverable session:', error);
+      return null;
+    }
+  }
+
+  // Resume a recovered session
+  async resumeSession(recoveryData) {
+    try {
+      console.log(`🔄 Resuming session: ${recoveryData.sessionId}`);
+      
+      // Restore session state
+      this.currentSession = {
+        id: recoveryData.sessionId,
+        startTime: recoveryData.startTime,
+        totalCycles: recoveryData.totalCycles,
+        hypoxicDuration: recoveryData.hypoxicDuration,
+        hyperoxicDuration: recoveryData.hyperoxicDuration
+      };
+      
+      // Restore protocol configuration
+      this.protocolConfig = {
+        totalCycles: recoveryData.totalCycles,
+        hypoxicDuration: recoveryData.hypoxicDuration,
+        hyperoxicDuration: recoveryData.hyperoxicDuration
+      };
+      
+      // Restore session progress
+      this.currentPhase = recoveryData.currentPhase;
+      this.currentCycle = recoveryData.currentCycle;
+      this.phaseTimeRemaining = recoveryData.phaseTimeRemaining;
+      this.startTime = new Date(recoveryData.startTime);
+      this.phaseStartTime = Date.now(); // Reset phase timer
+      
+      // Activate session
+          this.isActive = true;
+      this.isPaused = false;
+      
+      // Restart services
+      await activateKeepAwakeAsync();
+      
+      // Start aggressive background monitoring
+      if (this.aggressiveBackgroundService) {
+        await this.aggressiveBackgroundService.startAggressiveBackgroundMonitoring({
+          id: recoveryData.sessionId,
+          currentPhase: this.currentPhase,
+          currentCycle: this.currentCycle,
+          phaseTimeRemaining: this.phaseTimeRemaining,
+          totalCycles: this.protocolConfig.totalCycles,
+          hypoxicDuration: this.protocolConfig.hypoxicDuration,
+          hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
+        });
+      }
+      
+      // Start regular background monitoring as fallback
+      if (this.backgroundService) {
+        await this.backgroundService.startBackgroundMonitoring({
+          id: recoveryData.sessionId,
+          currentPhase: this.currentPhase,
+          currentCycle: this.currentCycle,
+          phaseTimeRemaining: this.phaseTimeRemaining,
+          totalCycles: this.protocolConfig.totalCycles,
+          hypoxicDuration: this.protocolConfig.hypoxicDuration,
+          hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
+        });
+      }
+      
+      // Schedule notifications for current phase
+      await this.schedulePhaseNotifications();
+      
+      // Start phase timer
+      this.startPhaseTimer();
+      
+      // Start session timeout
+      this.startSessionTimeout();
+      
+      // Start batch processing for readings
+      this.startBatchProcessing();
+      
+      // Update session state in storage
+      await AsyncStorage.setItem('activeSession', JSON.stringify(this.currentSession));
+      
+      // Clear recovery data
+      await AsyncStorage.removeItem('sessionRecovery');
+      
+      console.log(`✅ Session resumed successfully: ${recoveryData.currentPhase} phase, Cycle ${recoveryData.currentCycle}, ${recoveryData.phaseTimeRemaining}s remaining`);
+      
+      // Notify listeners
+      this.notify('sessionResumed', {
+        ...this.currentSession,
+        currentPhase: this.currentPhase,
+        currentCycle: this.currentCycle,
+        phaseTimeRemaining: this.phaseTimeRemaining,
+        recoveredFromBackground: true,
+        backgroundTime: recoveryData.backgroundTime,
+        capabilities: runtimeEnvironment.capabilities
+      });
+      
+      return this.currentSession.id;
+    } catch (error) {
+      console.error('❌ Failed to resume session:', error);
+      // Cleanup on failure
+      await this.cleanupAbandonedSession({ id: recoveryData.sessionId });
+      throw error;
+    }
+  }
+
+  // Decline session recovery and clean up
+  async declineSessionRecovery() {
+    try {
+      const recoveryData = await this.getRecoverableSession();
+      if (recoveryData) {
+        console.log('🗑️ User declined session recovery - cleaning up');
+        await this.cleanupAbandonedSession({ id: recoveryData.sessionId });
       }
     } catch (error) {
-      console.error('❌ Recovery cleanup failed:', error);
+      console.error('❌ Failed to decline session recovery:', error);
     }
   }
 

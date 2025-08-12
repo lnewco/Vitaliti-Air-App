@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaView, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import DashboardScreen from './DashboardScreen';
 import SessionHistoryScreen from './SessionHistoryScreen';
@@ -11,6 +12,7 @@ import HRVCalibrationScreen from './HRVCalibrationScreen';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import ProfileScreen from './ProfileScreen';
+import SessionRecoveryManager from '../components/SessionRecoveryManager';
 
 
 const Tab = createBottomTabNavigator();
@@ -93,44 +95,49 @@ const MainAppContent = () => {
   };
 
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
-      <Stack.Screen name="MainTabs" component={TabNavigator} />
-      <Stack.Screen 
-        name="SessionSetup" 
-        component={SessionSetupScreen}
-        options={{
-          presentation: 'card',
+    <>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
         }}
-      />
+      >
+        <Stack.Screen name="MainTabs" component={TabNavigator} />
+        <Stack.Screen 
+          name="SessionSetup" 
+          component={SessionSetupScreen}
+          options={{
+            presentation: 'card',
+          }}
+        />
 
-      <Stack.Screen 
-        name="HRVCalibration" 
-        component={HRVCalibrationScreen}
-        options={{
-          presentation: 'card',
-          title: 'HRV Calibration',
-        }}
-      />
+        <Stack.Screen 
+          name="HRVCalibration" 
+          component={HRVCalibrationScreen}
+          options={{
+            presentation: 'card',
+            title: 'HRV Calibration',
+          }}
+        />
 
-      <Stack.Screen 
-        name="AirSession" 
-        component={IHHTTrainingScreen}
-        options={{
-          presentation: 'card',
-        }}
-      />
-      <Stack.Screen 
-        name="PostSessionSurvey" 
-        component={PostSessionSurveyScreen}
-        options={{
-          presentation: 'card',
-        }}
-      />
-    </Stack.Navigator>
+        <Stack.Screen 
+          name="AirSession" 
+          component={IHHTTrainingScreen}
+          options={{
+            presentation: 'card',
+          }}
+        />
+        
+        <Stack.Screen 
+          name="PostSessionSurvey" 
+          component={PostSessionSurveyScreen}
+          options={{
+            presentation: 'card',
+          }}
+        />
+      </Stack.Navigator>
+
+      <SessionRecoveryManager />
+    </>
   );
 };
 
