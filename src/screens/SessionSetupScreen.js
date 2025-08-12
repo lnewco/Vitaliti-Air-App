@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Alert, PanResponder, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Alert, Dimensions } from 'react-native';
+import { Slider } from '@miblanchard/react-native-slider';
 import { useBluetoothConnection } from '../context/BluetoothContext';
 import StepIndicator from '../components/StepIndicator';
 import OptimizedConnectionManager from '../components/OptimizedConnectionManager';
@@ -264,48 +265,7 @@ const SessionSetupScreen = ({ navigation }) => {
     setValidationErrors([]); // Clear errors when user makes changes
   };
 
-  // Slider component
-  const CustomSlider = ({ value, onValueChange, minimumValue, maximumValue, step = 1 }) => {
-    const [sliderWidth, setSliderWidth] = useState(200);
-    
-    const panResponder = PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt) => {
-        const locationX = evt.nativeEvent.locationX;
-        const percentage = Math.max(0, Math.min(1, locationX / sliderWidth));
-        const newValue = minimumValue + Math.round(percentage * (maximumValue - minimumValue) / step) * step;
-        onValueChange(Math.max(minimumValue, Math.min(maximumValue, newValue)));
-      },
-      onPanResponderMove: (evt) => {
-        const locationX = evt.nativeEvent.locationX;
-        const percentage = Math.max(0, Math.min(1, locationX / sliderWidth));
-        const newValue = minimumValue + Math.round(percentage * (maximumValue - minimumValue) / step) * step;
-        onValueChange(Math.max(minimumValue, Math.min(maximumValue, newValue)));
-      },
-    });
-
-    const fillPercentage = ((value - minimumValue) / (maximumValue - minimumValue)) * 100;
-
-    return (
-      <View style={styles.sliderContainer}>
-        <Text style={styles.sliderMin}>{minimumValue}</Text>
-        <View 
-          style={styles.slider} 
-          {...panResponder.panHandlers}
-          onLayout={(event) => {
-            const { width } = event.nativeEvent.layout;
-            setSliderWidth(width);
-          }}
-        >
-          <View style={styles.sliderTrack} />
-          <View style={[styles.sliderFill, { width: `${fillPercentage}%` }]} />
-          <View style={[styles.sliderThumb, { left: `${fillPercentage}%` }]} />
-        </View>
-        <Text style={styles.sliderMax}>{maximumValue}</Text>
-      </View>
-    );
-  };
+  // Using native slider component now - no custom component needed
 
   const renderStep1 = () => {
     return (
@@ -356,39 +316,69 @@ const SessionSetupScreen = ({ navigation }) => {
           <View style={styles.protocolCard}>
             <Text style={styles.protocolLabel}>Total Cycles: {protocolConfig.totalCycles}</Text>
             <Text style={styles.protocolDescription}>Number of hypoxic-hyperoxic cycles</Text>
-            <CustomSlider
-              value={protocolConfig.totalCycles}
-              onValueChange={(value) => handleProtocolChange('totalCycles', value)}
+            <Slider
+              containerStyle={styles.slider}
+              value={[protocolConfig.totalCycles]}
+              onValueChange={(values) => handleProtocolChange('totalCycles', values[0])}
               minimumValue={1}
               maximumValue={10}
               step={1}
+              minimumTrackTintColor="#4CAF50"
+              maximumTrackTintColor="#E0E0E0"
+              thumbTintColor="#388E3C"
+              trackStyle={styles.sliderTrack}
+              thumbStyle={styles.sliderThumb}
             />
+            <View style={styles.sliderLabels}>
+              <Text style={styles.sliderLabelText}>1</Text>
+              <Text style={styles.sliderLabelText}>10</Text>
+            </View>
           </View>
 
           {/* Hypoxic Duration */}
           <View style={styles.protocolCard}>
             <Text style={styles.protocolLabel}>Hypoxic Duration: {protocolConfig.hypoxicDuration} min</Text>
             <Text style={styles.protocolDescription}>Duration of each hypoxic phase</Text>
-            <CustomSlider
-              value={protocolConfig.hypoxicDuration}
-              onValueChange={(value) => handleProtocolChange('hypoxicDuration', value)}
+            <Slider
+              containerStyle={styles.slider}
+              value={[protocolConfig.hypoxicDuration]}
+              onValueChange={(values) => handleProtocolChange('hypoxicDuration', values[0])}
               minimumValue={1}
               maximumValue={10}
               step={1}
+              minimumTrackTintColor="#2196F3"
+              maximumTrackTintColor="#E0E0E0"
+              thumbTintColor="#1976D2"
+              trackStyle={styles.sliderTrack}
+              thumbStyle={styles.sliderThumb}
             />
+            <View style={styles.sliderLabels}>
+              <Text style={styles.sliderLabelText}>1 min</Text>
+              <Text style={styles.sliderLabelText}>10 min</Text>
+            </View>
           </View>
 
           {/* Hyperoxic Duration */}
           <View style={styles.protocolCard}>
             <Text style={styles.protocolLabel}>Hyperoxic Duration: {protocolConfig.hyperoxicDuration} min</Text>
             <Text style={styles.protocolDescription}>Duration of each recovery phase</Text>
-            <CustomSlider
-              value={protocolConfig.hyperoxicDuration}
-              onValueChange={(value) => handleProtocolChange('hyperoxicDuration', value)}
+            <Slider
+              containerStyle={styles.slider}
+              value={[protocolConfig.hyperoxicDuration]}
+              onValueChange={(values) => handleProtocolChange('hyperoxicDuration', values[0])}
               minimumValue={1}
               maximumValue={5}
               step={1}
+              minimumTrackTintColor="#FF9800"
+              maximumTrackTintColor="#E0E0E0"
+              thumbTintColor="#F57C00"
+              trackStyle={styles.sliderTrack}
+              thumbStyle={styles.sliderThumb}
             />
+            <View style={styles.sliderLabels}>
+              <Text style={styles.sliderLabelText}>1 min</Text>
+              <Text style={styles.sliderLabelText}>5 min</Text>
+            </View>
           </View>
 
           {/* Session Preview */}
@@ -867,61 +857,43 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginBottom: 16,
   },
-  sliderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-    paddingHorizontal: 8,
-  },
-  sliderMin: {
-    fontSize: 14,
-    color: '#6B7280',
-    width: 20,
-    fontWeight: '500',
-  },
-  sliderMax: {
-    fontSize: 14,
-    color: '#6B7280',
-    width: 20,
-    textAlign: 'right',
-    fontWeight: '500',
-  },
+  // Slider Styles
   slider: {
-    flex: 1,
+    width: '100%',
     height: 40,
-    marginHorizontal: 15,
-    position: 'relative',
-    justifyContent: 'center',
+    marginVertical: 10,
   },
   sliderTrack: {
-    height: 8,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 4,
-  },
-  sliderFill: {
-    position: 'absolute',
-    height: 8,
-    backgroundColor: '#3B82F6',
-    borderRadius: 4,
+    height: 6,
+    borderRadius: 3,
   },
   sliderThumb: {
-    position: 'absolute',
     width: 24,
     height: 24,
-    backgroundColor: '#3B82F6',
     borderRadius: 12,
-    top: 8,
-    marginLeft: -12,
-    borderWidth: 3,
+    backgroundColor: '#3B82F6',
+    borderWidth: 2,
     borderColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 3,
+      height: 2,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 6,
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 10,
+    marginTop: -5,
+  },
+  sliderLabelText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
   },
   sessionPreview: {
     backgroundColor: '#F8F9FA',

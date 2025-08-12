@@ -10,56 +10,13 @@ import {
   ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Slider } from '@miblanchard/react-native-slider';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useBluetooth } from '../context/BluetoothContext';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import SafetyIndicator from '../components/SafetyIndicator';
 
-// Custom Slider Component for Expo Go compatibility
-const CustomSlider = ({ value, onValueChange, minimumValue = 0, maximumValue = 10, step = 1 }) => {
-  const handlePress = (event) => {
-    const { locationX } = event.nativeEvent;
-    const sliderWidth = 280; // Fixed width for calculations
-    const percentage = Math.max(0, Math.min(1, locationX / sliderWidth));
-    const range = maximumValue - minimumValue;
-    const rawValue = minimumValue + (percentage * range);
-    const steppedValue = Math.round(rawValue / step) * step;
-    const clampedValue = Math.max(minimumValue, Math.min(maximumValue, steppedValue));
-    onValueChange(clampedValue);
-  };
-
-  const getThumbPosition = () => {
-    const range = maximumValue - minimumValue;
-    const percentage = (value - minimumValue) / range;
-    return percentage * 280; // Match slider width
-  };
-
-  return (
-    <View style={styles.customSliderContainer}>
-      <TouchableOpacity 
-        style={styles.sliderTrack} 
-        onPress={handlePress}
-        activeOpacity={1}
-      >
-        {/* Track Background */}
-        <View style={styles.sliderTrackBackground} />
-        
-        {/* Active Track */}
-        <View style={[styles.sliderActiveTrack, { width: getThumbPosition() }]} />
-        
-        {/* Thumb */}
-        <View style={[styles.sliderThumb, { left: getThumbPosition() - 12 }]} />
-      </TouchableOpacity>
-      
-      {/* Value Labels */}
-      <View style={styles.sliderLabels}>
-        <Text style={styles.sliderLabelText}>{minimumValue}</Text>
-        <Text style={styles.sliderCurrentValue}>{value}</Text>
-        <Text style={styles.sliderLabelText}>{maximumValue}</Text>
-      </View>
-    </View>
-  );
-};
+// No longer need custom slider - using native component
 
 const PHASE_TYPES = {
   HYPOXIC: 'HYPOXIC',
@@ -676,18 +633,28 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           </Text>
           <Text style={styles.phaseTimer}>⏰ {formatTime(sessionInfo.phaseTimeRemaining)} remaining</Text>
 
-                     {sessionInfo.currentPhase === 'HYPOXIC' && (
-             <View style={styles.hypoxiaSliderContainer}>
-               <Text style={styles.hypoxiaLabel}>Hypoxia Level: {hypoxiaLevel}</Text>
-               <CustomSlider
-                 value={hypoxiaLevel}
-                 onValueChange={handleHypoxiaLevelChange}
-                 minimumValue={0}
-                 maximumValue={10}
-                 step={1}
-               />
-             </View>
-           )}
+          {sessionInfo.currentPhase === 'HYPOXIC' && (
+            <View style={styles.hypoxiaSliderContainer}>
+              <Text style={styles.hypoxiaLabel}>Hypoxia Level: {hypoxiaLevel}</Text>
+              <Slider
+                containerStyle={styles.slider}
+                value={[hypoxiaLevel]}
+                onValueChange={(values) => handleHypoxiaLevelChange(values[0])}
+                minimumValue={0}
+                maximumValue={10}
+                step={1}
+                minimumTrackTintColor="#2196F3"
+                maximumTrackTintColor="#E0E0E0"
+                thumbTintColor="#1976D2"
+                trackStyle={styles.sliderTrack}
+                thumbStyle={styles.sliderThumb}
+              />
+              <View style={styles.sliderLabels}>
+                <Text style={styles.sliderLabelText}>0</Text>
+                <Text style={styles.sliderLabelText}>10</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Live Data Display - Three Cards */}
@@ -1078,61 +1045,41 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-     // Custom Slider Styles
-   customSliderContainer: {
-     width: '100%',
-     alignItems: 'center',
-     marginTop: 10,
-   },
-   sliderTrack: {
-     width: 280, // Fixed width for the slider track
-     height: 10,
-     backgroundColor: '#E0E0E0',
-     borderRadius: 5,
-     position: 'relative',
-     marginBottom: 10,
-   },
-   sliderTrackBackground: {
-     position: 'absolute',
-     top: 0,
-     left: 0,
-     right: 0,
-     bottom: 0,
-     backgroundColor: '#E0E0E0',
-     borderRadius: 5,
-   },
-   sliderActiveTrack: {
-     position: 'absolute',
-     top: 0,
-     left: 0,
-     bottom: 0,
-     backgroundColor: '#2196F3', // Example color for active track
-     borderRadius: 5,
-   },
-   sliderThumb: {
-     position: 'absolute',
-     top: -5, // Adjust to center the thumb
-     width: 24,
-     height: 24,
-     backgroundColor: '#2196F3',
-     borderRadius: 12,
-     borderWidth: 2,
-     borderColor: '#FFFFFF',
-   },
-   sliderLabels: {
-     flexDirection: 'row',
-     justifyContent: 'space-between',
-     width: '100%',
-     marginTop: 10,
-   },
-   sliderLabelText: {
-     fontSize: 14,
-     color: '#666666',
-   },
-     sliderCurrentValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333333',
+  // Slider Styles
+  slider: {
+    width: '100%',
+    height: 40,
+    marginVertical: 10,
+  },
+  sliderTrack: {
+    height: 6,
+    borderRadius: 3,
+  },
+  sliderThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#1976D2',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 10,
+  },
+  sliderLabelText: {
+    fontSize: 14,
+    color: '#666666',
   },
   // Disabled button styles
   backButtonDisabled: {
