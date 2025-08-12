@@ -62,7 +62,9 @@ class SlidingWindow {
 
 class BluetoothService {
   constructor() {
-    this.manager = new BleManager();
+    this.manager = null;
+    this.referenceCount = 0;
+    this.isDestroyed = false;
     this.pulseOxDevice = null;
     this.hrDevice = null;
     this.onDeviceFound = null;
@@ -100,6 +102,57 @@ class BluetoothService {
     this.currentRealHRV = null;
   }
 
+  // Reference counting for proper lifecycle management
+  acquireReference() {
+    this.referenceCount++;
+    log.info(`📱 BluetoothService reference acquired (count: ${this.referenceCount})`);
+    
+    // Create manager if needed
+    if (!this.manager || this.isDestroyed) {
+      log.info('🔄 Creating new BleManager instance');
+      this.manager = new BleManager();
+      this.isDestroyed = false;
+    }
+    
+    return this.referenceCount;
+  }
+  
+  releaseReference() {
+    if (this.referenceCount > 0) {
+      this.referenceCount--;
+      log.info(`📱 BluetoothService reference released (count: ${this.referenceCount})`);
+      
+      // Only destroy if no more references
+      if (this.referenceCount === 0) {
+        log.info('🧹 No more references, scheduling cleanup...');
+        // Delay cleanup slightly to allow for quick re-acquisition
+        setTimeout(() => {
+          if (this.referenceCount === 0) {
+            this._performCleanup();
+          }
+        }, 500);
+      }
+    }
+    
+    return this.referenceCount;
+  }
+  
+  _performCleanup() {
+    log.info('🧹 Performing full BluetoothService cleanup');
+    this.stopScanning();
+    this.disconnect();
+    
+    if (this.manager && !this.isDestroyed) {
+      try {
+        this.manager.destroy();
+        this.isDestroyed = true;
+        log.info('✅ BleManager destroyed successfully');
+      } catch (error) {
+        log.error('Error destroying BleManager:', error);
+      }
+    }
+  }
+
   async requestPermissions() {
     try {
       if (Platform.OS === 'android') {
@@ -125,6 +178,11 @@ class BluetoothService {
 
   async isBluetoothEnabled() {
     try {
+      // Ensure manager exists before checking state
+      if (!this.manager || this.isDestroyed) {
+        log.warn('BleManager not initialized - cannot check Bluetooth state');
+        return false;
+      }
       const state = await this.manager.state();
       return state === 'PoweredOn';
     } catch (error) {
@@ -135,6 +193,12 @@ class BluetoothService {
 
   async startScanning(deviceType = 'pulse-ox') {
     try {
+      // Ensure manager exists before scanning
+      if (!this.manager || this.isDestroyed) {
+        log.error('Cannot start scanning - BleManager not initialized');
+        return;
+      }
+      
       log.info(`Starting ${deviceType} device scan...`);
       this.currentScanType = deviceType;
       this.isScanning = true;
@@ -174,6 +238,10 @@ class BluetoothService {
 
   async stopScanning() {
     try {
+      if (!this.manager || this.isDestroyed) {
+        log.warn('Cannot stop scanning - BleManager not initialized');
+        return;
+      }
       log.info('Stopping device scan...');
       this.manager.stopDeviceScan();
       this.isScanning = false;
@@ -501,6 +569,12 @@ class BluetoothService {
 
   handleBCIDataReceived(data) {
     try {
+      // Safety check - ensure manager is not destroyed
+      if (this.isDestroyed) {
+        log.warn('Cannot handle BCI data - BleManager is destroyed');
+        return;
+      }
+      
       const parsedData = this.parseBCIData(data);
       if (parsedData) {
         // Send to UI callback if available
@@ -520,6 +594,12 @@ class BluetoothService {
 
   handleHRDataReceived(data) {
     try {
+      // Safety check - ensure manager is not destroyed
+      if (this.isDestroyed) {
+        log.warn('Cannot handle HR data - BleManager is destroyed');
+        return;
+      }
+      
       const parsedData = this.parseHRData(data);
       if (parsedData) {
         // Send to UI callback if available
@@ -996,10 +1076,10 @@ class BluetoothService {
     }
   }
 
+  // Legacy cleanup method - now uses reference counting
   cleanup() {
-    this.stopScanning();
-    this.disconnect();
-    this.manager.destroy();
+    log.warn('⚠️ Direct cleanup() called - using releaseReference() instead');
+    this.releaseReference();
   }
 
   // Event handlers

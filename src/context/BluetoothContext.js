@@ -62,6 +62,9 @@ export const BluetoothProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
+    // Acquire reference to BluetoothService
+    BluetoothService.acquireReference();
+    
     // Set up event handlers for dual device support
     BluetoothService.setOnDeviceFound((device) => {
       log.info('Context: Device found callback triggered:', device.name || device.localName, 'Type:', device.deviceType);
@@ -152,7 +155,8 @@ export const BluetoothProvider = ({ children }) => {
     });
 
     return () => {
-      BluetoothService.cleanup();
+      // Release reference instead of direct cleanup
+      BluetoothService.releaseReference();
     };
   }, [throttledUIUpdate, persistentHRV, lastHRVUpdate]);
 

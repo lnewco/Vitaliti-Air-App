@@ -74,13 +74,13 @@ const PreSessionSurveyScreen = ({ navigation, route }) => {
       // Show confirmation popup and navigate
       Alert.alert(
         '🎯 Starting Your IHHT Session',
-        `Great! Your pre-session survey is complete.\n\n• ${cycles} cycles of hypoxic-hyperoxic training\n• Approximately ${totalDuration} minutes duration\n• Real-time safety monitoring\n\nGet comfortable and prepare to begin!`,
+        `Great! Your pre-session survey is complete.\n\n• ${cycles} cycles of hypoxic-hyperoxic training\n• Approximately ${totalDuration} minutes duration\n• Real-time safety monitoring\n\nNext, we'll calibrate your heart rate variability baseline.`,
         [
           {
-            text: 'Start Training',
+            text: 'Continue to HRV Calibration',
             onPress: () => {
-              console.log('🚀 Starting IHHT session directly after survey completion with sessionId:', sessionId);
-              navigation.navigate('AirSession', { 
+              console.log('📊 Moving to HRV calibration with sessionId:', sessionId);
+              navigation.navigate('HRVCalibration', { 
                 sessionId: sessionId,
                 protocolConfig: protocolConfig 
               });

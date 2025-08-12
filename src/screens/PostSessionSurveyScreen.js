@@ -21,6 +21,7 @@ const PostSessionSurveyScreen = ({ navigation, route }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
 
+
   const handleClarityChange = (value) => {
     setSurveyData(prev => ({ ...prev, clarity: value }));
     setValidationErrors([]); // Clear errors when user makes changes

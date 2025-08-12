@@ -253,13 +253,20 @@ class EnhancedSessionManager {
   }
 
   notify(event, data) {
-    this.listeners.forEach(listener => {
+    // Create a copy of listeners array to avoid modification during iteration
+    const listenersCopy = [...this.listeners];
+    listenersCopy.forEach(listener => {
       try {
         listener(event, data);
       } catch (error) {
         console.error('Error notifying listener:', error);
       }
     });
+  }
+  
+  clearListeners() {
+    console.log(`🧹 Clearing ${this.listeners.length} listeners`);
+    this.listeners = [];
   }
 
   async startSession(userIdOrSessionId, protocolSettings = {}) {
@@ -602,8 +609,18 @@ class EnhancedSessionManager {
 
   // Public method to skip to next phase
   async skipToNextPhase() {
-    if (!this.isActive || this.isPaused) {
-      console.log('⚠️ Cannot skip phase - session not active or paused');
+    if (!this.isActive) {
+      console.log('⚠️ Cannot skip phase - session not active');
+      return false;
+    }
+    
+    if (this.isPaused) {
+      console.log('⚠️ Cannot skip phase - session is paused');
+      return false;
+    }
+    
+    if (this.currentPhase === 'COMPLETED') {
+      console.log('⚠️ Cannot skip phase - session already completed');
       return false;
     }
     
@@ -802,7 +819,14 @@ class EnhancedSessionManager {
       await AsyncStorage.removeItem('activeSession');
 
     console.log('✅ Session stopped successfully');
+    
+    // Notify listeners before clearing them
     this.notify('sessionStopped', { sessionId, duration, stats, reason });
+    
+    // Give listeners time to process the stop event, then clear
+    setTimeout(() => {
+      this.clearListeners();
+    }, 100);
 
     return { sessionId, duration, stats, reason };
   }
