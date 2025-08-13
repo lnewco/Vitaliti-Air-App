@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
   View, 
   Text, 
@@ -26,29 +25,7 @@ const DashboardScreen = ({ navigation }) => {
     navigation.navigate('SessionSetup');
   };
 
-  // TEMPORARY: Reset function for testing onboarding
-  const resetForOnboardingTest = async () => {
-    try {
-      // Clear all onboarding-related data
-      await AsyncStorage.removeItem('onboarding_state');
-      await AsyncStorage.removeItem('hasCompletedOnboarding');
-      await AsyncStorage.removeItem('onboarding_completion_finished');
-      await AsyncStorage.removeItem('onboarding_force_complete');
-      await AsyncStorage.removeItem('onboarding_user_confirmed');
-      await AsyncStorage.clear();
-      
-      console.log('🧹 AsyncStorage fully cleared - restart app to test onboarding');
-      console.log('🔄 All onboarding flags removed');
-      
-      Alert.alert(
-        'Reset Complete', 
-        'App data cleared. Close the app COMPLETELY (swipe up and swipe away), then reopen to test new user onboarding.',
-        [{ text: 'OK', onPress: () => console.log('User should close app now') }]
-      );
-    } catch (error) {
-      console.error('Failed to clear AsyncStorage:', error);
-    }
-  };
+
 
 
 
@@ -79,13 +56,7 @@ const DashboardScreen = ({ navigation }) => {
                 <Text style={styles.startButtonText}>Start Session</Text>
               </TouchableOpacity>
               
-              {/* TEMPORARY: Test button for onboarding reset */}
-              <TouchableOpacity 
-                style={[styles.startButton, { backgroundColor: '#EF4444', marginTop: 20 }]}
-                onPress={resetForOnboardingTest}
-              >
-                <Text style={styles.startButtonText}>🧪 Reset for Onboarding Test</Text>
-              </TouchableOpacity>
+
               
 
 
