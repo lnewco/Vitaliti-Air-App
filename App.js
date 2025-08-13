@@ -1,3 +1,5 @@
+// Overall, I am suprised this project is done in plain Javascript rather than Typescript.
+// Probably too late at this point to switch over, but Typescript the standard at this point.
 import React from 'react';
 import { LogBox } from 'react-native';
 import { BluetoothProvider } from './src/context/BluetoothContext';

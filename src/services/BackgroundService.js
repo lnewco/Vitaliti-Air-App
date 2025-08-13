@@ -5,6 +5,9 @@
  */
 
 import { NativeModules, NativeEventEmitter, Platform, AppState } from 'react-native';
+import Constants from 'expo-constants';
+
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 // Try to load the native module (only available in development builds)
 let IHHTBackgroundModule = null;
@@ -12,7 +15,7 @@ let backgroundEmitter = null;
 
 try {
   IHHTBackgroundModule = NativeModules.IHHTBackgroundModule;
-  if (IHHTBackgroundModule) {
+  if (IHHTBackgroundModule && !isExpoGo) {
     backgroundEmitter = new NativeEventEmitter(IHHTBackgroundModule);
   }
 } catch (error) {
