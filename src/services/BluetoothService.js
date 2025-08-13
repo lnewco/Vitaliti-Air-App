@@ -709,6 +709,10 @@ class BluetoothService {
       const pleth = byte2 & 0x7F;
       const isPlethValid = pleth !== 0;
       
+      // Extract bargraph (Byte 3, bits 0-3) - likely the PI indicator
+      const bargraph = byte3 & 0x0F;
+      const isBargraphValid = bargraph !== 0;
+      
       // log.info('� BCI Parsed Values:', { // Disabled: high frequency logging
       //   signalStrength,
       //   isSignalValid,
@@ -720,7 +724,9 @@ class BluetoothService {
       //   spo2Raw,
       //   spo2,
       //   pleth,
-      //   isPlethValid
+      //   isPlethValid,
+      //   bargraph,
+      //   isBargraphValid
       // });
       
       // Return data even if values are invalid so we can show status
@@ -731,6 +737,7 @@ class BluetoothService {
         isFingerDetected,
         isSearchingForPulse,
         pleth: isPlethValid ? pleth : null,
+        bargraph: isBargraphValid ? bargraph : null,  // Add bargraph to returned data
         timestamp: Date.now(),
         rawData: originalBase64Data
       };
