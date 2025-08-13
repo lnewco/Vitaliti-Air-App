@@ -236,16 +236,40 @@ const PhoneVerificationScreen = ({ route, navigation }) => {
           await AsyncStorage.setItem('onboarding_state', 'completed');
           await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
           
-          console.log('✅ Onboarding completed - letting AuthContext handle navigation like returning users');
+          console.log('✅ Onboarding completed - forcing immediate AppNavigator refresh');
           
-          // Show success message (will appear over main app after auto-navigation)
+          // FORCE AppNavigator to re-check by navigating up to root and back to Main
           setTimeout(() => {
-            Alert.alert(
-              'Account Created Successfully!',
-              'Welcome to Vitaliti Air! Your account has been created and verified.',
-              [{ text: 'Continue', style: 'default' }]
-            );
-          }, 1000); // Delay to show over main app
+            try {
+              const rootNavigation = navigation.getParent();
+              if (rootNavigation) {
+                console.log('🔄 Forcing AppNavigator refresh by resetting to Main');
+                rootNavigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Main' }],
+                });
+                
+                // Show success message after navigation
+                setTimeout(() => {
+                  Alert.alert(
+                    'Account Created Successfully!',
+                    'Welcome to Vitaliti Air! Your account has been created and verified.',
+                    [{ text: 'Continue', style: 'default' }]
+                  );
+                }, 500);
+                
+              } else {
+                console.log('❌ No parent navigation found - showing popup anyway');
+                Alert.alert(
+                  'Account Created Successfully!',
+                  'Welcome to Vitaliti Air! Your account has been created and verified.',
+                  [{ text: 'Continue', style: 'default' }]
+                );
+              }
+            } catch (error) {
+              console.error('❌ Navigation or popup failed:', error);
+            }
+          }, 200); // Small delay to ensure AsyncStorage is written
           
         } catch (error) {
           console.error('❌ Failed to complete onboarding:', error);

@@ -29,10 +29,16 @@ const AppNavigator = () => {
   useEffect(() => {
     if (isAuthenticated) {
       console.log('🔄 Auth state changed to authenticated - checking onboarding status');
-      checkOnboardingStatus();
       
-      // Also check if onboarding completion just finished
-      checkForCompletionTransition();
+      // Add a small delay to ensure AsyncStorage has been updated by PhoneVerificationScreen
+      setTimeout(async () => {
+        console.log('🔄 Delayed onboarding status check after auth state change');
+        await checkOnboardingStatus();
+        
+        // Also check if onboarding completion just finished
+        await checkForCompletionTransition();
+      }, 300); // 300ms delay to ensure AsyncStorage is written
+      
     } else {
       // Reset the flag when user logs out
       hasCheckedOnboardingRef.current = false;
@@ -137,12 +143,15 @@ const AppNavigator = () => {
       // Set loading state when checking onboarding status
       setIsCheckingOnboarding(true);
       
+      // Force a fresh read of AsyncStorage by clearing any potential cache
+      await AsyncStorage.getAllKeys(); // This ensures fresh read
+      
       // Check new onboarding_state first, fallback to old hasCompletedOnboarding for backwards compatibility
       const state = await AsyncStorage.getItem('onboarding_state');
       const oldStatus = await AsyncStorage.getItem('hasCompletedOnboarding');
       
-      console.log('🔄 AppNavigator: Onboarding state from AsyncStorage:', state || 'not set');
-      console.log('🔄 AppNavigator: Legacy onboarding status:', oldStatus || 'not set');
+      console.log('🔄 AppNavigator: FRESH onboarding state from AsyncStorage:', state || 'not set');
+      console.log('🔄 AppNavigator: FRESH legacy onboarding status:', oldStatus || 'not set');
       
       // Determine actual onboarding state
       if (state === 'completed' || oldStatus === 'true') {
