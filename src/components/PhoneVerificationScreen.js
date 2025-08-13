@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import OnboardingProgressIndicator from './OnboardingProgressIndicator';
 import { useOnboarding } from '../context/OnboardingContext';
 import { useAuth } from '../auth/AuthContext';
@@ -228,19 +229,94 @@ const PhoneVerificationScreen = ({ route, navigation }) => {
       setErrors({});
       
       if (isOnboarding) {
-        console.log('📱 OTP verification successful in onboarding, navigating to CompletionScreen');
+        console.log('📱 OTP verification successful in onboarding - completing onboarding directly');
         
-        // Navigate to completion screen in onboarding flow
-        navigation.navigate('Completion');
-        
-        // Show success message for onboarding
-        setTimeout(() => {
+        try {
+          // Complete onboarding directly here instead of relying on CompletionScreen
+          await AsyncStorage.setItem('onboarding_state', 'completed');
+          await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
+          await AsyncStorage.setItem('onboarding_completion_finished', 'true');
+          
+          console.log('✅ Onboarding completed directly in PhoneVerificationScreen');
+          console.log('🔄 All AsyncStorage flags set to completed');
+          
+          // WAIT for AsyncStorage to flush, then force navigation
+          setTimeout(async () => {
+            console.log('🔄 AsyncStorage flush complete - executing navigation');
+            
+            // Verify the flags were actually saved
+            const savedState = await AsyncStorage.getItem('onboarding_state');
+            console.log('🔄 Verified onboarding_state in AsyncStorage:', savedState);
+            
+            try {
+              const rootNavigation = navigation.getParent();
+              if (rootNavigation) {
+                console.log('🔄 Using parent navigation to reset to Main');
+                
+                // FORCE navigation multiple times to override any interference
+                for (let i = 0; i < 3; i++) {
+                  rootNavigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Main' }],
+                  });
+                  console.log(`✅ Navigation reset attempt ${i + 1} completed`);
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                
+              } else {
+                console.log('❌ No parent navigation found');
+              }
+            } catch (error) {
+              console.error('❌ Parent navigation failed:', error);
+            }
+          }, 300); // Longer delay to ensure AsyncStorage flushes
+          
+          // Show success message
           Alert.alert(
             'Account Created Successfully!',
             'Welcome to Vitaliti Air! Your account has been created and verified.',
-            [{ text: 'Continue', style: 'default' }]
+            [{ 
+              text: 'Continue', 
+              onPress: async () => {
+                console.log('🔄 User tapped Continue - triggering AppNavigator detection');
+                
+                // Set a special flag that AppNavigator will detect immediately
+                try {
+                  await AsyncStorage.setItem('onboarding_force_complete', 'true');
+                  await AsyncStorage.setItem('onboarding_user_confirmed', 'true');
+                  console.log('✅ Set force complete flags for AppNavigator');
+                  
+                  // FORCE an immediate app state change to trigger AppNavigator checking
+                  console.log('🔄 Triggering app state change to force AppNavigator check');
+                  
+                  // Use a timeout to give AsyncStorage time to save, then force check
+                  setTimeout(() => {
+                    console.log('🔄 Attempting to trigger AppNavigator via app state simulation');
+                    // Close and reopen the app by going to background then active
+                    try {
+                      // This will trigger the AppState listener in AppNavigator
+                      const { AppState } = require('react-native');
+                      AppState.currentState = 'background';
+                      setTimeout(() => {
+                        AppState.currentState = 'active';
+                        console.log('🔄 App state simulation completed');
+                      }, 100);
+                    } catch (error) {
+                      console.error('❌ App state simulation failed:', error);
+                    }
+                  }, 200);
+                  
+                } catch (error) {
+                  console.error('❌ Failed to set completion flags:', error);
+                }
+              },
+              style: 'default' 
+            }]
           );
-        }, 100);
+        } catch (error) {
+          console.error('❌ Failed to complete onboarding:', error);
+          Alert.alert('Error', 'Failed to complete setup. Please try again.');
+        }
       } else {
         console.log('📱 OTP verification successful in login flow, auth context will handle navigation');
         // For login flow, the auth context will handle navigation to Main app

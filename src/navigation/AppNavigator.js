@@ -30,6 +30,9 @@ const AppNavigator = () => {
     if (isAuthenticated) {
       console.log('🔄 Auth state changed to authenticated - checking onboarding status');
       checkOnboardingStatus();
+      
+      // Also check if onboarding completion just finished
+      checkForCompletionTransition();
     } else {
       // Reset the flag when user logs out
       hasCheckedOnboardingRef.current = false;
@@ -67,12 +70,64 @@ const AppNavigator = () => {
         }
         
         checkOnboardingStatus();
+        
+        // Also check for completion transitions when app becomes active
+        if (isAuthenticated) {
+          checkForCompletionTransition();
+          
+          // Set up aggressive checking for forced completion
+          let checkCount = 0;
+          const maxChecks = 20; // 10 seconds of checking
+          const completionChecker = setInterval(async () => {
+            checkCount++;
+            await checkForCompletionTransition();
+            if (checkCount >= maxChecks) {
+              clearInterval(completionChecker);
+            }
+          }, 500);
+        }
       }
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
   }, []);
+
+  // Check if onboarding completion just finished and handle navigation
+  const checkForCompletionTransition = async () => {
+    try {
+      const forceComplete = await AsyncStorage.getItem('onboarding_force_complete');
+      const userConfirmed = await AsyncStorage.getItem('onboarding_user_confirmed');
+      const onboardingState = await AsyncStorage.getItem('onboarding_state');
+      
+      if (forceComplete === 'true' && userConfirmed === 'true' && onboardingState === 'completed' && isAuthenticated) {
+        console.log('🔄 FORCED onboarding completion detected - navigating to Main app NOW');
+        
+        // Clear ALL completion flags
+        await AsyncStorage.removeItem('onboarding_force_complete');
+        await AsyncStorage.removeItem('onboarding_user_confirmed');
+        await AsyncStorage.removeItem('onboarding_completion_finished');
+        
+        // IMMEDIATELY force navigation to Main app using the ROOT navigator
+        if (navigationRef.current && navigationRef.current.isReady()) {
+          try {
+            console.log('🔄 EXECUTING FORCED navigation reset to Main app');
+            navigationRef.current.reset({
+              index: 0,
+              routes: [{ name: 'Main' }],
+            });
+            console.log('✅ FORCED navigation completed successfully');
+          } catch (error) {
+            console.error('❌ FORCED navigation reset failed:', error);
+          }
+        } else {
+          console.error('❌ Navigation ref not ready for forced navigation');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error checking completion transition:', error);
+    }
+  };
 
   // Removed periodic check - CompletionScreen now handles navigation directly
   // This prevents the loop issue and makes navigation more predictable
@@ -261,6 +316,8 @@ const AppNavigator = () => {
     console.log('🔄 Flow: main (completed user, authenticated)');
     return 'main';
   };
+
+
 
   // Recalculate flow on every render to respond to state changes
   const currentFlow = getInitialFlow();

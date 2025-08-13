@@ -23,15 +23,24 @@ const CompletionScreen = ({ navigation }) => {
 
   useEffect(() => {
     // Auto-save when component mounts
-    handleSaveAndComplete();
+    console.log('🔄 CompletionScreen mounted, starting auto-save...');
+    
+    // Use a slight delay to ensure component is fully mounted
+    const timer = setTimeout(() => {
+      handleSaveAndComplete();
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   const handleSaveAndComplete = async () => {
     
     if (saving) {
+      console.log('⚠️ CompletionScreen: Save already in progress, skipping');
       return; // Prevent double-save
     }
     
+    console.log('🔄 CompletionScreen: Starting handleSaveAndComplete');
     setSaving(true);
     
     try {
@@ -247,14 +256,22 @@ const CompletionScreen = ({ navigation }) => {
     // Clear onboarding data from memory
     clearOnboardingData();
     
-    console.log('Onboarding completed - navigating directly to Main app');
+    console.log('✅ Onboarding completed - data saved and flags set');
+    console.log('🔄 AppNavigator will handle navigation to Main app');
     
-    // Navigate directly to the Main app with a reset action
-    // This ensures we clear the onboarding stack and can't go back
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'Main' }],
-    });
+    // Don't navigate manually - let AppNavigator detect the completion
+    // The onboarding_state = 'completed' + isAuthenticated = true will trigger
+    // the navigation in AppNavigator automatically
+    
+    // Set a flag to indicate completion is finished
+    setTimeout(async () => {
+      try {
+        await AsyncStorage.setItem('onboarding_completion_finished', 'true');
+        console.log('📝 Onboarding completion process finished');
+      } catch (error) {
+        console.error('Failed to set completion finished flag:', error);
+      }
+    }, 100);
   };
 
   return (

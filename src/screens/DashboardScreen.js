@@ -27,6 +27,8 @@ const DashboardScreen = ({ navigation }) => {
 
 
 
+
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -45,12 +47,14 @@ const DashboardScreen = ({ navigation }) => {
           </Text>
         </View>
 
-        <TouchableOpacity 
-          style={styles.startButton}
-          onPress={navigateToSessionSetup}
-        >
-          <Text style={styles.startButtonText}>Start Session</Text>
-        </TouchableOpacity>
+                      <TouchableOpacity 
+                style={styles.startButton}
+                onPress={navigateToSessionSetup}
+              >
+                <Text style={styles.startButtonText}>Start Session</Text>
+              </TouchableOpacity>
+              
+
 
         <View style={styles.infoSection}>
           <Text style={styles.infoText}>
