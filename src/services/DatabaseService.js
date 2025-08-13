@@ -70,6 +70,53 @@ class DatabaseService {
       );
     `;
 
+    const createCalibrationSessionsTable = `
+      CREATE TABLE IF NOT EXISTS calibration_sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        device_id TEXT NOT NULL,
+        start_time INTEGER NOT NULL,
+        end_time INTEGER,
+        calibration_value INTEGER CHECK (calibration_value >= 2 AND calibration_value <= 10),
+        final_spo2 INTEGER,
+        final_heart_rate INTEGER,
+        status TEXT NOT NULL DEFAULT 'active',
+        terminated_reason TEXT,
+        total_duration_seconds INTEGER,
+        levels_completed INTEGER DEFAULT 0,
+        avg_spo2 REAL,
+        min_spo2 INTEGER,
+        max_spo2 INTEGER,
+        avg_heart_rate REAL,
+        min_heart_rate INTEGER,
+        max_heart_rate INTEGER,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        synced_at INTEGER
+      );
+    `;
+
+    const createCalibrationReadingsTable = `
+      CREATE TABLE IF NOT EXISTS calibration_readings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        calibration_session_id TEXT NOT NULL,
+        intensity_level INTEGER NOT NULL CHECK (intensity_level >= 2 AND intensity_level <= 10),
+        minute_number INTEGER NOT NULL,
+        start_time INTEGER NOT NULL,
+        end_time INTEGER,
+        confirmation_time INTEGER,
+        duration_seconds INTEGER,
+        final_spo2 INTEGER,
+        final_heart_rate INTEGER,
+        avg_spo2 REAL,
+        min_spo2 INTEGER,
+        avg_heart_rate REAL,
+        completed BOOLEAN DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        FOREIGN KEY (calibration_session_id) REFERENCES calibration_sessions (id)
+      );
+    `;
+
     const createReadingsTable = `
       CREATE TABLE IF NOT EXISTS readings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -140,8 +187,18 @@ class DatabaseService {
     await this.db.executeSql(createReadingsTable);
     await this.db.executeSql(createSessionSurveysTable);
     await this.db.executeSql(createIntraSessionResponsesTable);
+    await this.db.executeSql(createCalibrationSessionsTable);
+    await this.db.executeSql(createCalibrationReadingsTable);
     await this.db.executeSql(createIndexes);
     await this.db.executeSql(createSurveyIndexes);
+    
+    // Create indexes for calibration tables
+    await this.db.executeSql(`
+      CREATE INDEX IF NOT EXISTS idx_calibration_sessions_user_id ON calibration_sessions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_calibration_sessions_device_id ON calibration_sessions(device_id);
+      CREATE INDEX IF NOT EXISTS idx_calibration_sessions_status ON calibration_sessions(status);
+      CREATE INDEX IF NOT EXISTS idx_calibration_readings_session ON calibration_readings(calibration_session_id);
+    `);
     
     // Add new columns one by one (will silently fail if columns already exist, which is fine)
     try {
@@ -664,6 +721,206 @@ class DatabaseService {
       readingCount: readingResult.rows.item(0).count,
       estimatedSizeMB: Math.round((readingResult.rows.item(0).count * 100) / 1024 / 1024 * 100) / 100
     };
+  }
+
+  // ========================================
+  // CALIBRATION SESSION MANAGEMENT
+  // ========================================
+
+  async createCalibrationSession(sessionId, userId = null, deviceId = 'unknown') {
+    try {
+      // Check if database is initialized
+      if (!this.db) {
+        throw new Error('Database not initialized - db object is null');
+      }
+      
+      const query = `
+        INSERT INTO calibration_sessions (id, user_id, device_id, start_time, status)
+        VALUES (?, ?, ?, ?, 'active')
+      `;
+      const startTime = Date.now();
+      const params = [sessionId, userId, deviceId, startTime];
+      
+      log.info(`Executing calibration session creation with params:`, params);
+      
+      const result = await this.db.executeSql(query, params);
+      log.info(`Calibration session created successfully: ${sessionId}`, result);
+      return sessionId;
+    } catch (error) {
+      log.error(`Failed to create calibration session in database:`, {
+        sessionId,
+        userId,
+        deviceId,
+        errorMessage: error.message,
+        errorStack: error.stack,
+        errorName: error.name,
+        errorCode: error.code,
+        fullError: JSON.stringify(error)
+      });
+      throw error;
+    }
+  }
+
+  async saveCalibrationReading(calibrationSessionId, readingData) {
+    const query = `
+      INSERT INTO calibration_readings (
+        calibration_session_id, intensity_level, minute_number, 
+        start_time, end_time, confirmation_time, duration_seconds,
+        final_spo2, final_heart_rate, avg_spo2, min_spo2, avg_heart_rate, completed
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    await this.db.executeSql(query, [
+      calibrationSessionId,
+      readingData.intensityLevel,
+      readingData.minuteNumber,
+      readingData.startTime,
+      readingData.endTime || null,
+      readingData.confirmationTime || null,
+      readingData.durationSeconds || null,
+      readingData.finalSpO2 || null,
+      readingData.finalHeartRate || null,
+      readingData.avgSpO2 || null,
+      readingData.minSpO2 || null,
+      readingData.avgHeartRate || null,
+      readingData.completed ? 1 : 0
+    ]);
+    
+    log.info(`Calibration reading saved for level ${readingData.intensityLevel}`);
+  }
+
+  async endCalibrationSession(sessionId, calibrationValue, terminatedReason) {
+    const endTime = Date.now();
+    
+    try {
+      // Get session start time for duration calculation
+      const sessionQuery = 'SELECT start_time FROM calibration_sessions WHERE id = ?';
+      const [sessionResult] = await this.db.executeSql(sessionQuery, [sessionId]);
+      const startTime = sessionResult.rows.item(0).start_time;
+      const totalDuration = Math.floor((endTime - startTime) / 1000);
+      
+      // Get statistics from readings
+      const statsQuery = `
+        SELECT 
+          COUNT(*) as levels_completed,
+          AVG(final_spo2) as avg_spo2,
+          MIN(final_spo2) as min_spo2,
+          MAX(final_spo2) as max_spo2,
+          AVG(final_heart_rate) as avg_heart_rate,
+          MIN(final_heart_rate) as min_heart_rate,
+          MAX(final_heart_rate) as max_heart_rate,
+          MAX(final_spo2) as final_spo2,
+          MAX(final_heart_rate) as final_heart_rate
+        FROM calibration_readings
+        WHERE calibration_session_id = ? AND completed = 1
+      `;
+      
+      const [statsResult] = await this.db.executeSql(statsQuery, [sessionId]);
+      const stats = statsResult.rows.item(0);
+      
+      // Update session with final data
+      const updateQuery = `
+        UPDATE calibration_sessions 
+        SET end_time = ?, 
+            status = 'completed',
+            calibration_value = ?,
+            terminated_reason = ?,
+            total_duration_seconds = ?,
+            levels_completed = ?,
+            avg_spo2 = ?, min_spo2 = ?, max_spo2 = ?,
+            avg_heart_rate = ?, min_heart_rate = ?, max_heart_rate = ?,
+            final_spo2 = ?, final_heart_rate = ?,
+            updated_at = ?
+        WHERE id = ?
+      `;
+      
+      await this.db.executeSql(updateQuery, [
+        endTime,
+        calibrationValue,
+        terminatedReason,
+        totalDuration,
+        stats.levels_completed || 0,
+        stats.avg_spo2,
+        stats.min_spo2,
+        stats.max_spo2,
+        stats.avg_heart_rate,
+        stats.min_heart_rate,
+        stats.max_heart_rate,
+        stats.final_spo2,
+        stats.final_heart_rate,
+        Date.now(),
+        sessionId
+      ]);
+      
+      log.info(`Calibration session ended: ${sessionId}, value: ${calibrationValue}, reason: ${terminatedReason}`);
+      return { calibrationValue, totalDuration, stats };
+    } catch (error) {
+      log.error(`Failed to end calibration session ${sessionId}:`, error);
+      throw error;
+    }
+  }
+
+  async getLatestCalibrationValue(userId) {
+    const query = `
+      SELECT calibration_value, end_time 
+      FROM calibration_sessions 
+      WHERE user_id = ? AND status = 'completed' AND calibration_value IS NOT NULL
+      ORDER BY end_time DESC 
+      LIMIT 1
+    `;
+    
+    const [result] = await this.db.executeSql(query, [userId]);
+    if (result.rows.length > 0) {
+      const row = result.rows.item(0);
+      return {
+        calibrationValue: row.calibration_value,
+        calibrationDate: new Date(row.end_time)
+      };
+    }
+    return null;
+  }
+
+  async updateUserCalibrationValue(userId, calibrationValue) {
+    // This would typically update a user profile table
+    // For now, we'll just log it since user profiles might be in Supabase
+    log.info(`User ${userId} calibration value updated to: ${calibrationValue}`);
+    // You might want to store this in a local settings/preferences table
+  }
+
+  async getCalibrationHistory(userId, limit = 10) {
+    const query = `
+      SELECT * FROM calibration_sessions 
+      WHERE user_id = ? 
+      ORDER BY start_time DESC 
+      LIMIT ?
+    `;
+    
+    const [result] = await this.db.executeSql(query, [userId, limit]);
+    const sessions = [];
+    
+    for (let i = 0; i < result.rows.length; i++) {
+      sessions.push(result.rows.item(i));
+    }
+    
+    return sessions;
+  }
+
+  async getCalibrationReadings(calibrationSessionId) {
+    const query = `
+      SELECT * FROM calibration_readings 
+      WHERE calibration_session_id = ? 
+      ORDER BY minute_number ASC
+    `;
+    
+    const [result] = await this.db.executeSql(query, [calibrationSessionId]);
+    const readings = [];
+    
+    for (let i = 0; i < result.rows.length; i++) {
+      readings.push(result.rows.item(i));
+    }
+    
+    return readings;
   }
 
   // Hypoxia Level Analytics

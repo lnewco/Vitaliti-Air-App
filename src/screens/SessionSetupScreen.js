@@ -7,6 +7,7 @@ import OptimizedConnectionManager from '../components/OptimizedConnectionManager
 import SurveyScaleInput from '../components/SurveyScaleInput';
 import SupabaseService from '../services/SupabaseService';
 import DatabaseService from '../services/DatabaseService';
+import CalibrationService from '../services/CalibrationService';
 import HRV_CONFIG from '../config/hrvConfig';
 import { useAuth } from '../auth/AuthContext';
 import BluetoothService from '../services/BluetoothService';
@@ -83,9 +84,12 @@ const getHRVStatusColor = (status) => {
   }
 };
 
-const SessionSetupScreen = ({ navigation }) => {
+const SessionSetupScreen = ({ navigation, route }) => {
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedHypoxiaLevel, setSelectedHypoxiaLevel] = useState(16);
+  const [calibrationValue, setCalibrationValue] = useState(null);
+  const [hasCalibration, setHasCalibration] = useState(false);
   const [protocolConfig, setProtocolConfig] = useState({
     totalCycles: 5,
     hypoxicDuration: 5, // minutes
@@ -102,6 +106,35 @@ const SessionSetupScreen = ({ navigation }) => {
     isHRConnected, 
     isAnyDeviceConnected 
   } = useBluetoothConnection();
+
+  // Load calibration value on mount
+  useEffect(() => {
+    const loadCalibrationValue = async () => {
+      try {
+        // Check if calibration value was passed from CalibrationComplete screen
+        if (route.params?.defaultHypoxiaLevel) {
+          setSelectedHypoxiaLevel(route.params.defaultHypoxiaLevel);
+          setCalibrationValue(route.params.defaultHypoxiaLevel);
+          setHasCalibration(true);
+          return;
+        }
+
+        // Otherwise, load from database
+        if (user?.id) {
+          const calibrationData = await CalibrationService.getLatestCalibrationValue(user.id);
+          if (calibrationData?.calibrationValue) {
+            setSelectedHypoxiaLevel(calibrationData.calibrationValue);
+            setCalibrationValue(calibrationData.calibrationValue);
+            setHasCalibration(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading calibration value:', error);
+      }
+    };
+
+    loadCalibrationValue();
+  }, [user, route.params]);
 
   // Auto-regress to step 1 if no devices are connected
   useEffect(() => {
@@ -378,6 +411,40 @@ const SessionSetupScreen = ({ navigation }) => {
             <View style={styles.sliderLabels}>
               <Text style={styles.sliderLabelText}>1 min</Text>
               <Text style={styles.sliderLabelText}>5 min</Text>
+            </View>
+          </View>
+
+          {/* Hypoxia Intensity Level */}
+          <View style={styles.protocolCard}>
+            <View style={styles.protocolHeaderRow}>
+              <Text style={styles.protocolLabel}>Hypoxia Level: {selectedHypoxiaLevel}%</Text>
+              {hasCalibration && (
+                <View style={styles.calibrationBadge}>
+                  <Text style={styles.calibrationBadgeText}>Calibrated: {calibrationValue}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.protocolDescription}>
+              {hasCalibration 
+                ? `Using your calibrated value of ${calibrationValue}. Adjust if needed.`
+                : 'Simulated altitude intensity (lower = more intense)'}
+            </Text>
+            <Slider
+              containerStyle={styles.slider}
+              value={[selectedHypoxiaLevel]}
+              onValueChange={(values) => setSelectedHypoxiaLevel(Math.round(values[0]))}
+              minimumValue={10}
+              maximumValue={21}
+              step={1}
+              minimumTrackTintColor="#DC2626"
+              maximumTrackTintColor="#E0E0E0"
+              thumbTintColor="#991B1B"
+              trackStyle={styles.sliderTrack}
+              thumbStyle={styles.sliderThumb}
+            />
+            <View style={styles.sliderLabels}>
+              <Text style={styles.sliderLabelText}>10% (High)</Text>
+              <Text style={styles.sliderLabelText}>21% (Low)</Text>
             </View>
           </View>
 
@@ -845,6 +912,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  protocolHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  calibrationBadge: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  calibrationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   protocolLabel: {
     fontSize: 18,

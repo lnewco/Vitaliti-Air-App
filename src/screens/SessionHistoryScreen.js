@@ -16,26 +16,39 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import DatabaseService from '../services/DatabaseService';
+import CalibrationService from '../services/CalibrationService';
+import { useAuth } from '../auth/AuthContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 const CHART_WIDTH = screenWidth - 60; // Account for container padding
 
 const SessionHistoryScreen = ({ route, navigation }) => {
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || 'training');
   const [sessions, setSessions] = useState([]);
+  const [calibrationSessions, setCalibrationSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState(null);
   const [sessionData, setSessionData] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
-    loadSessions();
-  }, []);
+    if (activeTab === 'training') {
+      loadSessions();
+    } else {
+      loadCalibrationSessions();
+    }
+  }, [activeTab]);
 
   // Refresh sessions when screen comes into focus (e.g., after ending a session)
   useFocusEffect(
     React.useCallback(() => {
-      loadSessions();
-    }, [])
+      if (activeTab === 'training') {
+        loadSessions();
+      } else {
+        loadCalibrationSessions();
+      }
+    }, [activeTab])
   );
 
   // Check if we should auto-show a session modal (from post-session survey)
@@ -142,8 +155,60 @@ const SessionHistoryScreen = ({ route, navigation }) => {
   };
 
 
-
-
+  const loadCalibrationSessions = async () => {
+    try {
+      setLoading(true);
+      
+      // Get calibration sessions from local database
+      let localCalibrations = [];
+      if (user?.id) {
+        localCalibrations = await CalibrationService.getCalibrationHistory(user.id, 20);
+      } else {
+        localCalibrations = await DatabaseService.getCalibrationHistory(null, 20);
+      }
+      
+      // Get calibration sessions from Supabase as well
+      let supabaseCalibrations = [];
+      try {
+        const SupabaseService = require('../services/SupabaseService').default;
+        if (user?.id) {
+          supabaseCalibrations = await SupabaseService.getCalibrationHistory(user.id, 20);
+        }
+      } catch (error) {
+        console.warn('Could not load Supabase calibration sessions:', error);
+      }
+      
+      // Merge and deduplicate calibration sessions
+      const calibrationMap = new Map();
+      
+      // Add local calibrations first
+      localCalibrations.forEach(session => {
+        calibrationMap.set(session.id, { ...session, source: 'local' });
+      });
+      
+      // Add Supabase calibrations that aren't already in local
+      supabaseCalibrations.forEach(session => {
+        if (!calibrationMap.has(session.id)) {
+          calibrationMap.set(session.id, { ...session, source: 'supabase' });
+        }
+      });
+      
+      // Convert to array and sort by start time
+      const allCalibrations = Array.from(calibrationMap.values())
+        .sort((a, b) => {
+          const timeA = typeof a.start_time === 'string' ? new Date(a.start_time).getTime() : a.start_time;
+          const timeB = typeof b.start_time === 'string' ? new Date(b.start_time).getTime() : b.start_time;
+          return timeB - timeA; // Most recent first
+        });
+      
+      setCalibrationSessions(allCalibrations);
+    } catch (error) {
+      console.error('Failed to load calibration sessions:', error);
+      Alert.alert('Error', 'Failed to load calibration history');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadSessionDetails = async (sessionId) => {
     try {
@@ -636,6 +701,65 @@ const SessionHistoryScreen = ({ route, navigation }) => {
     };
   };
 
+  const renderCalibrationItem = ({ item }) => {
+    const getTerminationReason = (reason) => {
+      switch (reason) {
+        case 'spo2_threshold': return 'SpO2 Threshold';
+        case 'max_intensity': return 'Max Level';
+        case 'user_ended': return 'User Ended';
+        case 'device_disconnected': return 'Disconnected';
+        default: return reason || 'Completed';
+      }
+    };
+
+    return (
+      <TouchableOpacity
+        style={styles.sessionItem}
+        onPress={() => {
+          Alert.alert(
+            'Calibration Details',
+            `Calibration Value: ${item.calibration_value || 'N/A'}\nDate: ${formatDate(item.start_time)}\nDuration: ${item.total_duration_seconds ? `${Math.floor(item.total_duration_seconds / 60)}m` : 'N/A'}\nLevels Completed: ${item.levels_completed || 0}\nFinal SpO2: ${item.final_spo2 || 'N/A'}%\nReason: ${getTerminationReason(item.terminated_reason)}`,
+            [{ text: 'OK' }]
+          );
+        }}
+      >
+        <View style={styles.sessionHeader}>
+          <Text style={styles.sessionDate}>
+            {formatDate(item.start_time)}
+          </Text>
+          <View style={[styles.calibrationBadge, item.calibration_value && styles.calibrationBadgeSuccess]}>
+            <Text style={styles.calibrationBadgeText}>
+              {item.calibration_value ? `Value: ${item.calibration_value}` : 'Incomplete'}
+            </Text>
+          </View>
+        </View>
+        
+        <View style={styles.sessionStats}>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Duration</Text>
+            <Text style={styles.statValue}>
+              {item.total_duration_seconds 
+                ? `${Math.floor(item.total_duration_seconds / 60)}m`
+                : 'N/A'}
+            </Text>
+          </View>
+          
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Levels</Text>
+            <Text style={styles.statValue}>{item.levels_completed || 0}</Text>
+          </View>
+          
+          {item.final_spo2 && (
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Final SpO2</Text>
+              <Text style={styles.statValue}>{item.final_spo2}%</Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   const renderSessionModal = () => {
     const spo2ChartData = sessionData ? prepareChartData(sessionData.readings, 'spo2', sessionData.start_time) : null;
     const hrChartData = sessionData ? prepareChartData(sessionData.readings, 'heart_rate', sessionData.start_time) : null;
@@ -901,27 +1025,77 @@ const SessionHistoryScreen = ({ route, navigation }) => {
     );
   }
 
-  if (sessions.length === 0) {
+  const currentData = activeTab === 'training' ? sessions : calibrationSessions;
+  
+  if (currentData.length === 0 && !loading) {
     return (
-      <SafeAreaView style={styles.centerContainer}>
-        <Text style={styles.emptyTitle}>No Training Sessions</Text>
-        <Text style={styles.emptySubtitle}>
-          Start your first training session from the dashboard
-        </Text>
+      <SafeAreaView style={styles.container}>
+        {/* Tab Switcher */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'training' && styles.activeTab]}
+            onPress={() => setActiveTab('training')}
+          >
+            <Text style={[styles.tabText, activeTab === 'training' && styles.activeTabText]}>
+              Training Sessions
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'calibration' && styles.activeTab]}
+            onPress={() => setActiveTab('calibration')}
+          >
+            <Text style={[styles.tabText, activeTab === 'calibration' && styles.activeTabText]}>
+              Calibration History
+            </Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.centerContainer}>
+          <Text style={styles.emptyTitle}>
+            {activeTab === 'training' ? 'No Training Sessions' : 'No Calibration Sessions'}
+          </Text>
+          <Text style={styles.emptySubtitle}>
+            {activeTab === 'training' 
+              ? 'Start your first training session from the dashboard'
+              : 'Complete a calibration to determine your optimal training intensity'}
+          </Text>
+        </View>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Tab Switcher */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'training' && styles.activeTab]}
+          onPress={() => setActiveTab('training')}
+        >
+          <Text style={[styles.tabText, activeTab === 'training' && styles.activeTabText]}>
+            Training Sessions
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'calibration' && styles.activeTab]}
+          onPress={() => setActiveTab('calibration')}
+        >
+          <Text style={[styles.tabText, activeTab === 'calibration' && styles.activeTabText]}>
+            Calibration History
+          </Text>
+        </TouchableOpacity>
+      </View>
       
       <FlatList
-        data={sessions}
-        renderItem={renderSessionItem}
+        data={currentData}
+        renderItem={activeTab === 'training' ? renderSessionItem : renderCalibrationItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={loadSessions} />
+          <RefreshControl 
+            refreshing={loading} 
+            onRefresh={activeTab === 'training' ? loadSessions : loadCalibrationSessions} 
+          />
         }
       />
       {renderSessionModal()}
@@ -934,7 +1108,46 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginHorizontal: 4,
+    borderRadius: 8,
+  },
+  activeTab: {
+    backgroundColor: '#3B82F6',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  activeTabText: {
+    color: '#FFFFFF',
+  },
+  calibrationBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#FEE2E2',
+  },
+  calibrationBadgeSuccess: {
+    backgroundColor: '#D1FAE5',
+  },
+  calibrationBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#065F46',
+  },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',

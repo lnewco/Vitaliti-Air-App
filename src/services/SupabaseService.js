@@ -1279,6 +1279,176 @@ class SupabaseService {
       return { success: false, error: error.message };
     }
   }
+
+  // ========================================
+  // CALIBRATION SESSION SYNC METHODS
+  // ========================================
+
+  async syncCalibrationSession(calibrationData) {
+    try {
+      if (!this.isOnline) {
+        this.queueForSync('syncCalibrationSession', calibrationData);
+        return { success: false, queued: true };
+      }
+
+      const currentUser = authService.getCurrentUser();
+      const userId = currentUser?.id || null;
+
+      // Create calibration session in Supabase
+      const { data, error } = await supabase
+        .from('calibration_sessions')
+        .insert({
+          id: calibrationData.sessionId,
+          user_id: userId,
+          device_id: this.deviceId,
+          local_session_id: calibrationData.sessionId,
+          start_time: new Date(calibrationData.startTime).toISOString(),
+          end_time: calibrationData.endTime ? new Date(calibrationData.endTime).toISOString() : null,
+          calibration_value: calibrationData.calibrationValue,
+          final_spo2: calibrationData.finalSpo2,
+          final_heart_rate: calibrationData.finalHeartRate,
+          status: calibrationData.status || 'completed',
+          terminated_reason: calibrationData.terminatedReason,
+          total_duration_seconds: calibrationData.totalDuration,
+          levels_completed: calibrationData.levelsCompleted,
+          avg_spo2: calibrationData.avgSpo2,
+          min_spo2: calibrationData.minSpo2,
+          max_spo2: calibrationData.maxSpo2,
+          avg_heart_rate: calibrationData.avgHeartRate,
+          min_heart_rate: calibrationData.minHeartRate,
+          max_heart_rate: calibrationData.maxHeartRate,
+          synced_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        log.error('❌ Failed to sync calibration session:', error);
+        this.queueForSync('syncCalibrationSession', calibrationData);
+        return { success: false, error: error.message };
+      }
+
+      log.info('Calibration session synced to Supabase:', data.id);
+      return { success: true, data };
+    } catch (error) {
+      log.error('❌ Error syncing calibration session:', error);
+      this.queueForSync('syncCalibrationSession', calibrationData);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async syncCalibrationReadings(sessionId, readings) {
+    try {
+      if (!this.isOnline) {
+        this.queueForSync('syncCalibrationReadings', { sessionId, readings });
+        return { success: false, queued: true };
+      }
+
+      // Transform readings for Supabase
+      const supabaseReadings = readings.map(reading => ({
+        calibration_session_id: sessionId,
+        intensity_level: reading.intensityLevel,
+        minute_number: reading.minuteNumber,
+        start_time: new Date(reading.startTime).toISOString(),
+        end_time: reading.endTime ? new Date(reading.endTime).toISOString() : null,
+        confirmation_time: reading.confirmationTime ? new Date(reading.confirmationTime).toISOString() : null,
+        duration_seconds: reading.durationSeconds,
+        final_spo2: reading.finalSpO2,
+        final_heart_rate: reading.finalHeartRate,
+        avg_spo2: reading.avgSpO2,
+        min_spo2: reading.minSpO2,
+        avg_heart_rate: reading.avgHeartRate,
+        completed: reading.completed
+      }));
+
+      const { data, error } = await supabase
+        .from('calibration_readings')
+        .insert(supabaseReadings)
+        .select();
+
+      if (error) {
+        log.error('❌ Failed to sync calibration readings:', error);
+        this.queueForSync('syncCalibrationReadings', { sessionId, readings });
+        return { success: false, error: error.message };
+      }
+
+      log.info(`Synced ${data.length} calibration readings for session ${sessionId}`);
+      return { success: true, data };
+    } catch (error) {
+      log.error('❌ Error syncing calibration readings:', error);
+      this.queueForSync('syncCalibrationReadings', { sessionId, readings });
+      return { success: false, error: error.message };
+    }
+  }
+
+  async syncCalibrationData(calibrationSessionData, calibrationReadings) {
+    try {
+      // Sync the session first
+      const sessionResult = await this.syncCalibrationSession(calibrationSessionData);
+      
+      if (sessionResult.success && calibrationReadings && calibrationReadings.length > 0) {
+        // Then sync the readings
+        await this.syncCalibrationReadings(calibrationSessionData.sessionId, calibrationReadings);
+      }
+
+      return sessionResult;
+    } catch (error) {
+      log.error('❌ Error syncing calibration data:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getCalibrationHistory(userId, limit = 10) {
+    try {
+      const { data, error } = await supabase
+        .from('calibration_sessions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('start_time', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        log.error('❌ Failed to fetch calibration history:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      log.error('❌ Error fetching calibration history:', error);
+      return [];
+    }
+  }
+
+  async getLatestCalibrationValue(userId) {
+    try {
+      const { data, error } = await supabase
+        .from('calibration_sessions')
+        .select('calibration_value, end_time')
+        .eq('user_id', userId)
+        .eq('status', 'completed')
+        .not('calibration_value', 'is', null)
+        .order('end_time', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) {
+        log.error('❌ Failed to fetch latest calibration value:', error);
+        return null;
+      }
+
+      if (data) {
+        return {
+          calibrationValue: data.calibration_value,
+          calibrationDate: new Date(data.end_time)
+        };
+      }
+
+      return null;
+    } catch (error) {
+      log.error('❌ Error fetching latest calibration value:', error);
+      return null;
+    }
+  }
 }
 
 export default new SupabaseService(); 

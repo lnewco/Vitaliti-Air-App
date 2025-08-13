@@ -12,6 +12,9 @@ import HRVCalibrationScreen from './HRVCalibrationScreen';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import ProfileScreen from './ProfileScreen';
+import CalibrationSetupScreen from './CalibrationSetupScreen';
+import CalibrationScreen from './CalibrationScreen';
+import CalibrationCompleteScreen from './CalibrationCompleteScreen';
 import SessionRecoveryManager from '../components/SessionRecoveryManager';
 
 
@@ -95,6 +98,33 @@ const MainStack = ({ onNavigateToSession }) => {
         component={SessionSetupScreen}
         options={{
           presentation: 'card',
+        }}
+      />
+
+      <Stack.Screen 
+        name="CalibrationSetup" 
+        component={CalibrationSetupScreen}
+        options={{
+          presentation: 'card',
+          title: 'Calibration Setup',
+        }}
+      />
+
+      <Stack.Screen 
+        name="Calibration" 
+        component={CalibrationScreen}
+        options={{
+          presentation: 'card',
+          title: 'Calibration',
+        }}
+      />
+
+      <Stack.Screen 
+        name="CalibrationComplete" 
+        component={CalibrationCompleteScreen}
+        options={{
+          presentation: 'card',
+          title: 'Calibration Complete',
         }}
       />
 

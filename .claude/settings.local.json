@@ -27,8 +27,13 @@
       "Bash(npm start)",
       "Bash(npx react-native bundle:*)",
       "Bash(npx expo export:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(git pull:*)"
     ],
     "deny": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }
