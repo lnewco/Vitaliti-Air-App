@@ -807,9 +807,19 @@ class BluetoothService {
         
         for (let i = 0; i < numRRIntervals; i++) {
           if (offset + 2 <= buffer.length) {
-            // RR intervals are in 1/1024 second units
+            // Get raw value
             const rrRaw = buffer.readUInt16LE(offset);
-            const rrMs = (rrRaw / 1024) * 1000; // Convert to milliseconds
+            
+            // Standard BLE spec: RR intervals are in 1/1024 second units
+            // But some devices (possibly WHOOP) might send milliseconds directly
+            let rrMs = (rrRaw / 1024) * 1000; // Standard conversion
+            
+            // Detection: if all intervals would be > 300ms when interpreted as raw ms,
+            // but < 30ms with standard conversion, device likely sends ms directly
+            if (rrMs < 30 && rrRaw > 300 && rrRaw < 2000) {
+              rrMs = rrRaw; // Use raw value as milliseconds
+            }
+            
             rrIntervals.push(rrMs);
             offset += 2;
           }
@@ -969,17 +979,21 @@ class BluetoothService {
     }
 
     try {
-      log.info(`🧠 ${type} HRV calculation: ${intervals.length} intervals`);
+      // Remove outliers before calculation
+      const cleanedIntervals = HRV_HELPERS.removeOutliers(intervals);
+      
+      if (cleanedIntervals.length < 2) {
+        return null;
+      }
       
       // Calculate RMSSD (Root Mean Square of Successive Differences)
       const successiveDifferences = [];
-      for (let i = 1; i < intervals.length; i++) {
-        const diff = intervals[i] - intervals[i - 1];
+      for (let i = 1; i < cleanedIntervals.length; i++) {
+        const diff = cleanedIntervals[i] - cleanedIntervals[i - 1];
         successiveDifferences.push(diff * diff);
       }
 
       if (successiveDifferences.length === 0) {
-        log.info(`${type} HRV: No successive differences calculated`);
         return null;
       }
 
@@ -987,16 +1001,19 @@ class BluetoothService {
       const rmssd = Math.sqrt(meanSquaredDiff);
 
       // Get data quality using our new helper
-      const dataQuality = HRV_HELPERS.getDataQuality(intervals.length);
+      const dataQuality = HRV_HELPERS.getDataQuality(cleanedIntervals.length);
+      const classification = HRV_HELPERS.getHRVClassification(rmssd);
 
       const result = {
         rmssd: Math.round(rmssd * 10) / 10, // Round to 1 decimal place
-        intervalCount: intervals.length,
+        intervalCount: cleanedIntervals.length,
+        originalIntervalCount: intervals.length,
         dataQuality,
-        timestamp: Date.now()
+        classification,
+        timestamp: Date.now(),
+        deviceSource: this.hrDevice?.name || 'Unknown HR Device'
       };
 
-      log.info(`${type} HRV calculated: RMSSD=${result.rmssd}ms (${result.dataQuality} quality)`);
       return result;
     } catch (error) {
       log.error(`❌ Error calculating ${type} HRV:`, error);
