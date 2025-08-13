@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import OnboardingProgressIndicator from './OnboardingProgressIndicator';
 import { useOnboarding } from '../context/OnboardingContext';
 import { useAuth } from '../auth/AuthContext';
@@ -228,19 +229,52 @@ const PhoneVerificationScreen = ({ route, navigation }) => {
       setErrors({});
       
       if (isOnboarding) {
-        console.log('📱 OTP verification successful in onboarding, navigating to CompletionScreen');
+        console.log('📱 OTP verification successful in onboarding - treating like returning user');
         
-        // Navigate to completion screen in onboarding flow
-        navigation.navigate('Completion');
-        
-        // Show success message for onboarding
-        setTimeout(() => {
-          Alert.alert(
-            'Account Created Successfully!',
-            'Welcome to Vitaliti Air! Your account has been created and verified.',
-            [{ text: 'Continue', style: 'default' }]
-          );
-        }, 100);
+        try {
+          // Complete onboarding flags immediately
+          await AsyncStorage.setItem('onboarding_state', 'completed');
+          await AsyncStorage.setItem('hasCompletedOnboarding', 'true');
+          
+          console.log('✅ Onboarding completed - forcing immediate AppNavigator refresh');
+          
+          // FORCE AppNavigator to re-check by navigating up to root and back to Main
+          setTimeout(() => {
+            try {
+              const rootNavigation = navigation.getParent();
+              if (rootNavigation) {
+                console.log('🔄 Forcing AppNavigator refresh by resetting to Main');
+                rootNavigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Main' }],
+                });
+                
+                // Show success message after navigation
+                setTimeout(() => {
+                  Alert.alert(
+                    'Account Created Successfully!',
+                    'Welcome to Vitaliti Air! Your account has been created and verified.',
+                    [{ text: 'Continue', style: 'default' }]
+                  );
+                }, 500);
+                
+              } else {
+                console.log('❌ No parent navigation found - showing popup anyway');
+                Alert.alert(
+                  'Account Created Successfully!',
+                  'Welcome to Vitaliti Air! Your account has been created and verified.',
+                  [{ text: 'Continue', style: 'default' }]
+                );
+              }
+            } catch (error) {
+              console.error('❌ Navigation or popup failed:', error);
+            }
+          }, 200); // Small delay to ensure AsyncStorage is written
+          
+        } catch (error) {
+          console.error('❌ Failed to complete onboarding:', error);
+          Alert.alert('Error', 'Failed to complete setup. Please try again.');
+        }
       } else {
         console.log('📱 OTP verification successful in login flow, auth context will handle navigation');
         // For login flow, the auth context will handle navigation to Main app
