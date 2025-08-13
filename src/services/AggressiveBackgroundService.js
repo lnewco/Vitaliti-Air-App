@@ -26,6 +26,11 @@ const SESSION_STATE_KEY = '@aggressive_session_state';
 const HEARTBEAT_INTERVAL = 5000; // 5 seconds
 const AGGRESSIVE_PING_INTERVAL = 1000; // 1 second when critical
 
+import Constants from 'expo-constants';
+
+// This constant allows Bluetooth features disabled within Expo Go.
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
+
 export default class AggressiveBackgroundService {
   constructor() {
     this.isActive = false;
@@ -47,6 +52,8 @@ export default class AggressiveBackgroundService {
   async initialize() {
     console.log('🚀 Initializing Aggressive Background Service');
     
+    if (isExpoGo) return;
+
     try {
       // Register background tasks (this is what was failing before)
       console.log('📱 Registering background tasks...');
@@ -87,6 +94,8 @@ export default class AggressiveBackgroundService {
   }
 
   async registerBackgroundTasks() {
+    if (isExpoGo) return;
+
     try {
       // Define background fetch task
       console.log('📱 Defining background fetch task...');
