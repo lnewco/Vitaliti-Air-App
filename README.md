@@ -4,7 +4,7 @@ A React Native mobile application for Intermittent Hypoxia-Hyperoxia Training (I
 
 ## Overview
 
-Vitaliti Air is a smart training companion that guides users through IHHT sessions using real-time SpO2 and heart rate feedback from Bluetooth-enabled pulse oximeters. The app implements the BCI Protocol V1.4 for medical device communication and provides safety monitoring throughout training sessions.
+Vitaliti Air is a streamlined training companion that guides users through IHHT sessions using real-time SpO2 and pulse rate feedback from Bluetooth-enabled pulse oximeters. The app implements the BCI Protocol V1.4 for medical device communication and provides safety monitoring throughout training sessions with a simplified, focused user experience.
 
 ## Technology Stack
 
@@ -42,14 +42,25 @@ src/
 │   ├── AuthService.js         # Supabase auth integration
 │   └── screens/               # Login & OTP screens
 ├── components/                # Reusable UI components
+│   ├── base/                  # Design system components
+│   │   ├── Button.js          # Theme-aware button
+│   │   ├── Card.js            # Container component
+│   │   ├── Badge.js           # Status indicators
+│   │   ├── Typography.js      # Text components
+│   │   └── MetricDisplay.js   # Metric visualization
+│   ├── onboarding/            # Onboarding flow components
 │   ├── ErrorBoundary.js       # Error handling wrapper
 │   ├── HeartRateDisplay.js    # Heart rate visualization
 │   ├── OptimizedConnectionManager.js # Bluetooth connection UI
 │   ├── SafetyIndicator.js     # Safety status & alerts
-│   ├── SpO2Display.js         # SpO2 visualization
-│   └── StepIndicator.js       # Multi-step UI component
+│   └── SpO2Display.js         # SpO2 visualization
 ├── config/
 │   └── supabase.js           # Supabase client configuration
+├── theme/                    # Design system theme
+│   ├── colors/               # Color palette & themes
+│   ├── typography.js         # Typography scales
+│   ├── spacing.js            # Spacing system
+│   └── ThemeContext.js       # Theme provider
 ├── context/
 │   └── BluetoothContext.js   # Bluetooth state management
 ├── navigation/               # App navigation structure
@@ -60,7 +71,8 @@ src/
 │   ├── IHHTTrainingScreen.js # Live training session
 │   ├── MainAppContent.js     # Authenticated app shell
 │   ├── SessionHistoryScreen.js # Past sessions
-│   └── SessionSetupScreen.js # Pre-training setup
+│   ├── SimplifiedSessionSetup.js # Streamlined session setup
+│   └── PostSessionSurveyScreen.js # Post-session feedback
 ├── services/                 # Core business logic
 │   ├── BluetoothService.js   # BLE device communication
 │   ├── DatabaseService.js    # Local data persistence
@@ -68,6 +80,7 @@ src/
 │   └── SupabaseService.js    # Cloud data sync
 └── utils/                    # Utility functions
     ├── logger.js             # Centralized logging system
+    ├── sessionIdGenerator.js  # Session ID generation
     └── surveyValidation.js   # Survey form validation
 ```
 
@@ -138,9 +151,9 @@ const supabaseAnonKey = 'your-anon-key';
 
 **BCI Protocol V1.4 Support**
 - Connects to BCI-compatible pulse oximeters
-- Real-time SpO2 and heart rate monitoring
+- Real-time SpO2 and pulse rate monitoring
 - Automatic device discovery and pairing
-- Connection status management
+- Simplified connection management (pulse oximeter only)
 
 **Key UUIDs**:
 - Service: `49535343-FE7D-4AE5-8FA9-9FAFD205E455`
@@ -152,11 +165,11 @@ const supabaseAnonKey = 'your-anon-key';
 ### IHHT Training Sessions
 
 **Session Structure**
-- Configurable training protocols (3-7 cycles)
-- Default: 5 cycles with 5-minute hypoxic, 2-minute hyperoxic phases
-- Total session duration: Variable based on protocol
-- Adjustable hypoxia intensity (0-10 scale)
-- Protocol templates for different experience levels
+- Fixed protocol: 5 cycles
+- Phase durations: 7-minute hypoxic, 3-minute hyperoxic
+- Total session duration: ~50 minutes
+- Default altitude level: 6 (adjustable in code)
+- Simplified single-screen setup
 
 **Safety Features**
 - Continuous SpO2 monitoring
@@ -169,6 +182,7 @@ const supabaseAnonKey = 'your-anon-key';
 - Manual phase skipping
 - Emergency session termination
 - Real-time progress tracking
+- Post-session survey for feedback
 
 **Implementation**: `src/screens/IHHTTrainingScreen.js`, `src/services/EnhancedSessionManager.js`
 
@@ -196,9 +210,10 @@ Note: The deprecated `SessionManager.js` has been removed. All session managemen
 ### User Interface
 
 **Dashboard Screen**
-- Today/This Week session views
-- Quick access to new sessions
-- Session history overview
+- Simplified session overview
+- Quick access to start training
+- Recent session summary
+- Profile access
 
 **Training Screen**
 - Real-time biometric displays
@@ -230,7 +245,8 @@ For detailed information about the app's design system, theme implementation, an
 - **Components**: Functional components with hooks
 - **Naming**: camelCase for variables/functions, PascalCase for components
 - **Imports**: Relative imports from `/src`, absolute for packages
-- **Styling**: Use theme-aware base components and semantic tokens
+- **Styling**: Use theme-aware base components from design system
+- **Theming**: Access theme via `useAppTheme()` hook
 - **Error Handling**: Console logging with emoji prefixes (❌, ✅, 🎯, 📱)
 
 ### State Management
@@ -273,7 +289,7 @@ The database schema is managed through migrations located in `database/migration
 2. **002_auth_and_profiles.sql** - User authentication and profiles
 3. **003_onboarding_data.sql** - Onboarding flow data
 4. **004_surveys.sql** - Pre/post session surveys
-5. **005_protocol_config.sql** - IHHT protocol configuration
+5. **005_protocol_config.sql** - IHHT protocol configuration (deprecated - now hardcoded)
 6. **006_security_policies.sql** - Row Level Security policies
 
 Key tables include:
