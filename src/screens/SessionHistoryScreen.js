@@ -16,39 +16,30 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import DatabaseService from '../services/DatabaseService';
-import CalibrationService from '../services/CalibrationService';
 import { useAuth } from '../auth/AuthContext';
+import { useAppTheme } from '../theme';
 
 const { width: screenWidth } = Dimensions.get('window');
 const CHART_WIDTH = screenWidth - 60; // Account for container padding
 
 const SessionHistoryScreen = ({ route, navigation }) => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState(route?.params?.initialTab || 'training');
+  const { colors, theme } = useAppTheme();
   const [sessions, setSessions] = useState([]);
-  const [calibrationSessions, setCalibrationSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState(null);
   const [sessionData, setSessionData] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
-    if (activeTab === 'training') {
-      loadSessions();
-    } else {
-      loadCalibrationSessions();
-    }
-  }, [activeTab]);
+    loadSessions();
+  }, []);
 
   // Refresh sessions when screen comes into focus (e.g., after ending a session)
   useFocusEffect(
     React.useCallback(() => {
-      if (activeTab === 'training') {
-        loadSessions();
-      } else {
-        loadCalibrationSessions();
-      }
-    }, [activeTab])
+      loadSessions();
+    }, [])
   );
 
   // Check if we should auto-show a session modal (from post-session survey)
@@ -88,6 +79,11 @@ const SessionHistoryScreen = ({ route, navigation }) => {
   const loadSessions = async () => {
     try {
       setLoading(true);
+      
+      // Initialize database if not already initialized
+      if (!DatabaseService.db) {
+        await DatabaseService.init();
+      }
       
       // Get sessions from local database
       const localSessions = await DatabaseService.getAllSessions();
@@ -155,67 +151,17 @@ const SessionHistoryScreen = ({ route, navigation }) => {
   };
 
 
-  const loadCalibrationSessions = async () => {
-    try {
-      setLoading(true);
-      
-      // Get calibration sessions from local database
-      let localCalibrations = [];
-      if (user?.id) {
-        localCalibrations = await CalibrationService.getCalibrationHistory(user.id, 20);
-      } else {
-        localCalibrations = await DatabaseService.getCalibrationHistory(null, 20);
-      }
-      
-      // Get calibration sessions from Supabase as well
-      let supabaseCalibrations = [];
-      try {
-        const SupabaseService = require('../services/SupabaseService').default;
-        if (user?.id) {
-          supabaseCalibrations = await SupabaseService.getCalibrationHistory(user.id, 20);
-        }
-      } catch (error) {
-        console.warn('Could not load Supabase calibration sessions:', error);
-      }
-      
-      // Merge and deduplicate calibration sessions
-      const calibrationMap = new Map();
-      
-      // Add local calibrations first
-      localCalibrations.forEach(session => {
-        calibrationMap.set(session.id, { ...session, source: 'local' });
-      });
-      
-      // Add Supabase calibrations that aren't already in local
-      supabaseCalibrations.forEach(session => {
-        if (!calibrationMap.has(session.id)) {
-          calibrationMap.set(session.id, { ...session, source: 'supabase' });
-        }
-      });
-      
-      // Convert to array and sort by start time
-      const allCalibrations = Array.from(calibrationMap.values())
-        .sort((a, b) => {
-          const timeA = typeof a.start_time === 'string' ? new Date(a.start_time).getTime() : a.start_time;
-          const timeB = typeof b.start_time === 'string' ? new Date(b.start_time).getTime() : b.start_time;
-          return timeB - timeA; // Most recent first
-        });
-      
-      setCalibrationSessions(allCalibrations);
-    } catch (error) {
-      console.error('Failed to load calibration sessions:', error);
-      Alert.alert('Error', 'Failed to load calibration history');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const loadSessionDetails = async (sessionId) => {
     try {
       // Show modal immediately with loading state
       setSelectedSession(sessionId);
       setSessionData(null); // Clear previous data
       setModalVisible(true);
+      
+      // Initialize database if not already initialized
+      if (!DatabaseService.db) {
+        await DatabaseService.init();
+      }
       
       // Try to get data from local database first
       let sessionData = await DatabaseService.getSessionWithData(sessionId);
@@ -428,11 +374,6 @@ const SessionHistoryScreen = ({ route, navigation }) => {
           </Text>
         </View>
         
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Readings</Text>
-          <Text style={styles.statValue}>{item.total_readings || 0}</Text>
-        </View>
-        
         {item.default_hypoxia_level !== null && item.default_hypoxia_level !== undefined && (
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Hypoxia Level</Text>
@@ -440,19 +381,19 @@ const SessionHistoryScreen = ({ route, navigation }) => {
           </View>
         )}
         
-        {item.avg_spo2 && (
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Avg SpO2</Text>
-            <Text style={styles.statValue}>{Math.round(item.avg_spo2)}%</Text>
-          </View>
-        )}
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Avg SpO2</Text>
+          <Text style={styles.statValue}>
+            {item.avg_spo2 ? `${Math.round(item.avg_spo2)}%` : '-'}
+          </Text>
+        </View>
         
-        {item.avg_heart_rate && (
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Avg HR</Text>
-            <Text style={styles.statValue}>{Math.round(item.avg_heart_rate)}</Text>
-          </View>
-        )}
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Avg HR</Text>
+          <Text style={styles.statValue}>
+            {item.avg_heart_rate ? Math.round(item.avg_heart_rate) : '-'}
+          </Text>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -701,64 +642,6 @@ const SessionHistoryScreen = ({ route, navigation }) => {
     };
   };
 
-  const renderCalibrationItem = ({ item }) => {
-    const getTerminationReason = (reason) => {
-      switch (reason) {
-        case 'spo2_threshold': return 'SpO2 Threshold';
-        case 'max_intensity': return 'Max Level';
-        case 'user_ended': return 'User Ended';
-        case 'device_disconnected': return 'Disconnected';
-        default: return reason || 'Completed';
-      }
-    };
-
-    return (
-      <TouchableOpacity
-        style={styles.sessionItem}
-        onPress={() => {
-          Alert.alert(
-            'Calibration Details',
-            `Calibration Value: ${item.calibration_value || 'N/A'}\nDate: ${formatDate(item.start_time)}\nDuration: ${item.total_duration_seconds ? `${Math.floor(item.total_duration_seconds / 60)}m` : 'N/A'}\nLevels Completed: ${item.levels_completed || 0}\nFinal SpO2: ${item.final_spo2 || 'N/A'}%\nReason: ${getTerminationReason(item.terminated_reason)}`,
-            [{ text: 'OK' }]
-          );
-        }}
-      >
-        <View style={styles.sessionHeader}>
-          <Text style={styles.sessionDate}>
-            {formatDate(item.start_time)}
-          </Text>
-          <View style={[styles.calibrationBadge, item.calibration_value && styles.calibrationBadgeSuccess]}>
-            <Text style={styles.calibrationBadgeText}>
-              {item.calibration_value ? `Value: ${item.calibration_value}` : 'Incomplete'}
-            </Text>
-          </View>
-        </View>
-        
-        <View style={styles.sessionStats}>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Duration</Text>
-            <Text style={styles.statValue}>
-              {item.total_duration_seconds 
-                ? `${Math.floor(item.total_duration_seconds / 60)}m`
-                : 'N/A'}
-            </Text>
-          </View>
-          
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Levels</Text>
-            <Text style={styles.statValue}>{item.levels_completed || 0}</Text>
-          </View>
-          
-          {item.final_spo2 && (
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Final SpO2</Text>
-              <Text style={styles.statValue}>{item.final_spo2}%</Text>
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
 
   const renderSessionModal = () => {
     const spo2ChartData = sessionData ? prepareChartData(sessionData.readings, 'spo2', sessionData.start_time) : null;
@@ -844,12 +727,12 @@ const SessionHistoryScreen = ({ route, navigation }) => {
                 width={CHART_WIDTH}
                 height={220}
                 chartConfig={{
-                  backgroundColor: '#ffffff',
-                  backgroundGradientFrom: '#ffffff',
-                  backgroundGradientTo: '#ffffff',
+                  backgroundColor: colors.surface.card,
+                  backgroundGradientFrom: colors.surface.card,
+                  backgroundGradientTo: colors.surface.card,
                   decimalPlaces: 0,
                   color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`,
-                  labelColor: (opacity = 1) => `rgba(102, 102, 102, ${opacity})`,
+                  labelColor: (opacity = 1) => theme === 'dark' ? `rgba(200, 200, 200, ${opacity})` : `rgba(102, 102, 102, ${opacity})`,
                   style: {
                     borderRadius: 8
                   },
@@ -881,11 +764,11 @@ const SessionHistoryScreen = ({ route, navigation }) => {
               {/* Phase legend */}
               <View style={styles.phaseLegend}>
                 <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
+                  <View style={[styles.legendDot, { backgroundColor: colors.warning[500] }]} />
                   <Text style={styles.legendText}>Hypoxic</Text>
                 </View>
                 <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+                  <View style={[styles.legendDot, { backgroundColor: colors.success[500] }]} />
                   <Text style={styles.legendText}>Hyperoxic</Text>
                 </View>
               </View>
@@ -900,12 +783,12 @@ const SessionHistoryScreen = ({ route, navigation }) => {
                 width={CHART_WIDTH}
                 height={220}
                 chartConfig={{
-                  backgroundColor: '#ffffff',
-                  backgroundGradientFrom: '#ffffff',
-                  backgroundGradientTo: '#ffffff',
+                  backgroundColor: colors.surface.card,
+                  backgroundGradientFrom: colors.surface.card,
+                  backgroundGradientTo: colors.surface.card,
                   decimalPlaces: 0,
                   color: (opacity = 1) => `rgba(244, 67, 54, ${opacity})`,
-                  labelColor: (opacity = 1) => `rgba(102, 102, 102, ${opacity})`,
+                  labelColor: (opacity = 1) => theme === 'dark' ? `rgba(200, 200, 200, ${opacity})` : `rgba(102, 102, 102, ${opacity})`,
                   style: {
                     borderRadius: 8
                   },
@@ -937,11 +820,11 @@ const SessionHistoryScreen = ({ route, navigation }) => {
               {/* Phase legend */}
               <View style={styles.phaseLegend}>
                 <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
+                  <View style={[styles.legendDot, { backgroundColor: colors.warning[500] }]} />
                   <Text style={styles.legendText}>Hypoxic</Text>
                 </View>
                 <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+                  <View style={[styles.legendDot, { backgroundColor: colors.success[500] }]} />
                   <Text style={styles.legendText}>Hyperoxic</Text>
                 </View>
               </View>
@@ -956,12 +839,12 @@ const SessionHistoryScreen = ({ route, navigation }) => {
                 width={CHART_WIDTH}
                 height={220}
                 chartConfig={{
-                  backgroundColor: '#ffffff',
-                  backgroundGradientFrom: '#ffffff',
-                  backgroundGradientTo: '#ffffff',
+                  backgroundColor: colors.surface.card,
+                  backgroundGradientFrom: colors.surface.card,
+                  backgroundGradientTo: colors.surface.card,
                   decimalPlaces: 0,
                   color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`,
-                  labelColor: (opacity = 1) => `rgba(102, 102, 102, ${opacity})`,
+                  labelColor: (opacity = 1) => theme === 'dark' ? `rgba(200, 200, 200, ${opacity})` : `rgba(102, 102, 102, ${opacity})`,
                   style: {
                     borderRadius: 8
                   },
@@ -1001,11 +884,11 @@ const SessionHistoryScreen = ({ route, navigation }) => {
               {/* Phase legend */}
               <View style={styles.phaseLegend}>
                 <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
+                  <View style={[styles.legendDot, { backgroundColor: colors.warning[500] }]} />
                   <Text style={styles.legendText}>Hypoxic</Text>
                 </View>
                 <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+                  <View style={[styles.legendDot, { backgroundColor: colors.success[500] }]} />
                   <Text style={styles.legendText}>Hyperoxic</Text>
                 </View>
               </View>
@@ -1017,6 +900,340 @@ const SessionHistoryScreen = ({ route, navigation }) => {
     );
   };
 
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.surface.background,
+    },
+    tabContainer: {
+      flexDirection: 'row',
+      backgroundColor: colors.surface.card,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border.light,
+    },
+    tab: {
+      flex: 1,
+      paddingVertical: 12,
+      alignItems: 'center',
+      borderRadius: 8,
+      marginHorizontal: 4,
+    },
+    activeTab: {
+      backgroundColor: colors.primary[500],
+    },
+    tabText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text.secondary,
+    },
+    activeTabText: {
+      color: colors.white,
+    },
+    listContainer: {
+      flex: 1,
+      paddingHorizontal: 16,
+      paddingTop: 16,
+    },
+    sessionCard: {
+      backgroundColor: colors.surface.card,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.border.light,
+      shadowColor: theme === 'dark' ? '#000' : '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: theme === 'dark' ? 0.3 : 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    sessionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 12,
+    },
+    sessionTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text.primary,
+      marginBottom: 4,
+      flex: 1,
+    },
+    sessionDate: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      marginBottom: 2,
+    },
+    sessionDuration: {
+      fontSize: 12,
+      color: colors.text.tertiary,
+    },
+    statusBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+      marginLeft: 8,
+    },
+    statusCompleted: {
+      backgroundColor: colors.success[100],
+    },
+    statusCompletedText: {
+      color: colors.success[700],
+      fontSize: 11,
+      fontWeight: '600',
+    },
+    statusIncomplete: {
+      backgroundColor: colors.warning[100],
+    },
+    statusIncompleteText: {
+      color: colors.warning[700],
+      fontSize: 11,
+      fontWeight: '600',
+    },
+    metricsContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border.light,
+    },
+    metricItem: {
+      alignItems: 'center',
+    },
+    metricValue: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: colors.text.primary,
+      marginBottom: 2,
+    },
+    metricLabel: {
+      fontSize: 11,
+      color: colors.text.secondary,
+      textTransform: 'uppercase',
+    },
+    chartContainer: {
+      marginTop: 16,
+      paddingTop: 16,
+      borderTopWidth: 1,
+      borderTopColor: colors.border.light,
+    },
+    chartTitle: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    centerContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.surface.background,
+    },
+    emptyContainer: {
+      flex: 1,
+      backgroundColor: colors.surface.background,
+    },
+    emptyContent: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 40,
+    },
+    emptyIcon: {
+      fontSize: 64,
+      marginBottom: 20,
+    },
+    emptyTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: colors.text.primary,
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    emptyText: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    emptySubtitle: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      textAlign: 'center',
+      marginTop: 8,
+      paddingHorizontal: 40,
+    },
+    loadingText: {
+      fontSize: 16,
+      color: colors.text.secondary,
+      marginTop: 10,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      backgroundColor: colors.surface.card,
+      borderRadius: 16,
+      maxWidth: 400,
+      width: '100%',
+      maxHeight: '80%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border.light,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    closeButton: {
+      padding: 4,
+    },
+    closeButtonText: {
+      fontSize: 24,
+      color: colors.text.secondary,
+    },
+    modalBody: {
+      padding: 20,
+    },
+    detailSection: {
+      marginBottom: 24,
+    },
+    detailSectionTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text.primary,
+      marginBottom: 12,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    detailLabel: {
+      fontSize: 14,
+      color: colors.text.secondary,
+    },
+    detailValue: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.text.primary,
+    },
+    chartSection: {
+      marginTop: 8,
+    },
+    syncIndicator: {
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    syncedDot: {
+      backgroundColor: colors.success[500],
+    },
+    unsyncedDot: {
+      backgroundColor: colors.warning[500],
+    },
+    // Session list item styles
+    sessionItem: {
+      backgroundColor: colors.surface.card,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.border.light,
+      shadowColor: theme === 'dark' ? '#000' : '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: theme === 'dark' ? 0.3 : 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    sessionStats: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border.light,
+    },
+    statItem: {
+      width: '33.33%',
+      paddingVertical: 8,
+      alignItems: 'center',
+    },
+    statLabel: {
+      fontSize: 11,
+      color: colors.text.secondary,
+      textTransform: 'uppercase',
+      marginBottom: 4,
+      letterSpacing: 0.5,
+    },
+    statValue: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    statusText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.white,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    // Chart legend styles
+    phaseLegend: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border.light,
+    },
+    legendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginHorizontal: 12,
+    },
+    legendDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      marginRight: 6,
+    },
+    legendText: {
+      fontSize: 12,
+      color: colors.text.secondary,
+    },
+    baselineReference: {
+      marginTop: 8,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: colors.border.light,
+      alignItems: 'center',
+    },
+    baselineText: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      fontStyle: 'italic',
+    },
+  });
+
   if (loading) {
     return (
       <SafeAreaView style={styles.centerContainer}>
@@ -1025,39 +1242,15 @@ const SessionHistoryScreen = ({ route, navigation }) => {
     );
   }
 
-  const currentData = activeTab === 'training' ? sessions : calibrationSessions;
-  
-  if (currentData.length === 0 && !loading) {
+  if (sessions.length === 0 && !loading) {
     return (
       <SafeAreaView style={styles.container}>
-        {/* Tab Switcher */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'training' && styles.activeTab]}
-            onPress={() => setActiveTab('training')}
-          >
-            <Text style={[styles.tabText, activeTab === 'training' && styles.activeTabText]}>
-              Training Sessions
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'calibration' && styles.activeTab]}
-            onPress={() => setActiveTab('calibration')}
-          >
-            <Text style={[styles.tabText, activeTab === 'calibration' && styles.activeTabText]}>
-              Calibration History
-            </Text>
-          </TouchableOpacity>
-        </View>
-        
         <View style={styles.centerContainer}>
           <Text style={styles.emptyTitle}>
-            {activeTab === 'training' ? 'No Training Sessions' : 'No Calibration Sessions'}
+            No Training Sessions
           </Text>
           <Text style={styles.emptySubtitle}>
-            {activeTab === 'training' 
-              ? 'Start your first training session from the dashboard'
-              : 'Complete a calibration to determine your optimal training intensity'}
+            Start your first training session from the dashboard
           </Text>
         </View>
       </SafeAreaView>
@@ -1066,35 +1259,15 @@ const SessionHistoryScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Tab Switcher */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'training' && styles.activeTab]}
-          onPress={() => setActiveTab('training')}
-        >
-          <Text style={[styles.tabText, activeTab === 'training' && styles.activeTabText]}>
-            Training Sessions
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'calibration' && styles.activeTab]}
-          onPress={() => setActiveTab('calibration')}
-        >
-          <Text style={[styles.tabText, activeTab === 'calibration' && styles.activeTabText]}>
-            Calibration History
-          </Text>
-        </TouchableOpacity>
-      </View>
-      
       <FlatList
-        data={currentData}
-        renderItem={activeTab === 'training' ? renderSessionItem : renderCalibrationItem}
+        data={sessions}
+        renderItem={renderSessionItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         refreshControl={
           <RefreshControl 
             refreshing={loading} 
-            onRefresh={activeTab === 'training' ? loadSessions : loadCalibrationSessions} 
+            onRefresh={loadSessions} 
           />
         }
       />
@@ -1103,255 +1276,4 @@ const SessionHistoryScreen = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginHorizontal: 4,
-    borderRadius: 8,
-  },
-  activeTab: {
-    backgroundColor: '#3B82F6',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  activeTabText: {
-    color: '#FFFFFF',
-  },
-  calibrationBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#FEE2E2',
-  },
-  calibrationBadgeSuccess: {
-    backgroundColor: '#D1FAE5',
-  },
-  calibrationBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#065F46',
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  loadingText: {
-    fontSize: 18,
-    color: '#666666',
-  },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: '#666666',
-    textAlign: 'center',
-  },
-  listContainer: {
-    padding: 20,
-  },
-  sessionItem: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  sessionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sessionDate: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333333',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  sessionStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666666',
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333333',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333333',
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    fontSize: 18,
-    color: '#666666',
-  },
-  summaryContainer: {
-    backgroundColor: '#ffffff',
-    margin: 20,
-    padding: 20,
-    borderRadius: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 16,
-  },
-  sessionId: {
-    fontSize: 12,
-    color: '#666666',
-    marginBottom: 4,
-  },
-  sessionTimestamp: {
-    fontSize: 14,
-    color: '#666666',
-    marginBottom: 16,
-  },
-  summaryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  summaryItem: {
-    width: '48%',
-    marginBottom: 16,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: '#666666',
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333333',
-  },
-  loadingContainer: {
-    padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#666666',
-    textAlign: 'center',
-  },
-  chartSection: {
-    backgroundColor: '#ffffff',
-    marginHorizontal: 20,
-    marginVertical: 10,
-    padding: 15,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  chartTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 10,
-  },
-  phaseLegend: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 10,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 15,
-  },
-  legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 5,
-  },
-  baselineReference: {
-    alignItems: 'center',
-    marginTop: 5,
-    paddingVertical: 5,
-    backgroundColor: '#F0F9FF',
-    borderRadius: 4,
-  },
-  baselineText: {
-    fontSize: 12,
-    color: '#4CAF50',
-    fontWeight: '500',
-  },
-  legendText: {
-    fontSize: 12,
-    color: '#666',
-  },
-});
-
-export default SessionHistoryScreen; 
+export default SessionHistoryScreen;

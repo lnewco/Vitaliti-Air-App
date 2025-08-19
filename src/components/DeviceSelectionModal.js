@@ -10,6 +10,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { useBluetoothConnection } from '../context/BluetoothContext';
+import { useAppTheme } from '../theme';
 import logger from '../utils/logger';
 
 const log = logger.createModuleLogger('DeviceSelectionModal');
@@ -31,6 +32,7 @@ const DeviceSelectionModal = ({
     stopScanning,
     connectToDevice,
   } = useBluetoothConnection();
+  const { colors, spacing } = useAppTheme();
 
   // Start scanning when modal opens
   useEffect(() => {
@@ -71,13 +73,9 @@ const DeviceSelectionModal = ({
   const handleConnectToDevice = useCallback(async (device) => {
     try {
       log.info('Connecting to device:', device.name || device.localName);
-      const success = await connectToDevice(device);
-      if (success) {
-        log.info('Connection successful');
-        // Modal will auto-close via the effect above
-      } else {
-        Alert.alert('Connection Error', 'Failed to connect to device. Please try again.');
-      }
+      await connectToDevice(device);
+      log.info('Connection successful');
+      // Modal will auto-close via the effect above
     } catch (error) {
       log.error('Connection failed:', error);
       Alert.alert('Connection Error', `Failed to connect: ${error.message}`);
@@ -94,6 +92,146 @@ const DeviceSelectionModal = ({
       onClose();
     }
   }, [stopScanning, onClose]);
+
+  const styles = StyleSheet.create({
+    modalContainer: {
+      flex: 1,
+      backgroundColor: colors.surface.background,
+      paddingTop: 60,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingBottom: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border.light,
+    },
+    modalTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: colors.text.primary,
+    },
+    closeButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.surface.card,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    closeButtonText: {
+      fontSize: 18,
+      color: colors.text.secondary,
+      fontWeight: 'bold',
+    },
+    modalInstructions: {
+      fontSize: 16,
+      color: colors.text.secondary,
+      textAlign: 'center',
+      margin: 20,
+      lineHeight: 24,
+    },
+    deviceList: {
+      flex: 1,
+      paddingHorizontal: 20,
+    },
+    deviceItem: {
+      backgroundColor: colors.surface.card,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    deviceInfo: {
+      flex: 1,
+      marginRight: 12,
+    },
+    deviceName: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: colors.text.primary,
+      marginBottom: 4,
+    },
+    deviceType: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      marginBottom: 2,
+    },
+    deviceRssi: {
+      fontSize: 12,
+      color: colors.text.tertiary,
+    },
+    connectButton: {
+      backgroundColor: colors.primary[500],
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 8,
+    },
+    connectButtonText: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontWeight: 'bold',
+    },
+    scanningContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 40,
+    },
+    spinner: {
+      marginBottom: 20,
+    },
+    scanningText: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: colors.text.primary,
+      marginBottom: 10,
+    },
+    scanningSubtext: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    noDevicesContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 40,
+    },
+    noDevicesText: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: colors.text.primary,
+      marginBottom: 10,
+    },
+    noDevicesSubtext: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      textAlign: 'center',
+      marginBottom: 20,
+      lineHeight: 20,
+    },
+    retryButton: {
+      backgroundColor: colors.primary[500],
+      paddingHorizontal: 30,
+      paddingVertical: 12,
+      borderRadius: 8,
+    },
+    retryButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+  });
 
   const renderDevice = useCallback(({ item }) => (
     <TouchableOpacity
@@ -118,7 +256,7 @@ const DeviceSelectionModal = ({
         <Text style={styles.connectButtonText}>Connect</Text>
       </TouchableOpacity>
     </TouchableOpacity>
-  ), [handleConnectToDevice, deviceType]);
+  ), [handleConnectToDevice, deviceType, styles]);
 
   // Filter devices by type
   const filteredDevices = discoveredDevices.filter(device => device.deviceType === deviceType);
@@ -157,7 +295,7 @@ const DeviceSelectionModal = ({
           />
         ) : isScanning ? (
           <View style={styles.scanningContainer}>
-            <ActivityIndicator size="large" color="#4ECDC4" style={styles.spinner} />
+            <ActivityIndicator size="large" color={colors.primary[500]} style={styles.spinner} />
             <Text style={styles.scanningText}>🔍 Scanning...</Text>
             <Text style={styles.scanningSubtext}>
               Make sure your {deviceType === 'pulse-ox' ? 'pulse oximeter' : 'heart rate monitor'} is nearby and turned on
@@ -181,143 +319,5 @@ const DeviceSelectionModal = ({
     </Modal>
   );
 };
-
-const styles = StyleSheet.create({
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-    paddingTop: 60,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E5E7EB',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    fontSize: 18,
-    color: '#374151',
-    fontWeight: 'bold',
-  },
-  modalInstructions: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    margin: 20,
-    lineHeight: 24,
-  },
-  deviceList: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  deviceItem: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  deviceInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  deviceName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  deviceType: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 2,
-  },
-  deviceRssi: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  connectButton: {
-    backgroundColor: '#4ECDC4',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  connectButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  scanningContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  spinner: {
-    marginBottom: 20,
-  },
-  scanningText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 12,
-  },
-  scanningSubtext: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  noDevicesContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  noDevicesText: {
-    fontSize: 18,
-    color: '#6B7280',
-    marginBottom: 8,
-  },
-  noDevicesSubtext: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: '#4ECDC4',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-});
 
 export default DeviceSelectionModal;

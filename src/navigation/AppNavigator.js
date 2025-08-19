@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useAuth } from '../auth/AuthContext';
 import { OnboardingProvider } from '../context/OnboardingContext';
+import { useAppTheme } from '../theme';
 import AuthNavigator from './AuthNavigator';
 import OnboardingNavigator from './OnboardingNavigator';
 import MainAppContent from '../screens/MainAppContent';
@@ -15,6 +16,7 @@ const Stack = createStackNavigator();
 
 const AppNavigator = () => {
   const { isAuthenticated, isLoading, user } = useAuth();
+  const { colors } = useAppTheme();
   const [onboardingState, setOnboardingState] = useState(null); // 'not_started' | 'in_progress' | 'completed'
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
   const navigationRef = useRef();
@@ -200,8 +202,8 @@ const AppNavigator = () => {
   // Show loading screen while checking authentication or onboarding status
   if (isLoading || isCheckingOnboarding) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2563EB" />
+      <View style={[styles.loadingContainer, { backgroundColor: colors?.surface?.background || '#FFFFFF' }]}>
+        <ActivityIndicator size="large" color={colors?.primary?.[500] || '#2563EB'} />
       </View>
     );
   }
@@ -262,9 +264,28 @@ const AppNavigator = () => {
       return;
     }
 
-    // Skip navigation if onboarding is in progress
-    if (onboardingState === 'in_progress') {
-      console.log('🔄 Onboarding in progress - skipping navigation reset');
+    // If authenticated user, always navigate to main (handles returning users)
+    if (isAuthenticated && user) {
+      console.log('🔄 Authenticated user detected - navigating to main app');
+      const currentRoute = navigationRef.current.getCurrentRoute();
+      if (!isInStack(currentRoute?.name, 'Main')) {
+        try {
+          navigationRef.current.reset({
+            index: 0,
+            routes: [{ name: 'Main' }],
+          });
+          console.log('✅ Navigation to main app successful');
+          return;
+        } catch (error) {
+          console.error('Navigation to main failed:', error);
+        }
+      }
+      return;
+    }
+
+    // Skip navigation if onboarding is in progress for new users
+    if (onboardingState === 'in_progress' && !isAuthenticated) {
+      console.log('🔄 Onboarding in progress for new user - skipping navigation reset');
       return;
     }
 
@@ -303,25 +324,36 @@ const AppNavigator = () => {
     console.log('🔄 isAuthenticated:', isAuthenticated);
     console.log('🔄 onboardingState:', onboardingState);
     
-    // Priority 1: If onboarding is in progress, stay in onboarding flow
+    // Priority 1: If authenticated user exists (returning user who signed in), go to main app
+    // This handles the case where a user signs in during onboarding
+    if (isAuthenticated && user) {
+      console.log('🔄 Flow: main (authenticated user, skipping onboarding)');
+      // Clear the in_progress state since they're an existing user
+      if (onboardingState === 'in_progress') {
+        AsyncStorage.setItem('onboarding_state', 'completed').catch(console.error);
+      }
+      return 'main';
+    }
+    
+    // Priority 2: If onboarding is in progress (new user), stay in onboarding flow
     if (onboardingState === 'in_progress') {
       console.log('🔄 Flow: onboarding (continuing in-progress onboarding)');
       return 'onboarding';
     }
     
-    // Priority 2: If user hasn't completed onboarding, show onboarding flow
+    // Priority 3: If user hasn't completed onboarding, show onboarding flow
     if (onboardingState !== 'completed') {
       console.log('🔄 Flow: onboarding (user needs to complete onboarding)');
       return 'onboarding';
     }
     
-    // Priority 3: If onboarding is complete but not authenticated, show auth flow
+    // Priority 4: If onboarding is complete but not authenticated, show auth flow
     if (!isAuthenticated) {
       console.log('🔄 Flow: auth (returning user needs to log in)');
       return 'auth';
     }
     
-    // Priority 4: If onboarding complete AND authenticated, show main app
+    // Priority 5: If onboarding complete AND authenticated, show main app
     console.log('🔄 Flow: main (completed user, authenticated)');
     return 'main';
   };
@@ -373,7 +405,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
   },
 });
 

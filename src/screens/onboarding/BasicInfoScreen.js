@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import OnboardingProgressIndicator from '../../components/OnboardingProgressIndicator';
+import { View, ScrollView, StyleSheet } from 'react-native';
+import { useAppTheme } from '../../theme';
+import OnboardingContainer from '../../components/onboarding/OnboardingContainer';
+import { H1, Body } from '../../components/base/Typography';
 import FormTextInput from '../../components/onboarding/FormTextInput';
 // import FormDatePicker from '../../components/onboarding/FormDatePicker'; // TEMPORARILY DISABLED
 import FormRadioGroup from '../../components/onboarding/FormRadioGroup';
@@ -54,141 +56,82 @@ const BasicInfoScreen = ({ navigation }) => {
   const maxDate = new Date();
   maxDate.setFullYear(maxDate.getFullYear() - 18); // 18 years ago
 
+  const { colors, spacing } = useAppTheme();
+  
+  const styles = StyleSheet.create({
+    scrollContent: {
+      flexGrow: 1,
+    },
+    header: {
+      alignItems: 'center',
+      marginBottom: spacing.xl,
+    },
+    title: {
+      marginBottom: spacing.md,
+    },
+    subtitle: {
+      textAlign: 'center',
+      maxWidth: 320,
+    },
+    formContainer: {
+      marginTop: spacing.lg,
+    },
+  });
+
   return (
-    <SafeAreaView style={styles.container}>
-      <OnboardingProgressIndicator currentStep={2} totalSteps={5} />
-      
-      <KeyboardAvoidingView 
-        style={styles.keyboardAvoidingView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <OnboardingContainer
+      currentStep={2}
+      totalSteps={5}
+      onNext={handleNext}
+      onBack={handleBack}
+      showProgress={true}
+    >
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView 
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.header}>
-            <Text style={styles.title}>Basic Information</Text>
-            <Text style={styles.subtitle}>
-              Tell us a bit about yourself to personalize your experience.
-            </Text>
-          </View>
-          
-          <View style={styles.formContainer}>
-            <FormTextInput
-              label="Full Name"
-              value={onboardingData.fullName}
-              onChangeText={(value) => updateFormData('fullName', value)}
-              placeholder="Enter your full name"
-              error={errors.fullName}
-              required
-            />
-            
-            {/* TEMPORARILY DISABLED - DateTimePicker compatibility issue
-            <FormDatePicker
-              label="Date of Birth"
-              value={onboardingData.dateOfBirth}
-              onChange={(date) => updateFormData('dateOfBirth', date)}
-              error={errors.dateOfBirth}
-              required
-              minimumDate={minDate}
-              maximumDate={maxDate}
-            />
-            */}
-            
-            <FormRadioGroup
-              label="Gender"
-              options={genderOptions}
-              value={onboardingData.gender}
-              onSelect={(value) => updateFormData('gender', value)}
-              error={errors.gender}
-              required
-            />
-          </View>
-        </ScrollView>
-        
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-            <Text style={styles.backButtonText}>Back</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-            <Text style={styles.nextButtonText}>Next</Text>
-          </TouchableOpacity>
+        <View style={styles.header}>
+          <H1 style={styles.title}>Basic Information</H1>
+          <Body color="secondary" style={styles.subtitle}>
+            Tell us a bit about yourself to personalize your experience.
+          </Body>
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        
+        <View style={styles.formContainer}>
+          <FormTextInput
+            label="Full Name"
+            value={onboardingData.fullName}
+            onChangeText={(value) => updateFormData('fullName', value)}
+            placeholder="Enter your full name"
+            error={errors.fullName}
+            required
+          />
+          
+          {/* TEMPORARILY DISABLED - DateTimePicker compatibility issue
+          <FormDatePicker
+            label="Date of Birth"
+            value={onboardingData.dateOfBirth}
+            onChange={(date) => updateFormData('dateOfBirth', date)}
+            error={errors.dateOfBirth}
+            required
+            minimumDate={minDate}
+            maximumDate={maxDate}
+          />
+          */}
+          
+          <FormRadioGroup
+            label="Gender"
+            options={genderOptions}
+            value={onboardingData.gender}
+            onSelect={(value) => updateFormData('gender', value)}
+            error={errors.gender}
+            required
+          />
+        </View>
+      </ScrollView>
+    </OnboardingContainer>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  header: {
-    paddingVertical: 24,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 24,
-    maxWidth: 320,
-  },
-  formContainer: {
-    marginTop: 20,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  backButton: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  backButtonText: {
-    color: '#6B7280',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  nextButton: {
-    flex: 1,
-    backgroundColor: '#3B82F6',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  nextButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
 
 export default BasicInfoScreen; 

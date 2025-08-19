@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
+import { View, TextInput, StyleSheet } from 'react-native';
+import { useAppTheme } from '../../theme';
+import { Label, Caption } from '../base/Typography';
 
 const FormTextInput = ({
   label,
@@ -12,12 +14,43 @@ const FormTextInput = ({
   keyboardType = 'default',
   ...props
 }) => {
+  const { colors, spacing, typography } = useAppTheme();
+  
+  const styles = StyleSheet.create({
+    container: {
+      marginBottom: spacing.lg,
+    },
+    labelContainer: {
+      flexDirection: 'row',
+      marginBottom: spacing.sm,
+    },
+    required: {
+      color: colors.error[500],
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border.light,
+      borderRadius: spacing.borderRadius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 4,
+      fontSize: typography.fontSize.base,
+      color: colors.text.primary,
+      backgroundColor: colors.surface.card,
+    },
+    inputError: {
+      borderColor: colors.error[500],
+    },
+    errorText: {
+      marginTop: spacing.xs,
+    },
+  });
+  
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>
-        {label}
-        {required && <Text style={styles.required}> *</Text>}
-      </Text>
+      <View style={styles.labelContainer}>
+        <Label>{label}</Label>
+        {required && <Label color="error"> *</Label>}
+      </View>
       
       <TextInput
         style={[
@@ -27,50 +60,17 @@ const FormTextInput = ({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor={colors.text.tertiary}
         autoCapitalize={autoCapitalize}
         keyboardType={keyboardType}
         {...props}
       />
       
       {error && (
-        <Text style={styles.errorText}>{error}</Text>
+        <Caption color="error" style={styles.errorText}>{error}</Caption>
       )}
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  required: {
-    color: '#EF4444',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#1F2937',
-    backgroundColor: '#FFFFFF',
-  },
-  inputError: {
-    borderColor: '#EF4444',
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#EF4444',
-    marginTop: 4,
-  },
-});
 
 export default FormTextInput; 

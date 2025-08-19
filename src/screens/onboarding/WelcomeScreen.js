@@ -1,9 +1,14 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Image } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import OnboardingProgressIndicator from '../../components/OnboardingProgressIndicator';
+import { useAppTheme } from '../../theme';
+import OnboardingContainer from '../../components/onboarding/OnboardingContainer';
+import { H1, Body } from '../../components/base/Typography';
+import Button from '../../components/base/Button';
 
 const WelcomeScreen = ({ navigation }) => {
+  const { colors, spacing } = useAppTheme();
+  
   const handleGetStarted = async () => {
     // Mark onboarding as in progress
     try {
@@ -31,130 +36,94 @@ const WelcomeScreen = ({ navigation }) => {
     navigation.navigate('Auth', { screen: 'LoginScreen' });
   };
 
+  const styles = StyleSheet.create({
+    content: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    logoContainer: {
+      marginBottom: spacing.xl,
+      alignItems: 'center',
+    },
+    logoPlaceholder: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: colors.primary[500],
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    logoText: {
+      color: colors.text.inverse,
+      fontSize: 18,
+      fontWeight: 'bold',
+      textAlign: 'center',
+    },
+    textContainer: {
+      alignItems: 'center',
+      marginBottom: spacing.xl,
+      paddingHorizontal: spacing.lg,
+    },
+    title: {
+      marginBottom: spacing.md,
+    },
+    subtitle: {
+      textAlign: 'center',
+      maxWidth: 320,
+    },
+    buttonContainer: {
+      width: '100%',
+      paddingHorizontal: spacing.lg,
+    },
+    signInButton: {
+      marginTop: spacing.md,
+    },
+  });
+
   return (
-    <SafeAreaView style={styles.container}>
-      <OnboardingProgressIndicator currentStep={1} totalSteps={5} />
-      
+    <OnboardingContainer
+      currentStep={1}
+      totalSteps={5}
+      onNext={null}
+      showProgress={true}
+    >
       <View style={styles.content}>
         <View style={styles.logoContainer}>
           <View style={styles.logoPlaceholder}>
-            <Text style={styles.logoText}>Vitaliti Air</Text>
+            <Body color="inverse" weight="bold" style={styles.logoText}>
+              Vitaliti Air
+            </Body>
           </View>
         </View>
         
         <View style={styles.textContainer}>
-          <Text style={styles.title}>Welcome to Vitaliti Air</Text>
-          <Text style={styles.subtitle}>
+          <H1 style={styles.title}>Welcome to Vitaliti Air</H1>
+          <Body color="secondary" style={styles.subtitle}>
             Optimize your health with personalized IHHT training. 
             Let's get you set up in just a few simple steps.
-          </Text>
+          </Body>
         </View>
         
         <View style={styles.buttonContainer}>
-          <TouchableOpacity 
-            style={styles.getStartedButton}
+          <Button
+            title="Get Started"
+            variant="primary"
             onPress={handleGetStarted}
-          >
-            <Text style={styles.getStartedButtonText}>Get Started</Text>
-          </TouchableOpacity>
+            fullWidth
+          />
           
-          <TouchableOpacity 
-            style={styles.signInButton}
+          <Button
+            title="Already have an account? Sign In"
+            variant="secondary"
             onPress={handleSignIn}
-          >
-            <Text style={styles.signInButtonText}>Already have an account? Sign In</Text>
-          </TouchableOpacity>
+            fullWidth
+            style={styles.signInButton}
+          />
         </View>
       </View>
-    </SafeAreaView>
+    </OnboardingContainer>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  logoContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#3B82F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  logoText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  textContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 24,
-    maxWidth: 320,
-  },
-  buttonContainer: {
-    width: '100%',
-    paddingBottom: 20,
-  },
-  getStartedButton: {
-    backgroundColor: '#3B82F6',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  getStartedButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  signInButton: {
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 12,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-  },
-  signInButtonText: {
-    color: '#3B82F6',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-});
 
 export default WelcomeScreen; 

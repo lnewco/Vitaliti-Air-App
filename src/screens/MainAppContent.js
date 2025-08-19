@@ -5,16 +5,13 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaView, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
+import { useAppTheme } from '../theme';
 import DashboardScreen from './DashboardScreen';
 import SessionHistoryScreen from './SessionHistoryScreen';
-import SessionSetupScreen from './SessionSetupScreen';
-import HRVCalibrationScreen from './HRVCalibrationScreen';
+import SimplifiedSessionSetup from './SimplifiedSessionSetup';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import ProfileScreen from './ProfileScreen';
-import CalibrationSetupScreen from './CalibrationSetupScreen';
-import CalibrationScreen from './CalibrationScreen';
-import CalibrationCompleteScreen from './CalibrationCompleteScreen';
 import SessionRecoveryManager from '../components/SessionRecoveryManager';
 
 
@@ -23,19 +20,21 @@ const Stack = createStackNavigator();
 
 // Tab Navigator for Dashboard and History
 function TabNavigator() {
+  const { colors } = useAppTheme();
+  
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#ffffff',
+          backgroundColor: colors.surface.card,
           borderTopWidth: 1,
-          borderTopColor: '#e0e0e0',
+          borderTopColor: colors.border.light,
           paddingBottom: 10,
           paddingTop: 5,
         },
-        tabBarActiveTintColor: '#2196F3',
-        tabBarInactiveTintColor: '#666666',
+        tabBarActiveTintColor: colors.primary[500],
+        tabBarInactiveTintColor: colors.text.secondary,
       }}
     >
       <Tab.Screen 
@@ -86,54 +85,42 @@ function TabNavigator() {
 
 // Stack Navigator Component with navigation handling
 const MainStack = ({ onNavigateToSession }) => {
+  const { colors } = useAppTheme();
+  
   return (
     <Stack.Navigator
       screenOptions={{
-        headerShown: false,
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: colors.surface.card,
+          elevation: 0,
+          shadowOpacity: 0,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border.light,
+        },
+        headerTintColor: colors.text.primary,
+        headerTitleStyle: {
+          color: colors.text.primary,
+          fontSize: 18,
+          fontWeight: '600',
+        },
+        headerBackTitleVisible: false,
+        headerBackTitle: 'Back',
       }}
     >
-      <Stack.Screen name="MainTabs" component={TabNavigator} />
+      <Stack.Screen 
+        name="MainTabs" 
+        component={TabNavigator}
+        options={{
+          headerShown: false,
+        }}
+      />
       <Stack.Screen 
         name="SessionSetup" 
-        component={SessionSetupScreen}
+        component={SimplifiedSessionSetup}
         options={{
           presentation: 'card',
-        }}
-      />
-
-      <Stack.Screen 
-        name="CalibrationSetup" 
-        component={CalibrationSetupScreen}
-        options={{
-          presentation: 'card',
-          title: 'Calibration Setup',
-        }}
-      />
-
-      <Stack.Screen 
-        name="Calibration" 
-        component={CalibrationScreen}
-        options={{
-          presentation: 'card',
-          title: 'Calibration',
-        }}
-      />
-
-      <Stack.Screen 
-        name="CalibrationComplete" 
-        component={CalibrationCompleteScreen}
-        options={{
-          presentation: 'card',
-          title: 'Calibration Complete',
-        }}
-      />
-
-      <Stack.Screen 
-        name="HRVCalibration" 
-        component={HRVCalibrationScreen}
-        options={{
-          presentation: 'card',
-          title: 'HRV Calibration',
+          title: 'Training Session Setup',
         }}
       />
 
@@ -142,6 +129,7 @@ const MainStack = ({ onNavigateToSession }) => {
         component={IHHTTrainingScreen}
         options={{
           presentation: 'card',
+          headerShown: false,  // Hide navigation header to avoid double header
         }}
       />
       
@@ -150,6 +138,7 @@ const MainStack = ({ onNavigateToSession }) => {
         component={PostSessionSurveyScreen}
         options={{
           presentation: 'card',
+          title: 'Post-Session Survey',
         }}
       />
     </Stack.Navigator>
@@ -181,68 +170,5 @@ const MainAppContent = () => {
     </>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  header: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#2563EB',
-  },
-  signOutButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 6,
-  },
-  signOutText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  content: {
-    flex: 1,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    paddingBottom: 10,
-    paddingTop: 5,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 5,
-  },
-  activeTab: {
-    backgroundColor: '#f0f8ff',
-    borderRadius: 8,
-    marginHorizontal: 10,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666666',
-  },
-  activeTabText: {
-    color: '#2196F3',
-  },
-});
 
 export default MainAppContent; 

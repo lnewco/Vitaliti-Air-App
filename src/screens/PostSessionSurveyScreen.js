@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, SafeAreaView, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { View, StyleSheet, Alert, ScrollView, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, SafeAreaView, Text, TouchableOpacity } from 'react-native';
+import { useAppTheme } from '../theme';
+import Container from '../components/base/Container';
+import { H1, Body, BodySmall, Caption } from '../components/base/Typography';
+import Button from '../components/base/Button';
+import Card from '../components/base/Card';
 import SurveyScaleInput from '../components/SurveyScaleInput';
 import SurveyNotesInput from '../components/SurveyNotesInput';
 import DatabaseService from '../services/DatabaseService';
@@ -16,6 +21,7 @@ import {
 } from '../utils/surveyValidation';
 
 const PostSessionSurveyScreen = ({ navigation, route }) => {
+  const { colors, spacing } = useAppTheme();
   const sessionId = route?.params?.sessionId;
   const [surveyData, setSurveyData] = useState(createDefaultPostSessionSurvey());
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -114,8 +120,74 @@ const PostSessionSurveyScreen = ({ navigation, route }) => {
 
   const canSubmit = isPostSessionSurveyComplete(surveyData) && !isSubmitting;
 
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    keyboardAvoidingView: {
+      flex: 1,
+    },
+    innerContainer: {
+      flex: 1,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border.light,
+      backgroundColor: colors.surface.card,
+    },
+    headerContent: {
+      flex: 1,
+    },
+    title: {
+      marginBottom: 4,
+    },
+    subtitle: {
+      lineHeight: 18,
+      marginBottom: 4,
+    },
+    requiredNote: {
+      marginTop: 2,
+      fontStyle: 'italic',
+    },
+    errorContainer: {
+      backgroundColor: colors.error[50],
+      borderColor: colors.error[200],
+      borderWidth: 1,
+      borderRadius: spacing.borderRadius.md,
+      padding: spacing.sm,
+      marginHorizontal: spacing.md,
+      marginVertical: spacing.sm,
+    },
+    errorText: {
+      marginBottom: 2,
+    },
+    content: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: spacing.md,
+      paddingBottom: 20,
+    },
+    surveyContent: {
+      gap: spacing.md,
+    },
+    footer: {
+      flexDirection: 'row',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: colors.border.light,
+      backgroundColor: colors.surface.card,
+    },
+  });
+
   return (
-    <SafeAreaView style={styles.container}>
+    <Container safe>
       <KeyboardAvoidingView 
         style={styles.keyboardAvoidingView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -126,12 +198,11 @@ const PostSessionSurveyScreen = ({ navigation, route }) => {
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.headerContent}>
-                <Text style={styles.title}>Post-Session Check-in</Text>
-                <Text style={styles.subtitle}>
-                  How are you feeling after your IHHT training? This feedback helps us understand how the training affects you over time.
-                </Text>
-                <Text style={styles.requiredNote}>* Required fields</Text>
-                <Text style={styles.scrollHint}>📝 Scroll down to add optional notes</Text>
+                <H1 style={styles.title}>Post-Session Survey</H1>
+                <Body color="secondary" style={styles.subtitle}>
+                  How are you feeling after training?
+                </Body>
+                <Caption color="error" style={styles.requiredNote}>* Required</Caption>
               </View>
             </View>
 
@@ -139,9 +210,9 @@ const PostSessionSurveyScreen = ({ navigation, route }) => {
             {validationErrors.length > 0 && (
               <View style={styles.errorContainer}>
                 {validationErrors.map((error, index) => (
-                  <Text key={index} style={styles.errorText}>
+                  <Caption key={index} color="error" style={styles.errorText}>
                     • {error}
-                  </Text>
+                  </Caption>
                 ))}
               </View>
             )}
@@ -187,146 +258,32 @@ const PostSessionSurveyScreen = ({ navigation, route }) => {
 
                 {/* Notes Section (Optional) */}
                 <SurveyNotesInput
-                  label="Would you like to add anything else?"
+                  label="Notes (optional)"
                   value={surveyData.notes || ''}
                   onValueChange={handleNotesChange}
-                  placeholder="Add any notes about your session experience (optional)"
+                  placeholder="Any additional comments"
                   maxLength={500}
                   disabled={isSubmitting}
                 />
-                
-                {/* Extra padding to ensure text input is visible when keyboard is open */}
-                <View style={styles.keyboardPadding} />
               </View>
             </ScrollView>
 
             {/* Footer */}
             <View style={styles.footer}>
-              <TouchableOpacity
-                style={[styles.button, styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
+              <Button
+                title={isSubmitting ? 'Saving...' : 'Complete Session'}
+                variant="primary"
                 onPress={handleSubmit}
                 disabled={!canSubmit}
-              >
-                <Text style={[styles.buttonText, styles.submitButtonText, !canSubmit && styles.submitButtonTextDisabled]}>
-                  {isSubmitting ? 'Saving...' : 'Complete Session'}
-                </Text>
-              </TouchableOpacity>
+                loading={isSubmitting}
+                fullWidth
+              />
             </View>
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </Container>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  innerContainer: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
-  },
-  headerContent: {
-    flex: 1,
-    paddingRight: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6c757d',
-    lineHeight: 22,
-  },
-  requiredNote: {
-    fontSize: 14,
-    color: '#e74c3c',
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  scrollHint: {
-    fontSize: 13,
-    color: '#007bff',
-    marginTop: 6,
-    fontStyle: 'italic',
-    textAlign: 'center',
-  },
-  errorContainer: {
-    backgroundColor: '#f8d7da',
-    borderColor: '#f5c6cb',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    margin: 20,
-  },
-  errorText: {
-    color: '#721c24',
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 120, // Increased padding to ensure notes section is visible above footer
-  },
-  surveyContent: {
-    gap: 24,
-  },
-  keyboardPadding: {
-    height: 100, // Extra space to ensure text input is visible above keyboard
-  },
-  footer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
-    backgroundColor: '#ffffff',
-  },
-  button: {
-    flex: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 0,
-  },
-  submitButton: {
-    backgroundColor: '#007bff',
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#e9ecef',
-    opacity: 0.6,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  submitButtonText: {
-    color: '#ffffff',
-  },
-  submitButtonTextDisabled: {
-    color: '#6c757d',
-  },
-});
 
 export default PostSessionSurveyScreen; 

@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text, TextInput, StyleSheet, Platform } from 'react-native';
+import { View, TextInput, StyleSheet, Platform } from 'react-native';
+import { useAppTheme } from '../theme';
+import { Body, Caption } from './base/Typography';
 
 const SurveyNotesInput = ({
   label,
@@ -10,15 +12,63 @@ const SurveyNotesInput = ({
   isRequired = false,
   disabled = false,
 }) => {
+  const theme = useAppTheme();
+  const { colors, spacing, typography } = theme || {};
   const characterCount = value.length;
   const isAtLimit = characterCount >= maxLength;
+  
+  // Fallback if theme is not ready
+  if (!colors || !spacing || !typography) {
+    return null;
+  }
+
+  const styles = StyleSheet.create({
+    container: {
+      marginVertical: spacing.sm,
+    },
+    label: {
+      marginBottom: spacing.xs,
+      fontWeight: '600',
+      fontSize: 14,
+    },
+    required: {
+      color: colors.error[500],
+    },
+    textInput: {
+      borderWidth: 1,
+      borderColor: colors.border.medium,
+      borderRadius: spacing.borderRadius.md,
+      padding: spacing.sm,
+      fontSize: 14,
+      color: colors.text.primary,
+      backgroundColor: colors.surface.card,
+      minHeight: 60,
+      maxHeight: 100,
+      textAlignVertical: 'top',
+    },
+    disabledInput: {
+      backgroundColor: colors.surface.background,
+      color: colors.text.disabled,
+    },
+    limitReached: {
+      borderColor: colors.warning[500],
+    },
+    footer: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      marginTop: spacing.xs,
+    },
+    characterCount: {
+      fontWeight: isAtLimit ? '600' : '400',
+    },
+  });
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>
+      <Body style={styles.label}>
         {label}
-        {isRequired && <Text style={styles.required}> *</Text>}
-      </Text>
+        {isRequired && <Body color="error"> *</Body>}
+      </Body>
       
       <TextInput
         style={[
@@ -29,9 +79,9 @@ const SurveyNotesInput = ({
         value={value}
         onChangeText={onValueChange}
         placeholder={placeholder}
-        placeholderTextColor="#6c757d"
+        placeholderTextColor={colors.text.secondary}
         multiline
-        numberOfLines={4}
+        numberOfLines={2}
         maxLength={maxLength}
         editable={!disabled}
         textAlignVertical="top"
@@ -43,62 +93,15 @@ const SurveyNotesInput = ({
       />
       
       <View style={styles.footer}>
-        <Text style={[
-          styles.characterCount,
-          isAtLimit && styles.limitReachedText,
-        ]}>
+        <Caption 
+          color={isAtLimit ? "warning" : "secondary"}
+          style={styles.characterCount}
+        >
           {characterCount}/{maxLength} characters
-        </Text>
+        </Caption>
       </View>
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    marginVertical: 16,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  required: {
-    color: '#e74c3c',
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: '#dee2e6',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#333',
-    backgroundColor: '#ffffff',
-    minHeight: 100,
-    maxHeight: 150,
-    textAlignVertical: 'top',
-  },
-  disabledInput: {
-    backgroundColor: '#f8f9fa',
-    color: '#6c757d',
-  },
-  limitReached: {
-    borderColor: '#ffc107',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 4,
-  },
-  characterCount: {
-    fontSize: 12,
-    color: '#6c757d',
-  },
-  limitReachedText: {
-    color: '#ffc107',
-    fontWeight: '600',
-  },
-});
 
 export default SurveyNotesInput; 
