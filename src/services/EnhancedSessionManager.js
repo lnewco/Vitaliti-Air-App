@@ -39,11 +39,12 @@ class EnhancedSessionManager {
     this.listeners = [];
     
     // IHHT Protocol state
-    this.currentPhase = 'HYPOXIC'; // 'HYPOXIC' | 'HYPEROXIC'
+    this.currentPhase = 'HYPOXIC'; // 'HYPOXIC' | 'HYPEROXIC' | 'TRANSITION'
     this.currentCycle = 1;
     this.phaseStartTime = null;
     this.phaseTimeRemaining = 300; // Will be set based on protocol
     this.phaseTimer = null;
+    this.nextPhaseAfterTransition = null; // Track what phase comes after transition
     
     // Protocol configuration (defaults)
     this.protocolConfig = {
@@ -65,8 +66,11 @@ class EnhancedSessionManager {
     this.backgroundTimeout = null;
     this.sessionTimeout = null;
     
-    // FiO2 tracking
-    this.currentHypoxiaLevel = 5; // Default hypoxia level (0-10 scale)
+    // Altitude level tracking
+    this.currentAltitudeLevel = 6; // Default altitude level (1-11 scale)
+    
+    // App state tracking for notifications
+    this.appState = AppState.currentState;
     
     // Buffer settings
     this.BATCH_SIZE = 50;
@@ -165,6 +169,9 @@ class EnhancedSessionManager {
     console.log('📱 App state changed to:', nextAppState);
     console.log('📱 DEBUG: Session active status:', this.isActive);
     console.log('📱 DEBUG: Current session:', this.currentSession?.id);
+    
+    // Track current app state for notification handling
+    this.appState = nextAppState;
     
     if (this.isActive) {
       if (nextAppState === 'background') {
@@ -270,26 +277,18 @@ class EnhancedSessionManager {
     this.listeners = [];
   }
 
-  async startSession(userIdOrSessionId, protocolSettings = {}) {
+  async startSession(sessionId, protocolConfig = {}) {
     if (this.isActive) {
       throw new Error('Session already active');
     }
 
+    if (!sessionId) {
+      throw new Error('Session ID is required');
+    }
+
     try {
-      // Handle both old and new calling patterns
-      // Old: startSession(sessionId) 
-      // New: startSession(userId, protocolSettings)
-      let userId = userIdOrSessionId;
-      let sessionId = null;
-      
-      // If it looks like a session ID (has underscore pattern), treat it as old format
-      if (typeof userIdOrSessionId === 'string' && userIdOrSessionId.includes('_')) {
-        sessionId = userIdOrSessionId;
-        userId = null; // Will be set from auth or device ID
-        console.log('🎬 Starting enhanced IHHT session with existing ID:', sessionId);
-      } else {
-        console.log('🎬 Starting enhanced IHHT session for user:', userId);
-      }
+      console.log('🎬 Starting enhanced IHHT session with ID:', sessionId);
+      console.log('📋 Protocol configuration:', protocolConfig);
       
       // Wait for initialization if needed
       if (!this.initialized) {
@@ -297,32 +296,34 @@ class EnhancedSessionManager {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
-      // Use pre-configured protocol if setProtocol was called, otherwise use passed settings
-      if (protocolSettings.totalCycles || protocolSettings.hypoxicDuration || protocolSettings.hyperoxicDuration) {
-        this.protocolConfig = {
-          totalCycles: protocolSettings.totalCycles || this.protocolConfig.totalCycles,
-          hypoxicDuration: protocolSettings.hypoxicDuration || this.protocolConfig.hypoxicDuration,
-          hyperoxicDuration: protocolSettings.hyperoxicDuration || this.protocolConfig.hyperoxicDuration
-        };
-      }
+      // Update protocol configuration
+      this.protocolConfig = {
+        totalCycles: protocolConfig.totalCycles || this.protocolConfig.totalCycles,
+        hypoxicDuration: protocolConfig.hypoxicDuration || this.protocolConfig.hypoxicDuration,
+        hyperoxicDuration: protocolConfig.hyperoxicDuration || this.protocolConfig.hyperoxicDuration
+      };
       
-      // Create session record (only if we don't have an existing sessionId)
-      if (!sessionId) {
-        sessionId = await SupabaseService.createSession({
-          user_id: userId,
-          protocol_type: 'STANDARD_IHHT',
-          target_spo2: 85,
-          recovery_spo2: 95,
-          total_cycles: this.protocolConfig.totalCycles,
-          cycle_duration: this.protocolConfig.hypoxicDuration + this.protocolConfig.hyperoxicDuration,
-          start_time: new Date().toISOString()
-        });
+      // Store additional protocol data for session creation
+      const defaultAltitudeLevel = protocolConfig.defaultAltitudeLevel || 6;
+      const baselineHRV = protocolConfig.baselineHRV || null;
+      
+      // Create session in Supabase with proper session data
+      const supabaseSession = await SupabaseService.createSession({
+        id: sessionId,  // Pass the session ID
+        startTime: new Date().toISOString(),
+        defaultAltitudeLevel: defaultAltitudeLevel,
+        baselineHRV: baselineHRV,
+        protocolConfig: this.protocolConfig
+      });
+      
+      if (!supabaseSession) {
+        throw new Error('Failed to create session in Supabase');
       }
 
       // Initialize session state
       this.currentSession = {
         id: sessionId,
-        userId,
+        supabaseId: supabaseSession.id,  // Store the Supabase session ID
         startTime: new Date().toISOString()
       };
       this.isActive = true;
@@ -477,6 +478,12 @@ class EnhancedSessionManager {
   }
 
   async sendPhaseStartNotification(phase) {
+    // Only send notification if app is not active
+    if (this.appState === 'active') {
+      console.log('📱 App is active, skipping phase notification');
+      return;
+    }
+    
     try {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') return;
@@ -568,17 +575,25 @@ class EnhancedSessionManager {
   startPhaseTimer() {
     // Use timestamp-based calculation for better accuracy
     this.phaseStartTime = Date.now();
+    console.log('⏱️ Starting phase timer for', this.currentPhase, 'phase');
     
     this.phaseTimer = setInterval(() => {
       if (!this.isActive || this.isPaused) return;
 
       // Calculate time remaining based on elapsed time
       const elapsed = Math.floor((Date.now() - this.phaseStartTime) / 1000);
-      const phaseDuration = this.currentPhase === 'HYPOXIC' 
-        ? this.protocolConfig.hypoxicDuration 
-        : this.protocolConfig.hyperoxicDuration;
+      const phaseDuration = this.currentPhase === 'TRANSITION'
+        ? 10  // Transition phase is always 10 seconds
+        : this.currentPhase === 'HYPOXIC' 
+          ? this.protocolConfig.hypoxicDuration 
+          : this.protocolConfig.hyperoxicDuration;
       
       this.phaseTimeRemaining = Math.max(0, phaseDuration - elapsed);
+      
+      // Log every 5 seconds for debugging
+      if (elapsed % 5 === 0) {
+        console.log(`⏱️ Phase timer: ${this.currentPhase} - ${this.phaseTimeRemaining}s remaining`);
+      }
 
       // Check for phase transition
       if (this.phaseTimeRemaining <= 0) {
@@ -633,16 +648,30 @@ class EnhancedSessionManager {
   async advancePhase() {
     console.log(`🔄 Advancing from ${this.currentPhase} phase (Cycle ${this.currentCycle})`);
 
-    if (this.currentPhase === 'HYPOXIC') {
-      // Transition to hyperoxic phase
-      this.currentPhase = 'HYPEROXIC';
-      this.phaseTimeRemaining = this.protocolConfig.hyperoxicDuration;
+    // If currently in TRANSITION, move to the scheduled phase
+    if (this.currentPhase === 'TRANSITION') {
+      this.currentPhase = this.nextPhaseAfterTransition;
+      this.phaseTimeRemaining = this.nextPhaseAfterTransition === 'HYPEROXIC' 
+        ? this.protocolConfig.hyperoxicDuration 
+        : this.protocolConfig.hypoxicDuration;
       this.phaseStartTime = Date.now();
       
-      console.log(`🔄 Advanced to HYPEROXIC phase (Cycle ${this.currentCycle})`);
+      console.log(`🔄 Transition complete - starting ${this.currentPhase} phase`);
       
-      // Send immediate notification for phase start
-      await this.sendPhaseStartNotification('HYPEROXIC');
+      // Send notification for actual phase start
+      await this.sendPhaseStartNotification(this.currentPhase);
+      this.nextPhaseAfterTransition = null;
+      return;
+    }
+
+    // When transitioning from HYPOXIC, go to TRANSITION first
+    if (this.currentPhase === 'HYPOXIC') {
+      this.currentPhase = 'TRANSITION';
+      this.nextPhaseAfterTransition = 'HYPEROXIC';
+      this.phaseTimeRemaining = 10; // 10 seconds
+      this.phaseStartTime = Date.now();
+      
+      console.log('⚠️ Entering mask switch transition → Take OFF mask for Hyperoxic phase');
       
     } else if (this.currentPhase === 'HYPEROXIC') {
       // Check if session is complete
@@ -652,19 +681,17 @@ class EnhancedSessionManager {
         return;
       }
 
-      // Advance to next cycle
+      // Move to next cycle via transition
       this.currentCycle++;
-      this.currentPhase = 'HYPOXIC';
-      this.phaseTimeRemaining = this.protocolConfig.hypoxicDuration;
+      this.currentPhase = 'TRANSITION';
+      this.nextPhaseAfterTransition = 'HYPOXIC';
+      this.phaseTimeRemaining = 10; // 10 seconds
       this.phaseStartTime = Date.now();
       
       // Update database with new cycle
       await this.updateSessionCycle();
       
-      console.log(`🔄 Advanced to Cycle ${this.currentCycle} - HYPOXIC phase`);
-      
-      // Send immediate notification for phase start
-      await this.sendPhaseStartNotification('HYPOXIC');
+      console.log(`⚠️ Entering mask switch transition → PUT ON mask for Hypoxic phase (Cycle ${this.currentCycle})`);
     }
 
     // Schedule new notifications for this phase
@@ -841,8 +868,58 @@ class EnhancedSessionManager {
       console.log('🎉 Session completed with', this.currentCycle, 'cycles');
     }
 
-    // Stop the session
-    await this.stopSession();
+    // Set phase to COMPLETED so UI can detect it
+    this.currentPhase = 'COMPLETED';
+    
+    // Notify listeners that session is complete
+    this.notify('sessionCompleted', {
+      sessionId: this.currentSession?.id,
+      cycles: this.currentCycle,
+      totalCycles: this.protocolConfig?.totalCycles
+    });
+
+    // Give UI time to detect completion before stopping
+    setTimeout(async () => {
+      // Stop the session
+      await this.stopSession('completed');
+    }, 2000); // 2 seconds for UI to handle completion
+  }
+
+  // Alias for stopSession to maintain compatibility with IHHTTrainingScreen
+  async endSession() {
+    console.log('📊 Ending session (called from UI)');
+    
+    // Check if session is already ended
+    if (!this.isActive && !this.currentSession) {
+      console.log('⚠️ Session already ended - returning last known info');
+      // Try to get session ID from storage if available
+      const storedSession = await AsyncStorage.getItem('lastEndedSession');
+      if (storedSession) {
+        return JSON.parse(storedSession);
+      }
+      return null;
+    }
+    
+    // Get the current session info before stopping
+    const sessionInfo = this.currentSession ? {
+      sessionId: this.currentSession.id,
+      duration: Date.now() - this.startTime,
+      cycles: this.currentCycle,
+      totalCycles: this.protocolConfig?.totalCycles
+    } : null;
+    
+    // Store session info for later retrieval
+    if (sessionInfo) {
+      await AsyncStorage.setItem('lastEndedSession', JSON.stringify(sessionInfo));
+    }
+    
+    // Stop the session if it's still active
+    if (this.isActive) {
+      await this.stopSession('manual');
+    }
+    
+    // Return session info for navigation
+    return sessionInfo;
   }
 
   resetSessionState() {
@@ -1066,10 +1143,10 @@ class EnhancedSessionManager {
     }
   }
 
-  // Resume a recovered session
-  async resumeSession(recoveryData) {
+  // Resume a recovered session (after app restart)
+  async resumeRecoveredSession(recoveryData) {
     try {
-      console.log(`🔄 Resuming session: ${recoveryData.sessionId}`);
+      console.log(`🔄 Resuming recovered session: ${recoveryData.sessionId}`);
       
       // Restore session state
       this.currentSession = {
@@ -1190,21 +1267,24 @@ class EnhancedSessionManager {
       isPaused: this.isPaused,
       currentSession: this.currentSession,
       currentPhase: this.currentPhase,
+      nextPhaseAfterTransition: this.nextPhaseAfterTransition,
       currentCycle: this.currentCycle,
       phaseTimeRemaining: this.phaseTimeRemaining,
       sessionStartTime: this.startTime, // Add session start time for UI timer
+      startTime: this.startTime, // Also include as startTime for backward compatibility
       totalCycles: this.protocolConfig.totalCycles,
       hypoxicDuration: this.protocolConfig.hypoxicDuration,
       hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
       capabilities: runtimeEnvironment.capabilities,
-      environment: runtimeEnvironment.environmentName
+      environment: runtimeEnvironment.environmentName,
+      currentAltitudeLevel: this.currentAltitudeLevel
     };
   }
 
-  setHypoxiaLevel(level) {
-    if (level >= 0 && level <= 10) {
-      this.currentHypoxiaLevel = level;
-      this.notify('hypoxiaLevelChanged', { level });
+  setAltitudeLevel(level) {
+    if (level >= 1 && level <= 11) {
+      this.currentAltitudeLevel = level;
+      this.notify('altitudeLevelChanged', { level });
     }
   }
 
@@ -1239,7 +1319,7 @@ class EnhancedSessionManager {
       
       // Start scanning for pulse oximeter (most critical device for sessions)
       console.log('🔍 Starting pulse-ox scan for reconnection...');
-      await BluetoothService.startScanning('pulse-ox');
+      await BluetoothService.startScan('pulse-ox');
       
       // Give it a few seconds to find and connect
       setTimeout(async () => {

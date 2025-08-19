@@ -1,15 +1,21 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
+import { useAppTheme } from '../theme';
 import LoginScreen from '../auth/screens/LoginScreen';
 import PhoneVerificationScreen from '../components/PhoneVerificationScreen';
 
 const Stack = createStackNavigator();
 
 const AuthNavigator = () => {
+  const { colors } = useAppTheme();
+  
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
+        cardStyle: {
+          backgroundColor: colors.surface.background,
+        },
         gestureEnabled: true,
         cardStyleInterpolator: ({ current, layouts }) => {
           return {

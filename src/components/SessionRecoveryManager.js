@@ -38,7 +38,7 @@ const SessionRecoveryManager = ({ onNavigateToSession }) => {
       setIsRecovering(true);
       console.log('🔄 User chose to resume session');
       
-      await EnhancedSessionManager.resumeSession(recoveryData);
+      await EnhancedSessionManager.resumeRecoveredSession(recoveryData);
       
       setShowRecoveryModal(false);
       setRecoveryData(null);

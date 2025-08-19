@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
   Alert,
-  ScrollView,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../auth/AuthContext';
 import { CommonActions } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
+import { useAppTheme } from '../theme';
+import Container from '../components/base/Container';
+import Button from '../components/base/Button';
+import Card from '../components/base/Card';
+import { H1, H2, Body, Caption } from '../components/base/Typography';
+import VectorIcon from '../components/base/VectorIcon';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, signOut } = useAuth();
@@ -156,217 +159,157 @@ const ProfileScreen = ({ navigation }) => {
     return 'Unknown User';
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Profile</Text>
-        </View>
+  const { colors, spacing, theme, toggleTheme, themePreference, setTheme } = useAppTheme();
+  
+  const styles = StyleSheet.create({
+    header: {
+      marginBottom: spacing.lg,
+    },
+    section: {
+      marginBottom: spacing.lg,
+    },
+    userCard: {
+      alignItems: 'center',
+      paddingVertical: spacing.lg,
+    },
+    avatarContainer: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.surface.background,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    avatarText: {
+      fontSize: 40,
+    },
+    userInfo: {
+      alignItems: 'center',
+    },
+    themeRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+    },
+    themeOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    themeIcon: {
+      marginRight: spacing.sm,
+    },
+    devSection: {
+      borderWidth: 1,
+      borderColor: colors.error[200],
+      borderStyle: 'dashed',
+      backgroundColor: colors.error[50],
+      padding: spacing.md,
+      borderRadius: spacing.borderRadius.lg,
+    },
+    appInfo: {
+      alignItems: 'center',
+      marginTop: spacing.xl,
+      paddingBottom: spacing.xl,
+    },
+  });
 
-        {/* User Info Section */}
-        <View style={styles.section}>
+  return (
+    <Container scrollable>
+      <View style={styles.header}>
+        <H1>Profile</H1>
+      </View>
+
+      {/* User Info Section */}
+      <Card style={styles.section}>
+        <Card.Body>
           <View style={styles.userCard}>
             <View style={styles.avatarContainer}>
-              <Text style={styles.avatarText}>👤</Text>
+              <Caption style={{ fontSize: 40 }}>👤</Caption>
             </View>
             {isLoadingProfile ? (
-              <ActivityIndicator size="small" color="#3B82F6" style={{ marginVertical: 10 }} />
+              <ActivityIndicator size="small" color={colors.primary[500]} style={{ marginVertical: 10 }} />
             ) : (
-              <>
+              <View style={styles.userInfo}>
                 {userName && (
-                  <Text style={styles.userName}>{userName}</Text>
+                  <H2>{userName}</H2>
                 )}
-                <Text style={styles.userLabel}>Phone Number</Text>
-                <Text style={styles.userPhone}>{getUserIdentifier()}</Text>
+                <Caption color="secondary" style={{ marginTop: spacing.xs }}>Phone Number</Caption>
+                <Body weight="semibold">{getUserIdentifier()}</Body>
                 {user?.id && (
-                  <Text style={styles.userId}>ID: {user.id.substring(0, 8)}...</Text>
+                  <Caption color="tertiary" style={{ marginTop: spacing.xs }}>ID: {user.id.substring(0, 8)}...</Caption>
                 )}
-              </>
+              </View>
             )}
           </View>
-        </View>
+        </Card.Body>
+      </Card>
 
-        {/* Actions Section */}
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={[styles.button, styles.logoutButton]}
-            onPress={handleLogout}
-            disabled={isLoggingOut}
-          >
-            {isLoggingOut ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.buttonText}>Log Out</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+      {/* Appearance Settings */}
+      <Card style={styles.section}>
+        <Card.Header title="Appearance" />
+        <Card.Body>
+          <View style={styles.themeRow}>
+            <View style={styles.themeOption}>
+              <VectorIcon name={theme === 'dark' ? 'moon' : 'sun'} size={20} color={colors.text.primary} style={styles.themeIcon} />
+              <Body>Dark Mode</Body>
+            </View>
+            <Switch
+              value={theme === 'dark'}
+              onValueChange={toggleTheme}
+              trackColor={{ false: colors.border.light, true: colors.primary[500] }}
+              thumbColor={colors.white}
+            />
+          </View>
+          <Caption color="secondary" style={{ marginTop: spacing.xs }}>
+            {themePreference === 'system' ? 'Following system preference' : `Using ${theme} theme`}
+          </Caption>
+        </Card.Body>
+      </Card>
 
-        {/* Developer Options Section */}
-        <View style={styles.section}>
+      {/* Actions Section */}
+      <View style={styles.section}>
+        <Button
+          title="Log Out"
+          variant="primary"
+          onPress={handleLogout}
+          loading={isLoggingOut}
+          disabled={isLoggingOut}
+          fullWidth
+        />
+      </View>
+
+      {/* Developer Options Section */}
+      <Card style={styles.section}>
+        <Card.Body>
           <View style={styles.devSection}>
-            <Text style={styles.devTitle}>Developer Options</Text>
-            <Text style={styles.devSubtitle}>For testing purposes only</Text>
+            <Body weight="semibold" color="error">Developer Options</Body>
+            <Caption color="error" style={{ marginBottom: spacing.md }}>For testing purposes only</Caption>
             
-            <TouchableOpacity
-              style={[styles.button, styles.clearButton]}
+            <Button
+              title="Clear All Data & Start Fresh"
+              variant="danger"
               onPress={handleClearAllData}
+              loading={isClearing}
               disabled={isClearing}
-            >
-              {isClearing ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <Text style={styles.clearButtonText}>Clear All Data & Start Fresh</Text>
-                  <Text style={styles.clearButtonSubtext}>Reset to fresh install state</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              fullWidth
+            />
+            <Caption color="error" style={{ marginTop: spacing.xs, textAlign: 'center' }}>
+              Reset to fresh install state
+            </Caption>
           </View>
-        </View>
+        </Card.Body>
+      </Card>
 
-        {/* App Info */}
-        <View style={styles.appInfo}>
-          <Text style={styles.appInfoText}>Vitaliti Air</Text>
-          <Text style={styles.appInfoSubtext}>Version 1.0.0</Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      {/* App Info */}
+      <View style={styles.appInfo}>
+        <Body color="secondary">Vitaliti Air</Body>
+        <Caption color="tertiary">Version 1.0.0</Caption>
+      </View>
+    </Container>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  scrollContent: {
-    paddingBottom: 30,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  section: {
-    paddingHorizontal: 20,
-    marginTop: 20,
-  },
-  userCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#E5E7EB',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  avatarText: {
-    fontSize: 40,
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  userLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 4,
-    marginTop: 8,
-  },
-  userPhone: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: 4,
-  },
-  userId: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 4,
-  },
-  button: {
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoutButton: {
-    backgroundColor: '#3B82F6',
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  devSection: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-    borderStyle: 'dashed',
-  },
-  devTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#DC2626',
-    marginBottom: 4,
-  },
-  devSubtitle: {
-    fontSize: 14,
-    color: '#F87171',
-    marginBottom: 16,
-  },
-  clearButton: {
-    backgroundColor: '#EF4444',
-  },
-  clearButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  clearButtonSubtext: {
-    color: '#FEE2E2',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  appInfo: {
-    alignItems: 'center',
-    marginTop: 40,
-    paddingHorizontal: 20,
-  },
-  appInfoText: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    fontWeight: '500',
-  },
-  appInfoSubtext: {
-    fontSize: 12,
-    color: '#D1D5DB',
-    marginTop: 4,
-  },
-});
 
 export default ProfileScreen;

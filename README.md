@@ -211,6 +211,18 @@ Note: The deprecated `SessionManager.js` has been removed. All session managemen
 - Detailed session data
 - Export functionality
 
+## Documentation
+
+### 📚 Design System
+For detailed information about the app's design system, theme implementation, and component library, see:
+- **[Design System Guide](docs/DESIGN_SYSTEM.md)** - Complete guide to the theme system, base components, and migration patterns
+
+### Additional Documentation
+- **Design System** - Theme tokens, components, patterns
+- **Architecture** - App structure and data flow
+- **Development** - Setup and debugging guides
+- **API** - Backend integration details
+
 ## Development Guidelines
 
 ### Code Style
@@ -218,7 +230,7 @@ Note: The deprecated `SessionManager.js` has been removed. All session managemen
 - **Components**: Functional components with hooks
 - **Naming**: camelCase for variables/functions, PascalCase for components
 - **Imports**: Relative imports from `/src`, absolute for packages
-- **Styling**: StyleSheet objects at component bottom
+- **Styling**: Use theme-aware base components and semantic tokens
 - **Error Handling**: Console logging with emoji prefixes (❌, ✅, 🎯, 📱)
 
 ### State Management

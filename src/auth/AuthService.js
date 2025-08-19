@@ -23,9 +23,26 @@ class AuthService {
         return false;
       }
 
-      this.currentUser = session?.user || null;
+      // If we have a session, try to refresh it to ensure it's still valid
+      if (session) {
+        try {
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          if (!refreshError && refreshData.session) {
+            this.currentUser = refreshData.session.user;
+            log.info('✅ Session refreshed for user:', this.currentUser.id);
+          } else if (refreshError) {
+            log.warn('⚠️ Could not refresh session:', refreshError.message);
+            this.currentUser = session.user; // Use existing session
+          }
+        } catch (refreshError) {
+          log.warn('⚠️ Session refresh failed:', refreshError);
+          this.currentUser = session.user; // Use existing session
+        }
+      } else {
+        this.currentUser = null;
+      }
+      
       this.isInitialized = true;
-
       log.info('Auth initialized:', this.currentUser ? 'User logged in' : 'No user');
       
       // Set up auth state change listener

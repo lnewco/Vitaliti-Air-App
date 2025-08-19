@@ -133,6 +133,12 @@ class SupabaseService {
       const { data: authSession, error: sessionError } = await supabase.auth.getSession();
       log.info('Supabase auth.getSession():', authSession, sessionError);
       
+      // CRITICAL: Ensure we have the local session ID
+      if (!sessionData.id) {
+        log.error('❌ CRITICAL: No session ID provided to createSession');
+        throw new Error('Session ID is required');
+      }
+      
       const session = {
         device_id: this.deviceId,
         user_id: currentUser?.id || null, // Link to authenticated user or anonymous
@@ -151,7 +157,7 @@ class SupabaseService {
         planned_hyperoxic_duration: sessionData.protocolConfig?.hyperoxicDuration || 180,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        // Store the local session ID as metadata
+        // CRITICAL: Store the local session ID for mapping recovery
         local_session_id: sessionData.id
       };
 
@@ -341,7 +347,7 @@ class SupabaseService {
       // Get current authenticated user
       const currentUser = authService.getCurrentUser();
       
-      // Use atomic function for single reading insert with HRV data
+      // Use atomic function for single reading insert
       const { data, error } = await supabase.rpc('insert_single_reading_with_device_id', {
         device_id_value: deviceIdToUse,
         p_session_id: supabaseSessionId,
@@ -355,11 +361,6 @@ class SupabaseService {
         p_fio2_level: reading.fio2Level || null,
         p_phase_type: reading.phaseType || null,
         p_cycle_number: reading.cycleNumber || null,
-        p_hrv_rmssd: reading.hrv?.rmssd || reading.hrv_rmssd || null,
-        p_hrv_type: reading.hrv?.type || null,
-        p_hrv_interval_count: reading.hrv?.intervalCount || null,
-        p_hrv_data_quality: reading.hrv?.dataQuality || null,
-        p_hrv_confidence: reading.hrv?.confidence || null,
         p_created_at: new Date().toISOString()
       });
 
@@ -381,15 +382,29 @@ class SupabaseService {
     try {
       // Get session mapping
       const firstReading = readings[0];
-      if (!firstReading) return null;
+      if (!firstReading) {
+        log.warn('⚠️ Empty readings batch');
+        return null;
+      }
       
-      let supabaseSessionId = this.sessionMapping.get(firstReading.session_id || firstReading.sessionId);
+      const localSessionId = firstReading.session_id || firstReading.sessionId;
+      log.info('📊 Processing readings batch for session:', localSessionId, 'Count:', readings.length);
+      
+      let supabaseSessionId = this.sessionMapping.get(localSessionId);
+      
+      if (supabaseSessionId) {
+        log.info('✅ Found existing session mapping:', localSessionId, '→', supabaseSessionId);
+      } else {
+        log.warn('⚠️ No session mapping found, attempting recovery for:', localSessionId);
+        log.info('📋 Current session mappings:', Array.from(this.sessionMapping.entries()));
+      }
       
       // Recover session mapping if needed
       if (!supabaseSessionId) {
-        supabaseSessionId = await this.recoverSessionMapping(firstReading.session_id || firstReading.sessionId);
+        supabaseSessionId = await this.recoverSessionMapping(localSessionId);
         if (!supabaseSessionId) {
-          log.error('❌ Failed to recover session mapping for batch:', firstReading.session_id || firstReading.sessionId);
+          log.error('❌ Failed to recover session mapping for batch:', localSessionId);
+          log.error('❌ Will queue batch for later sync');
           this.queueForSync('addReadingsBatch', readings);
           return null;
         }
@@ -415,11 +430,6 @@ class SupabaseService {
         fio2_level: reading.fio2Level || null,
         phase_type: reading.phaseType || null,
         cycle_number: reading.cycleNumber || null,
-        hrv_rmssd: reading.hrv?.rmssd || reading.hrv_rmssd || null,
-        hrv_type: reading.hrv?.type || null,
-        hrv_interval_count: reading.hrv?.intervalCount || null,
-        hrv_data_quality: reading.hrv?.dataQuality || null,
-        hrv_confidence: reading.hrv?.confidence || null,
         created_at: new Date().toISOString()
       }));
 
@@ -566,20 +576,48 @@ class SupabaseService {
   async cleanupOrphanedSyncItems() {
     const originalLength = this.syncQueue.length;
     
-    // Remove items where sessionId is undefined, null, or 'unknown'
+    // Remove items where sessionId is invalid or uses old patterns
     this.syncQueue = this.syncQueue.filter(item => {
-      const sessionId = item.data?.sessionId || item.data?.localSessionId;
-      const isOrphan = !sessionId || sessionId === 'undefined' || sessionId === 'unknown';
+      // Extract sessionId based on operation type
+      let sessionId = null;
+      
+      if (item.operation === 'endSession' || item.operation === 'updateSessionCycle') {
+        sessionId = item.data?.sessionId;
+      } else if (item.operation === 'updateSessionProtocolConfig') {
+        sessionId = item.data?.localSessionId;
+      } else if (item.operation === 'createSession') {
+        sessionId = item.data?.id || item.data?.localSessionId;
+      } else if (item.operation === 'addReadingsBatch' && Array.isArray(item.data) && item.data.length > 0) {
+        sessionId = item.data[0]?.session_id || item.data[0]?.sessionId;
+      } else {
+        sessionId = item.data?.localSessionId || item.data?.sessionId || item.data?.session_id;
+      }
+      
+      // Remove if sessionId is invalid or uses old patterns
+      const isOrphan = !sessionId || 
+                       sessionId === 'undefined' || 
+                       sessionId === 'unknown' ||
+                       sessionId === 'null' ||
+                       sessionId === 'IHHT_TRAINING';  // Old pattern without timestamp
       
       if (isOrphan) {
-        log.info(`🧹 Removing orphaned sync item: ${item.type} with sessionId: ${sessionId}`);
+        log.info(`🧹 Removing orphaned sync item: ${item.operation} with invalid sessionId: ${sessionId}`);
         return false;
       }
+      
+      // Also validate format - should contain timestamp
+      if (typeof sessionId === 'string' && 
+          (sessionId === sessionId.toUpperCase()) && // All caps likely old pattern
+          !sessionId.match(/\d{13}/)) { // Should contain timestamp
+        log.info(`🧹 Removing sync item with old format: ${item.operation} sessionId: ${sessionId}`);
+        return false;
+      }
+      
       return true;
     });
     
     if (this.syncQueue.length !== originalLength) {
-      log.info(`Cleaned up ${originalLength - this.syncQueue.length} orphaned sync items`);
+      log.info(`✅ Cleaned up ${originalLength - this.syncQueue.length} orphaned sync items`);
       await this.persistSyncQueue();
     }
   }
@@ -645,15 +683,9 @@ class SupabaseService {
             success = await this.addReadingsBatch(item.data) !== null;
             break;
           case 'pre_session_survey':
-            // Check if session mapping exists before trying to sync
-            const supabaseId1 = this.sessionMapping.get(item.data.localSessionId);
-            if (supabaseId1) {
-              const preResult = await this.syncPreSessionSurvey(item.data.localSessionId, item.data.clarityPre, item.data.energyPre);
-              success = preResult.success && !preResult.queued;
-            } else {
-              // Keep in queue but don't retry yet (session mapping doesn't exist)
-              success = false;
-            }
+            // Pre-session surveys deprecated - skip this item
+            log.info('⚠️ Skipping deprecated pre-session survey sync');
+            success = true; // Mark as success to remove from queue
             break;
           case 'post_session_survey':
             // Check if session mapping exists before trying to sync
@@ -818,6 +850,23 @@ class SupabaseService {
       // Clean up orphaned sync items with undefined sessionIds
       await this.cleanupOrphanedSyncItems();
       
+      // Additional cleanup specifically for IHHT_TRAINING pattern
+      const beforeExtraCleanup = this.syncQueue.length;
+      this.syncQueue = this.syncQueue.filter(item => {
+        const sessionId = item.data?.sessionId || item.data?.localSessionId || 
+                         (item.data?.[0]?.session_id) || (item.data?.[0]?.sessionId);
+        if (sessionId === 'IHHT_TRAINING') {
+          log.warn(`🧹 Removing legacy ${sessionId} sync item:`, item.operation);
+          return false;
+        }
+        return true;
+      });
+      
+      if (beforeExtraCleanup !== this.syncQueue.length) {
+        log.info(`✅ Extra cleanup removed ${beforeExtraCleanup - this.syncQueue.length} legacy items`);
+        await this.persistSyncQueue();
+      }
+      
       if (this.isOnline && this.syncQueue.length > 0) {
         await this.processSyncQueue();
       }
@@ -833,25 +882,56 @@ class SupabaseService {
   // Session mapping recovery from database
   async recoverSessionMapping(localSessionId) {
     try {
-      log.info('Attempting to recover session mapping for:', localSessionId);
+      log.info('🔍 Attempting to recover session mapping for:', localSessionId);
       
-      const { data, error } = await supabase
+      // First try: Look for exact local_session_id match
+      const { data: primaryData, error: primaryError } = await supabase
         .from('sessions')
-        .select('id')
+        .select('id, local_session_id, device_id, start_time, status')
         .eq('local_session_id', localSessionId)
         .eq('status', 'active')
         .single();
       
-      if (data && !error) {
-        const supabaseSessionId = data.id;
+      if (primaryData && !primaryError) {
+        const supabaseSessionId = primaryData.id;
         this.sessionMapping.set(localSessionId, supabaseSessionId);
         await this.persistSessionMapping();
-        log.info('Recovered session mapping:', localSessionId, '→', supabaseSessionId);
+        log.info('✅ Successfully recovered session mapping (primary):', localSessionId, '→', supabaseSessionId);
         return supabaseSessionId;
-      } else {
-        log.error('❌ No active session found in Supabase for:', localSessionId, error);
-        return null;
       }
+      
+      log.warn('⚠️ Primary recovery failed, attempting secondary recovery by device_id and recency');
+      
+      // Secondary recovery: Find most recent active session for this device
+      if (this.deviceId) {
+        const { data: secondaryData, error: secondaryError } = await supabase
+          .from('sessions')
+          .select('id, local_session_id, device_id, start_time, status')
+          .eq('device_id', this.deviceId)
+          .eq('status', 'active')
+          .order('start_time', { ascending: false })
+          .limit(1);
+        
+        if (secondaryData && secondaryData.length > 0 && !secondaryError) {
+          const session = secondaryData[0];
+          // Only use this if the session is recent (within last hour)
+          const sessionAge = Date.now() - new Date(session.start_time).getTime();
+          if (sessionAge < 60 * 60 * 1000) { // 1 hour
+            log.warn('⚠️ Using recent active session as fallback:', session.id);
+            log.warn('⚠️ Original local_session_id:', session.local_session_id, 'Requested:', localSessionId);
+            this.sessionMapping.set(localSessionId, session.id);
+            await this.persistSessionMapping();
+            return session.id;
+          } else {
+            log.error('❌ Found session but it\'s too old:', sessionAge / 1000 / 60, 'minutes');
+          }
+        }
+      }
+      
+      log.error('❌ No active session found in Supabase for:', localSessionId);
+      log.error('❌ Session mapping size:', this.sessionMapping.size);
+      log.error('❌ Current mappings:', Array.from(this.sessionMapping.entries()));
+      return null;
     } catch (error) {
       log.error('❌ Failed to recover session mapping:', error);
       return null;
@@ -940,50 +1020,51 @@ class SupabaseService {
   // ========================================
 
   /**
-   * Sync pre-session survey data to Supabase
+   * DEPRECATED: Pre-session surveys removed in simplified flow
+   * Keeping for reference only - do not use
    */
-  async syncPreSessionSurvey(localSessionId, clarityPre, energyPre) {
-    try {
-      log.info(`Syncing pre-session survey for: ${localSessionId}`);
+  // async syncPreSessionSurvey(localSessionId, clarityPre, energyPre) {
+  //   try {
+  //     log.info(`Syncing pre-session survey for: ${localSessionId}`);
       
-      // Get the Supabase session UUID
-      const supabaseId = this.sessionMapping.get(localSessionId);
-      if (!supabaseId) {
-        log.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
-        this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
-        return { success: true, queued: true };
-      }
+  //     // Get the Supabase session UUID
+  //     const supabaseId = this.sessionMapping.get(localSessionId);
+  //     if (!supabaseId) {
+  //       log.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
+  //       this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
+  //       return { success: true, queued: true };
+  //     }
 
-      // Get session data to determine correct device_id
-      const sessionData = await this.verifySessionData(supabaseId);
-      const deviceIdToUse = sessionData?.device_id || this.deviceId;
+  //     // Get session data to determine correct device_id
+  //     const sessionData = await this.verifySessionData(supabaseId);
+  //     const deviceIdToUse = sessionData?.device_id || this.deviceId;
 
-      // Get current authenticated user
-      const currentUser = authService.getCurrentUser();
+  //     // Get current authenticated user
+  //     const currentUser = authService.getCurrentUser();
       
-      // Use atomic function for survey insert
-      const { data, error } = await supabase.rpc('insert_pre_session_survey_with_device_id', {
-        device_id_value: deviceIdToUse,
-        p_session_id: supabaseId,
-        p_user_id: currentUser?.id || null,
-        p_clarity_pre: clarityPre,
-        p_energy_pre: energyPre
-      });
+  //     // Use atomic function for survey insert
+  //     const { data, error } = await supabase.rpc('insert_pre_session_survey_with_device_id', {
+  //       device_id_value: deviceIdToUse,
+  //       p_session_id: supabaseId,
+  //       p_user_id: currentUser?.id || null,
+  //       p_clarity_pre: clarityPre,
+  //       p_energy_pre: energyPre
+  //     });
 
-      if (error) {
-        log.error('❌ Failed to sync pre-session survey:', error);
-        this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
-        return { success: false, error: error.message };
-      }
+  //     if (error) {
+  //       log.error('❌ Failed to sync pre-session survey:', error);
+  //       this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
+  //       return { success: false, error: error.message };
+  //     }
 
-      log.info('Pre-session survey synced to Supabase');
-      return { success: true, data };
-    } catch (error) {
-      log.error('❌ Error syncing pre-session survey:', error);
-      this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
-      return { success: false, error: error.message };
-    }
-  }
+  //     log.info('Pre-session survey synced to Supabase');
+  //     return { success: true, data };
+  //   } catch (error) {
+  //     log.error('❌ Error syncing pre-session survey:', error);
+  //     this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
+  //     return { success: false, error: error.message };
+  //   }
+  // }
 
   /**
    * Sync post-session survey data to Supabase
@@ -1284,171 +1365,6 @@ class SupabaseService {
   // CALIBRATION SESSION SYNC METHODS
   // ========================================
 
-  async syncCalibrationSession(calibrationData) {
-    try {
-      if (!this.isOnline) {
-        this.queueForSync('syncCalibrationSession', calibrationData);
-        return { success: false, queued: true };
-      }
-
-      const currentUser = authService.getCurrentUser();
-      const userId = currentUser?.id || null;
-
-      // Create calibration session in Supabase
-      const { data, error } = await supabase
-        .from('calibration_sessions')
-        .insert({
-          id: calibrationData.sessionId,
-          user_id: userId,
-          device_id: this.deviceId,
-          local_session_id: calibrationData.sessionId,
-          start_time: new Date(calibrationData.startTime).toISOString(),
-          end_time: calibrationData.endTime ? new Date(calibrationData.endTime).toISOString() : null,
-          calibration_value: calibrationData.calibrationValue,
-          final_spo2: calibrationData.finalSpo2,
-          final_heart_rate: calibrationData.finalHeartRate,
-          status: calibrationData.status || 'completed',
-          terminated_reason: calibrationData.terminatedReason,
-          total_duration_seconds: calibrationData.totalDuration,
-          levels_completed: calibrationData.levelsCompleted,
-          avg_spo2: calibrationData.avgSpo2,
-          min_spo2: calibrationData.minSpo2,
-          max_spo2: calibrationData.maxSpo2,
-          avg_heart_rate: calibrationData.avgHeartRate,
-          min_heart_rate: calibrationData.minHeartRate,
-          max_heart_rate: calibrationData.maxHeartRate,
-          synced_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (error) {
-        log.error('❌ Failed to sync calibration session:', error);
-        this.queueForSync('syncCalibrationSession', calibrationData);
-        return { success: false, error: error.message };
-      }
-
-      log.info('Calibration session synced to Supabase:', data.id);
-      return { success: true, data };
-    } catch (error) {
-      log.error('❌ Error syncing calibration session:', error);
-      this.queueForSync('syncCalibrationSession', calibrationData);
-      return { success: false, error: error.message };
-    }
-  }
-
-  async syncCalibrationReadings(sessionId, readings) {
-    try {
-      if (!this.isOnline) {
-        this.queueForSync('syncCalibrationReadings', { sessionId, readings });
-        return { success: false, queued: true };
-      }
-
-      // Transform readings for Supabase
-      const supabaseReadings = readings.map(reading => ({
-        calibration_session_id: sessionId,
-        intensity_level: reading.intensityLevel,
-        minute_number: reading.minuteNumber,
-        start_time: new Date(reading.startTime).toISOString(),
-        end_time: reading.endTime ? new Date(reading.endTime).toISOString() : null,
-        confirmation_time: reading.confirmationTime ? new Date(reading.confirmationTime).toISOString() : null,
-        duration_seconds: reading.durationSeconds,
-        final_spo2: reading.finalSpO2,
-        final_heart_rate: reading.finalHeartRate,
-        avg_spo2: reading.avgSpO2,
-        min_spo2: reading.minSpO2,
-        avg_heart_rate: reading.avgHeartRate,
-        completed: reading.completed
-      }));
-
-      const { data, error } = await supabase
-        .from('calibration_readings')
-        .insert(supabaseReadings)
-        .select();
-
-      if (error) {
-        log.error('❌ Failed to sync calibration readings:', error);
-        this.queueForSync('syncCalibrationReadings', { sessionId, readings });
-        return { success: false, error: error.message };
-      }
-
-      log.info(`Synced ${data.length} calibration readings for session ${sessionId}`);
-      return { success: true, data };
-    } catch (error) {
-      log.error('❌ Error syncing calibration readings:', error);
-      this.queueForSync('syncCalibrationReadings', { sessionId, readings });
-      return { success: false, error: error.message };
-    }
-  }
-
-  async syncCalibrationData(calibrationSessionData, calibrationReadings) {
-    try {
-      // Sync the session first
-      const sessionResult = await this.syncCalibrationSession(calibrationSessionData);
-      
-      if (sessionResult.success && calibrationReadings && calibrationReadings.length > 0) {
-        // Then sync the readings
-        await this.syncCalibrationReadings(calibrationSessionData.sessionId, calibrationReadings);
-      }
-
-      return sessionResult;
-    } catch (error) {
-      log.error('❌ Error syncing calibration data:', error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  async getCalibrationHistory(userId, limit = 10) {
-    try {
-      const { data, error } = await supabase
-        .from('calibration_sessions')
-        .select('*')
-        .eq('user_id', userId)
-        .order('start_time', { ascending: false })
-        .limit(limit);
-
-      if (error) {
-        log.error('❌ Failed to fetch calibration history:', error);
-        return [];
-      }
-
-      return data || [];
-    } catch (error) {
-      log.error('❌ Error fetching calibration history:', error);
-      return [];
-    }
-  }
-
-  async getLatestCalibrationValue(userId) {
-    try {
-      const { data, error } = await supabase
-        .from('calibration_sessions')
-        .select('calibration_value, end_time')
-        .eq('user_id', userId)
-        .eq('status', 'completed')
-        .not('calibration_value', 'is', null)
-        .order('end_time', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (error) {
-        log.error('❌ Failed to fetch latest calibration value:', error);
-        return null;
-      }
-
-      if (data) {
-        return {
-          calibrationValue: data.calibration_value,
-          calibrationDate: new Date(data.end_time)
-        };
-      }
-
-      return null;
-    } catch (error) {
-      log.error('❌ Error fetching latest calibration value:', error);
-      return null;
-    }
-  }
 }
 
 export default new SupabaseService(); 

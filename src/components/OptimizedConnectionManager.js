@@ -1,75 +1,28 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, Alert } from 'react-native';
 import { useBluetoothConnection, useBluetoothData } from '../context/BluetoothContext';
+import { useAppTheme } from '../theme';
 
 // ===== MEMOIZED DATA DISPLAY COMPONENT =====
 const BluetoothDataDisplay = React.memo(() => {
-  const { pulseOximeterData, heartRateData, persistentHRV } = useBluetoothData();
-  const { isPulseOxConnected, isHRConnected } = useBluetoothConnection();
+  const { pulseOximeterData } = useBluetoothData();
+  const { isPulseOxConnected } = useBluetoothConnection();
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
 
-  const DualHRVDisplay = ({ heartRateData }) => {
-    if (!heartRateData) return null;
-    
-    // Use persistentHRV for more stable values, fallback to heartRateData
-    const quickHRV = persistentHRV?.quickHRV || heartRateData?.quickHRV;
-    const realHRV = persistentHRV?.realHRV || heartRateData?.realHRV;
-    
-    if (!quickHRV && !realHRV) return null;
-    
-    return (
-      <View style={styles.hrvDisplayContainer}>
-        {quickHRV && (
-          <View style={styles.hrvItem}>
-            <Text style={styles.hrvLabel}>Quick HRV ({quickHRV.windowSize}s)</Text>
-            <Text style={styles.hrvValue}>{quickHRV.rmssd}ms</Text>
-            <Text style={styles.hrvQuality}>{quickHRV.dataQuality} quality</Text>
-          </View>
-        )}
-        {realHRV && (
-          <View style={styles.hrvItem}>
-            <Text style={styles.hrvLabel}>Real HRV ({realHRV.windowSize}s)</Text>
-            <Text style={styles.hrvValue}>{realHRV.rmssd}ms</Text>
-            <Text style={styles.hrvQuality}>{realHRV.dataQuality} quality</Text>
-          </View>
-        )}
-      </View>
-    );
-  };
 
-  if (!isPulseOxConnected && !isHRConnected) {
+  if (!isPulseOxConnected) {
     return null;
   }
 
   return (
     <View style={styles.dataDisplaySection}>
       <View style={styles.deviceDataContainer}>
-        {heartRateData && (
-          <View style={[styles.dataCard, styles.hrCard]}>
-            <Text style={styles.dataLabel}>Heart Rate Monitor</Text>
-            <View style={styles.dataRow}>
-              <Text style={[styles.dataValue, styles.primaryDataValue]}>{heartRateData.heartRate || '--'} bpm</Text>
-            </View>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataSubLabel}>Sensor Contact:</Text>
-              <Text style={[styles.dataSubValue, heartRateData.sensorContactDetected ? styles.goodStatus : styles.warningStatus]}>
-                {heartRateData.sensorContactDetected ? '✅ Good' : '⚠️ Check placement'}
-              </Text>
-            </View>
-            {!heartRateData.sensorContactDetected && (
-              <Text style={styles.sensorWarning}>
-                Ensure the heart rate monitor is properly positioned and has good skin contact
-              </Text>
-            )}
-            
-            <DualHRVDisplay heartRateData={heartRateData} />
-          </View>
-        )}
-        
         {pulseOximeterData && (
           <View style={[styles.dataCard, styles.pulseOxCard]}>
             <Text style={styles.dataLabel}>Pulse Oximeter</Text>
             <View style={styles.dataRow}>
-              <Text style={[styles.dataValue, !isHRConnected && styles.primaryDataValue]}>{pulseOximeterData.spo2 || '--'}%</Text>
+              <Text style={[styles.dataValue, styles.primaryDataValue]}>{pulseOximeterData.spo2 || '--'}%</Text>
               <Text style={styles.dataUnit}>SpO₂</Text>
             </View>
             <View style={styles.dataRow}>
@@ -90,17 +43,18 @@ const BluetoothDataDisplay = React.memo(() => {
 
 // ===== MAIN OPTIMIZED CONNECTION MANAGER =====
 const OptimizedConnectionManager = () => {
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
+  
   // ===== STABLE CONNECTION STATE (no re-renders from data) =====
   const {
     isScanning,
     scanType,
     isPulseOxConnected,
-    isHRConnected,
     discoveredDevices,
     connectedPulseOxDevice,
-    connectedHRDevice,
-    startScanning,
-    stopScanning,
+    startScan,
+    stopScan,
     connectToDevice,
     disconnect,
   } = useBluetoothConnection();
@@ -115,14 +69,14 @@ const OptimizedConnectionManager = () => {
       console.log(`🔍 Starting ${deviceType} scan...`);
       setModalScanType(deviceType);
       setShowDeviceModal(true);
-      await startScanning(deviceType);
+      await startScan(deviceType);
     } catch (error) {
       console.error(`❌ Failed to start ${deviceType} scan:`, error);
       Alert.alert('Scan Error', `Failed to start scanning for ${deviceType}: ${error.message}`);
       setShowDeviceModal(false);
       setModalScanType(null);
     }
-  }, [startScanning]);
+  }, [startScan]);
 
   const handleDisconnect = useCallback(async (deviceType) => {
     try {
@@ -137,45 +91,40 @@ const OptimizedConnectionManager = () => {
   const handleConnectToDevice = useCallback(async (device) => {
     try {
       console.log('🔗 Connecting to device:', device.name || device.localName);
-      const success = await connectToDevice(device);
-      if (success) {
-        console.log('✅ Connection successful');
-        setShowDeviceModal(false);
-        setModalScanType(null);
-        await stopScanning();
-      } else {
-        Alert.alert('Connection Error', 'Failed to connect to device. Please try again.');
-      }
+      await connectToDevice(device);
+      console.log('✅ Connection successful');
+      setShowDeviceModal(false);
+      setModalScanType(null);
+      await stopScan();
     } catch (error) {
       console.error('❌ Connection failed:', error);
       Alert.alert('Connection Error', `Failed to connect: ${error.message}`);
     }
-  }, [connectToDevice, stopScanning]);
+  }, [connectToDevice, stopScan]);
 
   const handleCloseModal = useCallback(async () => {
     try {
-      await stopScanning();
+      await stopScan();
     } catch (error) {
       console.error('❌ Error stopping scan:', error);
     }
     setShowDeviceModal(false);
     setModalScanType(null);
-  }, [stopScanning]);
+  }, [stopScan]);
 
   // ===== AUTO-CLOSE MODAL ON CONNECTION =====
   useEffect(() => {
     if (showDeviceModal && modalScanType) {
-      const currentScanConnected = (modalScanType === 'pulse-ox' && isPulseOxConnected) || 
-                                   (modalScanType === 'hr-monitor' && isHRConnected);
+      const currentScanConnected = modalScanType === 'pulse-ox' && isPulseOxConnected;
       
       if (currentScanConnected) {
         console.log(`🎯 ${modalScanType} connected - closing modal`);
         setShowDeviceModal(false);
         setModalScanType(null);
-        stopScanning().catch(console.error);
+        stopScan().catch(console.error);
       }
     }
-  }, [isPulseOxConnected, isHRConnected, showDeviceModal, modalScanType, stopScanning]);
+  }, [isPulseOxConnected, showDeviceModal, modalScanType, stopScan]);
 
   // ===== MEMOIZED DEVICE RENDERER =====
   const renderDevice = useCallback(({ item }) => (
@@ -185,10 +134,10 @@ const OptimizedConnectionManager = () => {
     >
       <View style={styles.deviceInfo}>
         <Text style={styles.deviceName}>
-          {item.deviceType === 'pulse-ox' ? '📱' : '❤️'} {item.name || item.localName || (item.deviceType === 'pulse-ox' ? 'Pulse Oximeter' : 'Heart Rate Monitor')}
+          📱 {item.name || item.localName || 'Pulse Oximeter'}
         </Text>
         <Text style={styles.deviceType}>
-          {item.deviceType === 'pulse-ox' ? 'Pulse Oximeter' : 'Heart Rate Monitor'}
+          Pulse Oximeter
         </Text>
         {item.rssi && (
           <Text style={styles.deviceRssi}>Signal: {item.rssi} dBm</Text>
@@ -207,7 +156,7 @@ const OptimizedConnectionManager = () => {
     <View style={styles.container}>
       {/* Pulse Oximeter Section */}
       <View style={styles.deviceSection}>
-        <Text style={styles.sectionTitle}>1. Pulse Oximeter (Required)</Text>
+        <Text style={styles.sectionTitle}>Pulse Oximeter (Required)</Text>
         <View style={styles.statusCard}>
           {isPulseOxConnected ? (
             <>
@@ -242,43 +191,6 @@ const OptimizedConnectionManager = () => {
       </View>
 
       {/* Heart Rate Monitor Section */}
-      <View style={styles.deviceSection}>
-        <Text style={styles.sectionTitle}>2. Heart Rate Monitor (Optional)</Text>
-        <Text style={styles.sectionSubtitle}>
-          For enhanced heart rate accuracy and HRV analysis
-        </Text>
-        <View style={styles.statusCard}>
-          {isHRConnected ? (
-            <>
-              <Text style={styles.statusIcon}>❤️</Text>
-              <Text style={styles.statusTitle}>Connected</Text>
-              <Text style={styles.deviceNameConnected}>
-                {connectedHRDevice?.name || connectedHRDevice?.localName || 'Heart Rate Monitor'}
-              </Text>
-              <TouchableOpacity 
-                style={styles.disconnectButton} 
-                onPress={() => handleDisconnect('hr-monitor')}
-              >
-                <Text style={styles.disconnectButtonText}>Disconnect</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <Text style={styles.statusIcon}>❤️</Text>
-              <Text style={styles.statusTitle}>Not Connected</Text>
-              <TouchableOpacity 
-                style={styles.findButton} 
-                onPress={() => handleFindDevice('hr-monitor')}
-              >
-                <Text style={styles.findButtonText}>Find Heart Rate Monitor</Text>
-              </TouchableOpacity>
-              <Text style={styles.instructions}>
-                Optional for enhanced accuracy and HRV analysis
-              </Text>
-            </>
-          )}
-        </View>
-      </View>
 
       {/* Optimized Data Display - Only shows when devices are connected */}
       <BluetoothDataDisplay />
@@ -293,7 +205,7 @@ const OptimizedConnectionManager = () => {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>
-              {modalScanType === 'pulse-ox' ? 'Find Pulse Oximeter' : 'Find Heart Rate Monitor'}
+              Find Pulse Oximeter
             </Text>
             <TouchableOpacity style={styles.closeButton} onPress={handleCloseModal}>
               <Text style={styles.closeButtonText}>✕</Text>
@@ -302,7 +214,7 @@ const OptimizedConnectionManager = () => {
 
           <Text style={styles.modalInstructions}>
             {isScanning 
-              ? `Scanning for ${modalScanType === 'pulse-ox' ? 'pulse oximeters' : 'heart rate monitors'}...`
+              ? 'Scanning for pulse oximeters...'
               : 'Make sure your device is powered on and in pairing mode'
             }
           </Text>
@@ -319,7 +231,7 @@ const OptimizedConnectionManager = () => {
             <View style={styles.scanningContainer}>
               <Text style={styles.scanningText}>🔍 Scanning...</Text>
               <Text style={styles.scanningSubtext}>
-                Make sure your {modalScanType === 'pulse-ox' ? 'pulse oximeter' : 'heart rate monitor'} is nearby and discoverable
+                Make sure your pulse oximeter is nearby and discoverable
               </Text>
             </View>
           ) : (
@@ -339,7 +251,7 @@ const OptimizedConnectionManager = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -349,21 +261,21 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.text.primary,
     marginBottom: 8,
   },
   sectionSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.text.secondary,
     marginBottom: 16,
     lineHeight: 20,
   },
   statusCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface.card,
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: colors.isDark ? '#000' : '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -376,44 +288,44 @@ const styles = StyleSheet.create({
   statusTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.text.primary,
     marginBottom: 8,
   },
   deviceNameConnected: {
     fontSize: 16,
-    color: '#059669',
+    color: colors.success[600],
     fontWeight: '600',
     marginBottom: 16,
     textAlign: 'center',
   },
   instructions: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.text.secondary,
     textAlign: 'center',
     marginTop: 12,
     lineHeight: 20,
     maxWidth: 280,
   },
   findButton: {
-    backgroundColor: '#4ECDC4',
+    backgroundColor: colors.primary[500],
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
     marginBottom: 8,
   },
   findButtonText: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontSize: 16,
     fontWeight: 'bold',
   },
   disconnectButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.error[500],
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 10,
   },
   disconnectButtonText: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -427,22 +339,22 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   dataCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.surface.elevated,
     borderRadius: 12,
     padding: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#4ECDC4',
+    borderLeftColor: colors.primary[500],
   },
   hrCard: {
-    borderLeftColor: '#FF6B6B',
+    borderLeftColor: colors.error[400],
   },
   pulseOxCard: {
-    borderLeftColor: '#FFE66D',
+    borderLeftColor: colors.warning[400],
   },
   dataLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#374151',
+    color: colors.text.primary,
     marginBottom: 8,
   },
   dataRow: {
@@ -453,20 +365,20 @@ const styles = StyleSheet.create({
   dataValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.text.primary,
     marginRight: 8,
   },
   primaryDataValue: {
-    color: '#059669',
+    color: colors.success[600],
   },
   dataUnit: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.text.secondary,
     marginLeft: 4,
   },
   dataSubLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.text.secondary,
     marginRight: 8,
   },
   dataSubValue: {
@@ -474,14 +386,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   goodStatus: {
-    color: '#10B981',
+    color: colors.success[500],
   },
   warningStatus: {
-    color: '#F59E0B',
+    color: colors.warning[500],
   },
   sensorWarning: {
     fontSize: 12,
-    color: '#F59E0B',
+    color: colors.warning[500],
     marginTop: 8,
     textAlign: 'center',
   },
@@ -491,33 +403,33 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   hrvItem: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface.card,
     borderRadius: 12,
     padding: 12,
     borderLeftWidth: 4,
-    borderLeftColor: '#4ECDC4',
+    borderLeftColor: colors.primary[500],
   },
   hrvLabel: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#374151',
+    color: colors.text.primary,
     marginBottom: 4,
   },
   hrvValue: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#059669',
+    color: colors.success[600],
     marginBottom: 4,
   },
   hrvQuality: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.text.secondary,
   },
 
   // ===== MODAL STYLES =====
   modalContainer: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.surface.background,
     paddingTop: 60,
   },
   modalHeader: {
@@ -527,29 +439,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border.light,
   },
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.text.primary,
   },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.surface.elevated,
     justifyContent: 'center',
     alignItems: 'center',
   },
   closeButtonText: {
     fontSize: 18,
-    color: '#374151',
+    color: colors.text.primary,
     fontWeight: 'bold',
   },
   modalInstructions: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.text.secondary,
     textAlign: 'center',
     margin: 20,
     lineHeight: 24,
@@ -559,13 +471,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   deviceItem: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface.card,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: colors.isDark ? '#000' : '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -578,26 +490,26 @@ const styles = StyleSheet.create({
   deviceName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.text.primary,
     marginBottom: 4,
   },
   deviceType: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.text.secondary,
     marginBottom: 2,
   },
   deviceRssi: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.text.tertiary,
   },
   connectButton: {
-    backgroundColor: '#4ECDC4',
+    backgroundColor: colors.primary[500],
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
   },
   connectButtonText: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -610,12 +522,12 @@ const styles = StyleSheet.create({
   scanningText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.text.primary,
     marginBottom: 12,
   },
   scanningSubtext: {
     fontSize: 16,
-    color: '#6B7280',
+    color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 24,
   },
@@ -627,17 +539,17 @@ const styles = StyleSheet.create({
   },
   noDevicesText: {
     fontSize: 18,
-    color: '#6B7280',
+    color: colors.text.secondary,
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: '#4ECDC4',
+    backgroundColor: colors.primary[500],
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontSize: 16,
     fontWeight: 'bold',
   },
