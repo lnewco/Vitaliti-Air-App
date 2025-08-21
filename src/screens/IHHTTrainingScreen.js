@@ -532,7 +532,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       <View style={styles.container}>
         <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
         <View style={styles.phaseCard}>
-          <Text style={styles.phaseIcon}>🫁</Text>
+
           <Text style={styles.phaseTitle}>IHHT Training</Text>
           <Text style={styles.phaseMessage}>
             Ready to begin your hypoxic-hyperoxic training session
@@ -642,14 +642,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       flex: 1,
       textAlign: 'center',
     },
-    pauseButton: {
-      padding: 8,
-    },
-    pauseButtonText: {
-      color: colors.white,
-      fontSize: 16,
-      fontWeight: '600',
-    },
+
     mainTimer: {
       alignItems: 'center',
       paddingVertical: 20,
@@ -949,9 +942,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           </Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>IHHT Training Session</Text>
-        <TouchableOpacity style={styles.pauseButton} onPress={sessionInfo.isPaused ? resumeSession : pauseSession}>
-          <Text style={styles.pauseButtonText}>{sessionInfo.isPaused ? 'Resume' : 'Pause'}</Text>
-        </TouchableOpacity>
+        <View style={{ width: 60 }} />
       </View>
       
       {/* Scrollable Content */}
@@ -972,8 +963,8 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
 
           {/* Main Timer Display */}
           <View style={styles.mainTimer}>
-            <Text style={styles.timerText}>⏱️ {formatTotalTime(getTotalTimeElapsed())}</Text>
-            <Text style={styles.cycleText}>🔄 Cycle {sessionInfo.currentCycle} of {sessionInfo.totalCycles}</Text>
+            <Text style={styles.timerText}>{formatTotalTime(getTotalTimeElapsed())}</Text>
+            <Text style={styles.cycleText}>Cycle {sessionInfo.currentCycle} of {sessionInfo.totalCycles}</Text>
           </View>
 
           {/* Phase Card */}
@@ -984,7 +975,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
                 ? colors.neutral[800]  // Dark mode: subtle dark background
                 : colors.neutral[100]  // Light mode: subtle light background
             }]}>
-              <Text style={styles.phaseIcon}>🔄</Text>
+
               <Text style={styles.phaseTitle}>Switching Phase</Text>
               <Text style={[styles.phaseMessage, { 
                 fontSize: 16, 
@@ -1006,14 +997,14 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           ) : (
             // Regular hypoxic/hyperoxic phase card
             <View style={[styles.phaseCard, { backgroundColor: phaseColors.light }]}>
-              <Text style={styles.phaseIcon}>{sessionInfo.currentPhase === 'HYPOXIC' ? '🫁' : '🧘'}</Text>
+
               <Text style={styles.phaseTitle}>
                 {sessionInfo.currentPhase === 'HYPOXIC' ? 'Hypoxic Phase' : 'Hyperoxic Phase'}
               </Text>
               <Text style={styles.phaseMessage}>
                 {sessionInfo.currentPhase === 'HYPOXIC' ? 'Reduced oxygen exposure' : 'Recovery with normal oxygen'}
               </Text>
-              <Text style={styles.phaseTimer}>⏰ {formatTime(sessionInfo.phaseTimeRemaining)} remaining</Text>
+              <Text style={styles.phaseTimer}>{formatTime(sessionInfo.phaseTimeRemaining)} remaining</Text>
               
               {/* Altitude Level Slider - Show during all hypoxic phases */}
               {sessionInfo.currentPhase === 'HYPOXIC' && (
@@ -1084,7 +1075,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           onPress={sessionInfo.isPaused ? resumeSession : pauseSession}
         >
           <Text style={styles.controlButtonText}>
-            {sessionInfo.isPaused ? '▶️ Resume' : '⏸️ Pause'}
+            {sessionInfo.isPaused ? 'Resume' : 'Pause'}
           </Text>
         </TouchableOpacity>
         
@@ -1093,7 +1084,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           onPress={skipToNextPhase}
         >
           <Text style={styles.controlButtonText}>
-            Skip ⏭️
+            Skip
           </Text>
         </TouchableOpacity>
         
@@ -1111,7 +1102,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       {sessionInfo.isPaused && (
         <View style={styles.pausedOverlay}>
           <View style={styles.pausedCard}>
-            <Text style={styles.pausedIcon}>⏸️</Text>
+
             <Text style={styles.pausedTitle}>Session Paused</Text>
             <Text style={styles.pausedSubtitle}>
               Cycle {sessionInfo.currentCycle} of {sessionInfo.totalCycles}

@@ -252,7 +252,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
 
         {/* Bluetooth Connection Manager */}
         <View style={styles.connectionSection}>
-          <OptimizedConnectionManager />
+          <OptimizedConnectionManager hideDataDisplay />
         </View>
       </ScrollView>
 

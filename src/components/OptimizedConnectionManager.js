@@ -42,7 +42,7 @@ const BluetoothDataDisplay = React.memo(() => {
 });
 
 // ===== MAIN OPTIMIZED CONNECTION MANAGER =====
-const OptimizedConnectionManager = () => {
+const OptimizedConnectionManager = ({ hideDataDisplay = false }) => {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
   
@@ -193,7 +193,7 @@ const OptimizedConnectionManager = () => {
       {/* Heart Rate Monitor Section */}
 
       {/* Optimized Data Display - Only shows when devices are connected */}
-      <BluetoothDataDisplay />
+      {!hideDataDisplay && <BluetoothDataDisplay />}
 
       {/* Device Discovery Modal */}
       <Modal
