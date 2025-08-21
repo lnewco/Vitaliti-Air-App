@@ -11,6 +11,9 @@ import OnboardingContainer from '../../components/onboarding/OnboardingContainer
 import { H1, H3, Body, BodySmall, Caption } from '../../components/base/Typography';
 import Card from '../../components/base/Card';
 import { useOnboarding } from '../../context/OnboardingContext';
+import LegalDocumentModal from '../../components/legal/LegalDocumentModal';
+import { TERMS_OF_USE } from '../../legal/TermsOfUse';
+import { RESEARCH_CONSENT } from '../../legal/ResearchConsent';
 
 const ConsentScreen = ({ navigation }) => {
   const { 
@@ -20,6 +23,8 @@ const ConsentScreen = ({ navigation }) => {
   } = useOnboarding();
   
   const [errors, setErrors] = useState({});
+  const [modalVisible, setModalVisible] = useState(false);
+  const [currentDocument, setCurrentDocument] = useState(null);
 
   const handleNext = () => {
     const validationErrors = validateConsent();
@@ -47,12 +52,19 @@ const ConsentScreen = ({ navigation }) => {
   };
 
   const showConsentDetails = (type) => {
-    const title = type === 'research' ? 'Research Participation' : 'Liability Waiver';
-    const message = type === 'research' 
-      ? 'By consenting, you agree to participate in research studies using anonymized data from your IHHT sessions. This helps us improve the technology and understand its benefits.\n\nYour personal information will never be shared, and you can withdraw consent at any time.'
-      : 'By accepting this waiver, you acknowledge that IHHT training carries inherent risks and that you participate at your own risk. You agree to hold Vitaliti Air harmless from any injuries or adverse effects.\n\nAlways consult your physician before starting any new health regimen.';
-    
-    Alert.alert(title, message, [{ text: 'OK', style: 'default' }]);
+    const document = type === 'research' ? RESEARCH_CONSENT : TERMS_OF_USE;
+    setCurrentDocument(document);
+    setModalVisible(true);
+  };
+
+  const handleAgreeFromModal = () => {
+    setModalVisible(false);
+    // Auto-check the corresponding checkbox when user agrees from modal
+    if (currentDocument === RESEARCH_CONSENT) {
+      updateConsent('researchConsent', true);
+    } else if (currentDocument === TERMS_OF_USE) {
+      updateConsent('liabilityWaiver', true);
+    }
   };
 
   const { colors, spacing } = useAppTheme();
@@ -171,7 +183,7 @@ const ConsentScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
               <BodySmall color="secondary" style={styles.consentDescription}>
-                I consent to participate in research studies using anonymized data from my IHHT sessions.
+                I consent to participate in research using anonymized data from my IHHT sessions.
               </BodySmall>
               
               <TouchableOpacity
@@ -203,7 +215,7 @@ const ConsentScreen = ({ navigation }) => {
           <Card>
             <Card.Body>
               <View style={styles.consentHeader}>
-                <H3>Liability Waiver</H3>
+                <H3>Terms of Use & Liability Waiver</H3>
                 <TouchableOpacity 
                   style={styles.infoButton}
                   onPress={() => showConsentDetails('liability')}
@@ -212,7 +224,7 @@ const ConsentScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
               <BodySmall color="secondary" style={styles.consentDescription}>
-                I acknowledge the risks associated with IHHT training and agree to hold Vitaliti Air harmless.
+                I acknowledge the risks of IHHT training and agree to the Terms of Use.
               </BodySmall>
               
               <TouchableOpacity
@@ -241,6 +253,14 @@ const ConsentScreen = ({ navigation }) => {
           </Card>
         </View>
       </ScrollView>
+      
+      {/* Legal Document Modal */}
+      <LegalDocumentModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        document={currentDocument}
+        onAgree={handleAgreeFromModal}
+      />
     </OnboardingContainer>
   );
 };
