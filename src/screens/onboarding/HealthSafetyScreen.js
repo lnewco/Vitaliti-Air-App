@@ -195,7 +195,7 @@ const HealthSafetyScreen = ({ navigation }) => {
             Help us ensure IHHT training is safe for you.
           </Body>
           <Button
-            title="ℹ About IHHT Safety"
+            title="About IHHT Safety"
             variant="ghost"
             size="small"
             onPress={showHealthInfo}

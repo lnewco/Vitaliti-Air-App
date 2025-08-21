@@ -229,7 +229,7 @@ const OptimizedConnectionManager = ({ hideDataDisplay = false }) => {
             />
           ) : isScanning ? (
             <View style={styles.scanningContainer}>
-              <Text style={styles.scanningText}>🔍 Scanning...</Text>
+              <Text style={styles.scanningText}>Scanning...</Text>
               <Text style={styles.scanningSubtext}>
                 Make sure your pulse oximeter is nearby and discoverable
               </Text>

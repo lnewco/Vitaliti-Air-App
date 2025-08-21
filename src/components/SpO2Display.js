@@ -64,7 +64,7 @@ const SpO2Display = ({ data, isConnected }) => {
         {data.isSearchingForPulse && (
           <View style={styles.statusRow}>
             <Text style={[styles.statusValue, { color: '#F59E0B' }]}>
-              🔍 Searching for pulse...
+              Searching for pulse...
             </Text>
           </View>
         )}

@@ -811,7 +811,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     },
     endSessionButton: {
       backgroundColor: colors.error[500],
-      minWidth: 60,
+      flex: 1,
     },
     backButtonDisabled: {
       opacity: 0.5,

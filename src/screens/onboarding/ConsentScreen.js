@@ -167,7 +167,7 @@ const ConsentScreen = ({ navigation }) => {
                   style={styles.infoButton}
                   onPress={() => showConsentDetails('research')}
                 >
-                  <Body style={styles.infoButtonText}>ℹ</Body>
+                  <Body style={styles.infoButtonText}>i</Body>
                 </TouchableOpacity>
               </View>
               <BodySmall color="secondary" style={styles.consentDescription}>
@@ -208,7 +208,7 @@ const ConsentScreen = ({ navigation }) => {
                   style={styles.infoButton}
                   onPress={() => showConsentDetails('liability')}
                 >
-                  <Body style={styles.infoButtonText}>ℹ</Body>
+                  <Body style={styles.infoButtonText}>i</Body>
                 </TouchableOpacity>
               </View>
               <BodySmall color="secondary" style={styles.consentDescription}>

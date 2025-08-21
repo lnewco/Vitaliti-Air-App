@@ -296,7 +296,7 @@ const DeviceSelectionModal = ({
         ) : isScanning ? (
           <View style={styles.scanningContainer}>
             <ActivityIndicator size="large" color={colors.primary[500]} style={styles.spinner} />
-            <Text style={styles.scanningText}>🔍 Scanning...</Text>
+            <Text style={styles.scanningText}>Scanning...</Text>
             <Text style={styles.scanningSubtext}>
               Make sure your {deviceType === 'pulse-ox' ? 'pulse oximeter' : 'heart rate monitor'} is nearby and turned on
             </Text>
