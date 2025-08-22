@@ -1,6 +1,20 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import Constants from 'expo-constants';
+
+// Check if we're in Expo Go (which doesn't support @react-native-community/datetimepicker)
+const isExpoGo = Constants.appOwnership === 'expo';
+
+let DateTimePicker = null;
+if (!isExpoGo) {
+  try {
+    DateTimePicker = require('@react-native-community/datetimepicker').default;
+  } catch (error) {
+    console.log('📱 DateTimePicker not available - using text input fallback');
+  }
+} else {
+  console.log('📱 Expo Go detected - using text input fallback for date picker');
+}
 
 const FormDatePicker = ({
   label,
@@ -55,7 +69,7 @@ const FormDatePicker = ({
         <Text style={styles.errorText}>{error}</Text>
       )}
       
-      {showPicker && (
+      {showPicker && DateTimePicker && (
         <DateTimePicker
           value={value || new Date()}
           mode="date"
@@ -64,6 +78,21 @@ const FormDatePicker = ({
           minimumDate={minimumDate}
           maximumDate={maximumDate}
         />
+      )}
+      
+      {showPicker && !DateTimePicker && (
+        <View style={styles.fallbackPicker}>
+          <Text style={styles.fallbackText}>
+            Date picker not available in Expo Go. 
+            Please enter your birth year manually or use a development build.
+          </Text>
+          <TouchableOpacity 
+            style={styles.fallbackButton}
+            onPress={() => setShowPicker(false)}
+          >
+            <Text style={styles.fallbackButtonText}>Close</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
@@ -104,6 +133,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#EF4444',
     marginTop: 4,
+  },
+  fallbackPicker: {
+    backgroundColor: '#F3F4F6',
+    padding: 16,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  fallbackText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  fallbackButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignSelf: 'center',
+  },
+  fallbackButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

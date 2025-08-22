@@ -1,6 +1,45 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import BluetoothService from '../services/BluetoothService';
+import Constants from 'expo-constants';
 import logger from '../utils/logger';
+
+// Conditionally import BluetoothService with error handling
+let BluetoothService = null;
+
+// Check if we're in Expo Go (which doesn't support native Bluetooth)
+const isExpoGo = Constants.appOwnership === 'expo';
+
+// Create comprehensive mock service for Expo Go and fallbacks
+const createMockBluetoothService = () => ({
+  acquireReference: () => {},
+  releaseReference: () => {},
+  setOnDeviceFound: () => {},
+  setOnPulseOximeterData: () => {},
+  setOnPulseOxDataReceived: () => {}, // This was missing!
+  setOnConnectionChange: () => {},
+  startScanning: () => Promise.resolve(),
+  stopScanning: () => Promise.resolve(),
+  connectToDevice: () => Promise.resolve(false),
+  disconnectDevice: () => Promise.resolve(),
+  isPulseOxConnected: false,
+  isAnyDeviceConnected: false,
+  // Additional methods that might be called
+  destroy: () => {},
+  cleanup: () => {},
+  getConnectedDevices: () => [],
+  reconnectDevices: () => Promise.resolve(false),
+});
+
+if (isExpoGo) {
+  console.log('📱 Expo Go detected - using mock Bluetooth service');
+  BluetoothService = createMockBluetoothService();
+} else {
+  try {
+    BluetoothService = require('../services/BluetoothService').default;
+  } catch (error) {
+    console.log('📱 BluetoothService not available - using mock service');
+    BluetoothService = createMockBluetoothService();
+  }
+}
 
 const log = logger.createModuleLogger('BluetoothContext');
 

@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, AppState } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import DatabaseService from './DatabaseService';
 import SupabaseService from './SupabaseService';
 import serviceFactory from './ServiceFactory';
@@ -104,8 +105,17 @@ class EnhancedSessionManager {
       
       // Create services based on environment
       this.backgroundService = await serviceFactory.createBackgroundService();
-      this.aggressiveBackgroundService = new AggressiveBackgroundService();
-      await this.aggressiveBackgroundService.initialize();
+      
+      // Only use aggressive background service in development
+      const isProduction = Constants.appOwnership === 'standalone' && !__DEV__;
+      if (!isProduction) {
+        this.aggressiveBackgroundService = new AggressiveBackgroundService();
+        await this.aggressiveBackgroundService.initialize();
+      } else {
+        console.log('📱 Production mode - skipping aggressive background service');
+        this.aggressiveBackgroundService = null;
+      }
+      
       this.liveActivityService = await serviceFactory.createLiveActivityService();
       this.notificationService = await serviceFactory.createNotificationService();
       
@@ -271,7 +281,7 @@ class EnhancedSessionManager {
       }
     });
   }
-  
+
   clearListeners() {
     console.log(`🧹 Clearing ${this.listeners.length} listeners`);
     this.listeners = [];
@@ -281,7 +291,7 @@ class EnhancedSessionManager {
     if (this.isActive) {
       throw new Error('Session already active');
     }
-
+    
     if (!sessionId) {
       throw new Error('Session ID is required');
     }
@@ -313,8 +323,8 @@ class EnhancedSessionManager {
         startTime: new Date().toISOString(),
         defaultAltitudeLevel: defaultAltitudeLevel,
         baselineHRV: baselineHRV,
-        protocolConfig: this.protocolConfig
-      });
+          protocolConfig: this.protocolConfig
+        });
       
       if (!supabaseSession) {
         throw new Error('Failed to create session in Supabase');
@@ -579,7 +589,7 @@ class EnhancedSessionManager {
     
     this.phaseTimer = setInterval(() => {
       if (!this.isActive || this.isPaused) return;
-
+      
       // Calculate time remaining based on elapsed time
       const elapsed = Math.floor((Date.now() - this.phaseStartTime) / 1000);
       const phaseDuration = this.currentPhase === 'TRANSITION'

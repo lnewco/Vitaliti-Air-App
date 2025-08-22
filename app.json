@@ -69,7 +69,20 @@
     },
     "plugins": [
       "expo-background-task",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "node_modules/react-native-vector-icons/Fonts/MaterialIcons.ttf",
+            "node_modules/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf",
+            "node_modules/react-native-vector-icons/Fonts/Ionicons.ttf",
+            "node_modules/react-native-vector-icons/Fonts/Feather.ttf",
+            "node_modules/react-native-vector-icons/Fonts/FontAwesome.ttf",
+            "node_modules/react-native-vector-icons/Fonts/FontAwesome5_Regular.ttf"
+          ]
+        }
+      ]
     ]
   }
 }

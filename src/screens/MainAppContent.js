@@ -13,6 +13,7 @@ import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import ProfileScreen from './ProfileScreen';
 import SessionRecoveryManager from '../components/SessionRecoveryManager';
+import SafeIcon from '../components/base/SafeIcon';
 
 
 const Tab = createBottomTabNavigator();
@@ -43,7 +44,7 @@ function TabNavigator() {
         options={{
           tabBarLabel: 'Monitor',
           tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: 20 }}>📊</Text>
+            <SafeIcon name="chart" size="sm" color={color} />
           ),
           tabBarLabelStyle: {
             fontSize: 14,
@@ -57,7 +58,7 @@ function TabNavigator() {
         options={{
           tabBarLabel: 'History',
           tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: 20 }}>📈</Text>
+            <SafeIcon name="history" size="sm" color={color} />
           ),
           tabBarLabelStyle: {
             fontSize: 14,
@@ -71,7 +72,7 @@ function TabNavigator() {
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: 20 }}>👤</Text>
+            <SafeIcon name="profile" size="sm" color={color} />
           ),
           tabBarLabelStyle: {
             fontSize: 14,

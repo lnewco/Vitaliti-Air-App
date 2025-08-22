@@ -4,7 +4,7 @@ import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import { Container } from '../components/base';
 import { Card } from '../components/base';
 import { H2, Body, BodySmall, Caption } from '../components/base/Typography';
-import VectorIcon from '../components/base/VectorIcon';
+import SafeIcon from '../components/base/SafeIcon';
 import { useAppTheme } from '../theme';
 
 const DashboardScreen = ({ navigation }) => {
@@ -60,7 +60,7 @@ const DashboardScreen = ({ navigation }) => {
       {/* Compact Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <VectorIcon name="lungs" size="lg" color={colors.primary[500]} />
+          <SafeIcon name="lungs" size="lg" color={colors.primary[500]} />
           <H2 style={styles.title}>Vitaliti Air</H2>
         </View>
       </View>
@@ -74,7 +74,7 @@ const DashboardScreen = ({ navigation }) => {
         >
           <Card style={[styles.sessionCard, styles.trainingCard]}>
             <Card.Header
-              icon={<VectorIcon name="training" size="lg" color={colors.primary[500]} />}
+              icon={<SafeIcon name="training" size="lg" color={colors.primary[500]} />}
               title="Training Session"
               subtitle="Start your IHHT training"
             />
@@ -85,7 +85,7 @@ const DashboardScreen = ({ navigation }) => {
             </Card.Body>
             <Card.Footer>
               <Caption color="tertiary">30-60 minutes</Caption>
-              <VectorIcon name="chevron-right" size="sm" color={colors.text.tertiary} />
+              <SafeIcon name="chevron-right" size="sm" color={colors.text.tertiary} />
             </Card.Footer>
           </Card>
         </TouchableOpacity>

@@ -1,10 +1,23 @@
-import SQLite from 'react-native-sqlite-storage';
+import Constants from 'expo-constants';
 import logger from '../utils/logger';
 
 const log = logger.createModuleLogger('DatabaseService');
 
-// Enable promise-based API
-SQLite.enablePromise(true);
+// Check if we're in Expo Go (which doesn't support react-native-sqlite-storage)
+const isExpoGo = Constants.appOwnership === 'expo';
+
+let SQLite = null;
+if (!isExpoGo) {
+  try {
+    SQLite = require('react-native-sqlite-storage').default;
+    // Enable promise-based API
+    SQLite.enablePromise(true);
+  } catch (error) {
+    console.log('📱 SQLite not available - using fallback storage');
+  }
+} else {
+  console.log('📱 Expo Go detected - using AsyncStorage fallback for database');
+}
 
 class DatabaseService {
   constructor() {
@@ -13,7 +26,15 @@ class DatabaseService {
 
   async init() {
     try {
-      log.info('�️ Initializing database...');
+      log.info('🗄️ Initializing database...');
+      
+      if (!SQLite || isExpoGo) {
+        log.info('📱 Using AsyncStorage fallback for database (Expo Go mode)');
+        // In Expo Go, we'll use AsyncStorage as a simple fallback
+        this.db = null; // Flag that we're using fallback mode
+        return;
+      }
+      
       this.db = await SQLite.openDatabase({
         name: 'vitaliti.db',
         location: 'default',

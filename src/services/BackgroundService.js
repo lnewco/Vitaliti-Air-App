@@ -5,18 +5,26 @@
  */
 
 import { NativeModules, NativeEventEmitter, Platform, AppState } from 'react-native';
+import Constants from 'expo-constants';
+
+// Check if we're in Expo Go (which doesn't support custom native modules)
+const isExpoGo = Constants.appOwnership === 'expo';
 
 // Try to load the native module (only available in development builds)
 let IHHTBackgroundModule = null;
 let backgroundEmitter = null;
 
-try {
-  IHHTBackgroundModule = NativeModules.IHHTBackgroundModule;
-  if (IHHTBackgroundModule) {
-    backgroundEmitter = new NativeEventEmitter(IHHTBackgroundModule);
+if (!isExpoGo) {
+  try {
+    IHHTBackgroundModule = NativeModules.IHHTBackgroundModule;
+    if (IHHTBackgroundModule) {
+      backgroundEmitter = new NativeEventEmitter(IHHTBackgroundModule);
+    }
+  } catch (error) {
+    console.log('📱 Background module not available - using fallback mode');
   }
-} catch (error) {
-  console.log('📱 Background module not available - using fallback mode');
+} else {
+  console.log('📱 Expo Go detected - skipping custom native module loading');
 }
 
 class BackgroundService {

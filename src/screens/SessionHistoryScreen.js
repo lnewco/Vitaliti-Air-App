@@ -13,7 +13,21 @@ import {
   SafeAreaView
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { LineChart } from 'react-native-chart-kit';
+import Constants from 'expo-constants';
+
+// Check if we're in Expo Go (which may not support react-native-chart-kit)
+const isExpoGo = Constants.appOwnership === 'expo';
+
+let LineChart = null;
+if (!isExpoGo) {
+  try {
+    LineChart = require('react-native-chart-kit').LineChart;
+  } catch (error) {
+    console.log('📱 Chart library not available - using text fallback');
+  }
+} else {
+  console.log('📱 Expo Go detected - using text fallback for charts');
+}
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import DatabaseService from '../services/DatabaseService';
 import { useAuth } from '../auth/AuthContext';
@@ -722,10 +736,11 @@ const SessionHistoryScreen = ({ route, navigation }) => {
           {spo2ChartData && (
             <View style={styles.chartSection}>
               <Text style={styles.chartTitle}>SpO2 Over Time</Text>
-              <LineChart
-                data={spo2ChartData}
-                width={CHART_WIDTH}
-                height={220}
+              {LineChart ? (
+                <LineChart
+                  data={spo2ChartData}
+                  width={CHART_WIDTH}
+                  height={220}
                 chartConfig={{
                   backgroundColor: colors.surface.card,
                   backgroundGradientFrom: colors.surface.card,
@@ -760,7 +775,17 @@ const SessionHistoryScreen = ({ route, navigation }) => {
                 dotSize={4}
                 segments={4}
                 formatYLabel={(value) => `${value}%`}
-              />
+                />
+              ) : (
+                <View style={styles.chartFallback}>
+                  <Text style={styles.chartFallbackText}>
+                    📊 Chart visualization not available in Expo Go
+                  </Text>
+                  <Text style={styles.chartFallbackSubtext}>
+                    SpO2 Data: {spo2ChartData.datasets[0].data.join(', ')}%
+                  </Text>
+                </View>
+              )}
               {/* Phase legend */}
               <View style={styles.phaseLegend}>
                 <View style={styles.legendItem}>
@@ -778,7 +803,8 @@ const SessionHistoryScreen = ({ route, navigation }) => {
           {hrChartData && (
             <View style={styles.chartSection}>
               <Text style={styles.chartTitle}>Heart Rate Over Time</Text>
-              <LineChart
+              {LineChart ? (
+                <LineChart
                 data={hrChartData}
                 width={CHART_WIDTH}
                 height={220}
@@ -816,7 +842,17 @@ const SessionHistoryScreen = ({ route, navigation }) => {
                 dotSize={4}
                 segments={4}
                 formatYLabel={(value) => `${value}`}
-              />
+                />
+              ) : (
+                <View style={styles.chartFallback}>
+                  <Text style={styles.chartFallbackText}>
+                    📊 Chart visualization not available in Expo Go
+                  </Text>
+                  <Text style={styles.chartFallbackSubtext}>
+                    Heart Rate Data: {hrChartData.datasets[0].data.join(', ')} BPM
+                  </Text>
+                </View>
+              )}
               {/* Phase legend */}
               <View style={styles.phaseLegend}>
                 <View style={styles.legendItem}>
@@ -834,7 +870,8 @@ const SessionHistoryScreen = ({ route, navigation }) => {
           {hrvChartData && (
             <View style={styles.chartSection}>
               <Text style={styles.chartTitle}>Heart Rate Variability Over Time</Text>
-              <LineChart
+              {LineChart ? (
+                <LineChart
                 data={hrvChartData}
                 width={CHART_WIDTH}
                 height={220}
@@ -872,7 +909,17 @@ const SessionHistoryScreen = ({ route, navigation }) => {
                 dotSize={4}
                 segments={4}
                 formatYLabel={(value) => `${value}ms`}
-              />
+                />
+              ) : (
+                <View style={styles.chartFallback}>
+                  <Text style={styles.chartFallbackText}>
+                    📊 Chart visualization not available in Expo Go
+                  </Text>
+                  <Text style={styles.chartFallbackSubtext}>
+                    HRV Data: {hrvChartData.datasets[0].data.join(', ')}ms
+                  </Text>
+                </View>
+              )}
               {/* Baseline reference if available */}
               {sessionData?.baseline_hrv_rmssd && (
                 <View style={styles.baselineReference}>
@@ -1231,6 +1278,27 @@ const SessionHistoryScreen = ({ route, navigation }) => {
       fontSize: 12,
       color: colors.text.secondary,
       fontStyle: 'italic',
+    },
+    chartFallback: {
+      backgroundColor: colors.surface.background,
+      padding: 20,
+      borderRadius: 8,
+      alignItems: 'center',
+      marginVertical: 8,
+      borderWidth: 1,
+      borderColor: colors.border.light,
+      borderStyle: 'dashed',
+    },
+    chartFallbackText: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      fontWeight: '600',
+      marginBottom: 8,
+    },
+    chartFallbackSubtext: {
+      fontSize: 12,
+      color: colors.text.tertiary,
+      textAlign: 'center',
     },
   });
 

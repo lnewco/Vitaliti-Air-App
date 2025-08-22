@@ -18,7 +18,12 @@ import { AppState, Alert } from 'react-native';
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import moduleLoader from '../modules/ModuleLoader';
+
+// Check if we're in production build or Expo Go
+const isProduction = Constants.appOwnership === 'standalone' && !__DEV__;
+const isExpoGo = Constants.appOwnership === 'expo';
 
 const BACKGROUND_TASK_NAME = 'IHHT_SESSION_BACKGROUND_TASK';
 const KEEPALIVE_TASK_NAME = 'IHHT_KEEPALIVE_TASK';
@@ -46,6 +51,13 @@ export default class AggressiveBackgroundService {
 
   async initialize() {
     console.log('🚀 Initializing Aggressive Background Service');
+    
+    // In production builds or Expo Go, use simplified background handling
+    if (isProduction || isExpoGo) {
+      console.log('📱 Production/Expo Go mode - using simplified background service');
+      this.isActive = false; // Disable aggressive features
+      return true;
+    }
     
     try {
       // Register background tasks (this is what was failing before)
