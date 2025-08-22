@@ -1,23 +1,7 @@
-import Constants from 'expo-constants';
+import * as SQLite from 'expo-sqlite';
 import logger from '../utils/logger';
 
 const log = logger.createModuleLogger('DatabaseService');
-
-// Check if we're in Expo Go (which doesn't support react-native-sqlite-storage)
-const isExpoGo = Constants.appOwnership === 'expo';
-
-let SQLite = null;
-if (!isExpoGo) {
-  try {
-    SQLite = require('react-native-sqlite-storage').default;
-    // Enable promise-based API
-    SQLite.enablePromise(true);
-  } catch (error) {
-    console.log('📱 SQLite not available - using fallback storage');
-  }
-} else {
-  console.log('📱 Expo Go detected - using AsyncStorage fallback for database');
-}
 
 class DatabaseService {
   constructor() {
@@ -28,17 +12,7 @@ class DatabaseService {
     try {
       log.info('🗄️ Initializing database...');
       
-      if (!SQLite || isExpoGo) {
-        log.info('📱 Using AsyncStorage fallback for database (Expo Go mode)');
-        // In Expo Go, we'll use AsyncStorage as a simple fallback
-        this.db = null; // Flag that we're using fallback mode
-        return;
-      }
-      
-      this.db = await SQLite.openDatabase({
-        name: 'vitaliti.db',
-        location: 'default',
-      });
+      this.db = await SQLite.openDatabaseAsync('vitaliti.db');
       
       await this.createTables();
       log.info('Database initialized successfully');
@@ -157,12 +131,17 @@ class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_intra_responses_phase ON intra_session_responses(session_id, phase_number);
     `;
 
-    await this.db.executeSql(createSessionsTable);
-    await this.db.executeSql(createReadingsTable);
-    await this.db.executeSql(createSessionSurveysTable);
-    await this.db.executeSql(createIntraSessionResponsesTable);
-    await this.db.executeSql(createIndexes);
-    await this.db.executeSql(createSurveyIndexes);
+    // Combine all table creation and index queries for better performance
+    const allTableQueries = `
+      ${createSessionsTable}
+      ${createReadingsTable}
+      ${createSessionSurveysTable}
+      ${createIntraSessionResponsesTable}
+      ${createIndexes}
+      ${createSurveyIndexes}
+    `;
+    
+    await this.db.execAsync(allTableQueries);
     
     // Add new columns one by one (will silently fail if columns already exist, which is fine)
     try {
@@ -208,7 +187,7 @@ class DatabaseService {
       
       for (const column of readingsColumns) {
         try {
-          await this.db.executeSql(`ALTER TABLE readings ADD COLUMN ${column}`);
+          await this.db.execAsync(`ALTER TABLE readings ADD COLUMN ${column}`);
         } catch (e) {
           // Column probably already exists - that's fine
         }
@@ -216,7 +195,7 @@ class DatabaseService {
       
       for (const column of sessionsColumns) {
         try {
-          await this.db.executeSql(`ALTER TABLE sessions ADD COLUMN ${column}`);
+          await this.db.execAsync(`ALTER TABLE sessions ADD COLUMN ${column}`);
         } catch (e) {
           // Column probably already exists - that's fine
         }
@@ -245,7 +224,7 @@ class DatabaseService {
     const hypoxicDuration = protocolConfig?.hypoxicDuration || 420; // 7 minutes
     const hyperoxicDuration = protocolConfig?.hyperoxicDuration || 180; // 3 minutes
     
-    await this.db.executeSql(query, [
+    await this.db.runAsync(query, [
       sessionId, 
       startTime, 
       hypoxiaLevel, 
@@ -275,7 +254,7 @@ class DatabaseService {
     const hypoxicDuration = protocolConfig.hypoxicDuration;
     const hyperoxicDuration = protocolConfig.hyperoxicDuration;
     
-    await this.db.executeSql(query, [
+    await this.db.runAsync(query, [
       totalCycles, hypoxicDuration, hyperoxicDuration,
       totalCycles, hypoxicDuration, hyperoxicDuration, // planned values
       Date.now(),
@@ -297,7 +276,7 @@ class DatabaseService {
       WHERE id = ?
     `;
     
-    await this.db.executeSql(query, [
+    await this.db.runAsync(query, [
       actualData.cyclesCompleted || 0,
       actualData.hypoxicTime || 0,
       actualData.hyperoxicTime || 0,
@@ -336,7 +315,7 @@ class DatabaseService {
       `;
       
       log.info(`Executing update query for session: ${sessionId}`);
-      await this.db.executeSql(query, [
+      await this.db.runAsync(query, [
         endTime,
         stats.totalReadings,
         stats.avgSpO2,
@@ -364,24 +343,19 @@ class DatabaseService {
       SET current_cycle = ?, updated_at = ?
       WHERE id = ?
     `;
-    await this.db.executeSql(query, [currentCycle, Date.now(), sessionId]);
+    await this.db.runAsync(query, [currentCycle, Date.now(), sessionId]);
     log.info(`Updated session ${sessionId} to cycle ${currentCycle} in local DB`);
   }
 
   async getSession(sessionId) {
     const query = 'SELECT * FROM sessions WHERE id = ?';
-    const [result] = await this.db.executeSql(query, [sessionId]);
-    return result.rows.length > 0 ? result.rows.item(0) : null;
+    const result = await this.db.getFirstAsync(query, [sessionId]);
+    return result;
   }
 
   async getAllSessions() {
     const query = 'SELECT * FROM sessions ORDER BY start_time DESC LIMIT 20';
-    const [result] = await this.db.executeSql(query);
-    
-    const sessions = [];
-    for (let i = 0; i < result.rows.length; i++) {
-      sessions.push(result.rows.item(i));
-    }
+    const sessions = await this.db.getAllAsync(query);
     return sessions;
   }
 
@@ -396,7 +370,7 @@ class DatabaseService {
     const isValid = (reading.spo2 !== null && reading.spo2 > 0) || 
                    (reading.heartRate !== null && reading.heartRate > 0);
     
-    await this.db.executeSql(query, [
+    await this.db.runAsync(query, [
       sessionId,
       reading.timestamp,
       reading.spo2,
@@ -417,7 +391,7 @@ class DatabaseService {
   async addReadingsBatch(readings) {
     if (readings.length === 0) return;
     
-    await this.db.transaction(async (tx) => {
+    await this.db.withTransactionAsync(async () => {
       const query = `
         INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid, fio2_level, phase_type, cycle_number, hrv_rmssd, hrv_type, hrv_interval_count, hrv_data_quality, hrv_confidence)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -427,7 +401,7 @@ class DatabaseService {
         // More flexible validation: valid if we have either spo2 or heart rate data
         const isValid = (reading.spo2 !== null && reading.spo2 > 0) || 
                        (reading.heartRate !== null && reading.heartRate > 0);
-        await tx.executeSql(query, [
+        await this.db.runAsync(query, [
           reading.sessionId,
           reading.timestamp,
           reading.spo2,
@@ -456,11 +430,7 @@ class DatabaseService {
       ORDER BY timestamp ASC
     `;
     
-    const [result] = await this.db.executeSql(query, [sessionId]);
-    const readings = [];
-    for (let i = 0; i < result.rows.length; i++) {
-      readings.push(result.rows.item(i));
-    }
+    const readings = await this.db.getAllAsync(query, [sessionId]);
     return readings;
   }
 
@@ -476,7 +446,7 @@ class DatabaseService {
         WHERE id = ?
       `;
       
-      await this.db.executeSql(query, [
+      await this.db.runAsync(query, [
         rmssd,
         confidence,
         intervalCount,
@@ -501,10 +471,9 @@ class DatabaseService {
         WHERE id = ?
       `;
       
-      const [result] = await this.db.executeSql(query, [sessionId]);
+      const row = await this.db.getFirstAsync(query, [sessionId]);
       
-      if (result.rows.length > 0) {
-        const row = result.rows.item(0);
+      if (row) {
         return {
           rmssd: row.baseline_hrv_rmssd,
           confidence: row.baseline_hrv_confidence,
@@ -532,18 +501,15 @@ class DatabaseService {
         WHERE session_id = ? AND hrv_rmssd IS NOT NULL AND hrv_rmssd > 0
       `;
       
-      const [result] = await this.db.executeSql(query, [sessionId]);
+      const row = await this.db.getFirstAsync(query, [sessionId]);
       
-      if (result.rows.length > 0) {
-        const row = result.rows.item(0);
-        if (row.hrvReadingCount > 0) {
-          return {
-            avgHRV: row.avgHRV,
-            minHRV: row.minHRV,
-            maxHRV: row.maxHRV,
-            readingCount: row.hrvReadingCount
-          };
-        }
+      if (row && row.hrvReadingCount > 0) {
+        return {
+          avgHRV: row.avgHRV,
+          minHRV: row.minHRV,
+          maxHRV: row.maxHRV,
+          readingCount: row.hrvReadingCount
+        };
       }
       
       return null;
@@ -569,8 +535,7 @@ class DatabaseService {
       WHERE session_id = ?
     `;
     
-    const [result] = await this.db.executeSql(query, [sessionId]);
-    const stats = result.rows.item(0);
+    const stats = await this.db.getFirstAsync(query, [sessionId]);
     
     // Log for debugging
     log.info('Session stats calculated:', {
@@ -599,7 +564,7 @@ class DatabaseService {
       WHERE id = ?
     `;
     
-    await this.db.executeSql(query, [
+    await this.db.runAsync(query, [
       stats.totalReadings,
       stats.avgSpO2,
       stats.minSpO2,
@@ -625,12 +590,8 @@ class DatabaseService {
       ORDER BY start_time DESC
     `;
     
-    const [result] = await this.db.executeSql(query);
-    const sessionsToReprocess = [];
-    
-    for (let i = 0; i < result.rows.length; i++) {
-      sessionsToReprocess.push(result.rows.item(i).id);
-    }
+    const result = await this.db.getAllAsync(query);
+    const sessionsToReprocess = result.map(row => row.id);
     
     log.info(`� Found ${sessionsToReprocess.length} sessions to reprocess`);
     
@@ -663,13 +624,13 @@ class DatabaseService {
     `;
     
     // This will cascade delete readings due to foreign key
-    await this.db.executeSql(deleteQuery);
+    await this.db.runAsync(deleteQuery);
     log.info('🧹 Cleaned up old sessions');
   }
 
   async clearAllData() {
-    await this.db.executeSql('DELETE FROM readings');
-    await this.db.executeSql('DELETE FROM sessions');
+    await this.db.runAsync('DELETE FROM readings');
+    await this.db.runAsync('DELETE FROM sessions');
     log.info('Cleared all data');
   }
 
@@ -677,13 +638,13 @@ class DatabaseService {
     const sessionCountQuery = 'SELECT COUNT(*) as count FROM sessions';
     const readingCountQuery = 'SELECT COUNT(*) as count FROM readings';
     
-    const [sessionResult] = await this.db.executeSql(sessionCountQuery);
-    const [readingResult] = await this.db.executeSql(readingCountQuery);
+    const sessionResult = await this.db.getFirstAsync(sessionCountQuery);
+    const readingResult = await this.db.getFirstAsync(readingCountQuery);
     
     return {
-      sessionCount: sessionResult.rows.item(0).count,
-      readingCount: readingResult.rows.item(0).count,
-      estimatedSizeMB: Math.round((readingResult.rows.item(0).count * 100) / 1024 / 1024 * 100) / 100
+      sessionCount: sessionResult.count,
+      readingCount: readingResult.count,
+      estimatedSizeMB: Math.round((readingResult.count * 100) / 1024 / 1024 * 100) / 100
     };
   }
 
@@ -710,11 +671,10 @@ class DatabaseService {
       LIMIT ?
     `;
     
-    const results = await this.db.executeSql(query, [limit]);
+    const results = await this.db.getAllAsync(query, [limit]);
     const sessions = [];
     
-    for (let i = 0; i < results.rows.length; i++) {
-      const session = results.rows.item(i);
+    for (const session of results) {
       sessions.push({
         id: session.id,
         startTime: session.start_time,
@@ -743,8 +703,7 @@ class DatabaseService {
       WHERE default_hypoxia_level IS NOT NULL
     `;
     
-    const results = await this.db.executeSql(query);
-    const stats = results.rows.item(0);
+    const stats = await this.db.getFirstAsync(query);
     
     return {
       totalSessions: stats.totalSessions || 0,
@@ -820,8 +779,8 @@ class DatabaseService {
         WHERE session_id = ?
       `;
       
-      await this.db.executeSql(insertQuery, [sessionId, clarityPost, energyPost, stressPost, notesPost]);
-      await this.db.executeSql(updateQuery, [clarityPost, energyPost, stressPost, notesPost, sessionId]);
+      await this.db.runAsync(insertQuery, [sessionId, clarityPost, energyPost, stressPost, notesPost]);
+      await this.db.runAsync(updateQuery, [clarityPost, energyPost, stressPost, notesPost, sessionId]);
       
       log.info(`Post-session survey saved: clarity=${clarityPost}, energy=${energyPost}, stress=${stressPost}`);
       
@@ -850,7 +809,7 @@ class DatabaseService {
         VALUES (?, ?, ?, ?, ?, ?)
       `;
       
-      await this.db.executeSql(query, [sessionId, phaseNumber, clarity, energy, stress, timestamp]);
+      await this.db.runAsync(query, [sessionId, phaseNumber, clarity, energy, stress, timestamp]);
       log.info(`Intra-session response saved: phase=${phaseNumber}, clarity=${clarity}, energy=${energy}, stress=${stress}`);
       
       return { success: true };
@@ -868,13 +827,13 @@ class DatabaseService {
       log.info(`Fetching survey data for session: ${sessionId}`);
       
       // Get main survey data
-      const [surveyResult] = await this.db.executeSql(
+      const surveyRow = await this.db.getFirstAsync(
         'SELECT * FROM session_surveys WHERE session_id = ?',
         [sessionId]
       );
       
       // Get intra-session responses
-      const [responsesResult] = await this.db.executeSql(
+      const responsesResult = await this.db.getAllAsync(
         'SELECT * FROM intra_session_responses WHERE session_id = ? ORDER BY phase_number ASC',
         [sessionId]
       );
@@ -887,29 +846,26 @@ class DatabaseService {
       };
       
       // Process main survey data
-      if (surveyResult.rows.length > 0) {
-        const row = surveyResult.rows.item(0);
-        
-        if (row.clarity_pre !== null && row.energy_pre !== null) {
+      if (surveyRow) {
+        if (surveyRow.clarity_pre !== null && surveyRow.energy_pre !== null) {
           surveyData.preSession = {
-            clarity: row.clarity_pre,
-            energy: row.energy_pre
+            clarity: surveyRow.clarity_pre,
+            energy: surveyRow.energy_pre
           };
         }
         
-        if (row.clarity_post !== null && row.energy_post !== null && row.stress_post !== null) {
+        if (surveyRow.clarity_post !== null && surveyRow.energy_post !== null && surveyRow.stress_post !== null) {
           surveyData.postSession = {
-            clarity: row.clarity_post,
-            energy: row.energy_post,
-            stress: row.stress_post,
-            notes: row.notes_post || undefined
+            clarity: surveyRow.clarity_post,
+            energy: surveyRow.energy_post,
+            stress: surveyRow.stress_post,
+            notes: surveyRow.notes_post || undefined
           };
         }
       }
       
       // Process intra-session responses
-      for (let i = 0; i < responsesResult.rows.length; i++) {
-        const row = responsesResult.rows.item(i);
+      for (const row of responsesResult) {
         surveyData.intraSessionResponses.push({
           clarity: row.clarity,
           energy: row.energy,
@@ -937,12 +893,12 @@ class DatabaseService {
    */
   async getSurveyCompletionStatus(sessionId) {
     try {
-      const [result] = await this.db.executeSql(
+      const row = await this.db.getFirstAsync(
         'SELECT clarity_pre, energy_pre, clarity_post, energy_post, stress_post FROM session_surveys WHERE session_id = ?',
         [sessionId]
       );
       
-      if (result.rows.length === 0) {
+      if (!row) {
         return {
           hasPreSession: false,
           hasPostSession: false,
@@ -950,8 +906,6 @@ class DatabaseService {
           isPostSessionComplete: false
         };
       }
-      
-      const row = result.rows.item(0);
       const hasPreSession = row.clarity_pre !== null && row.energy_pre !== null;
       const hasPostSession = row.clarity_post !== null && row.energy_post !== null && row.stress_post !== null;
       
@@ -981,8 +935,8 @@ class DatabaseService {
     try {
       log.info(`Deleting survey data for session: ${sessionId}`);
       
-      await this.db.executeSql('DELETE FROM session_surveys WHERE session_id = ?', [sessionId]);
-      await this.db.executeSql('DELETE FROM intra_session_responses WHERE session_id = ?', [sessionId]);
+      await this.db.runAsync('DELETE FROM session_surveys WHERE session_id = ?', [sessionId]);
+      await this.db.runAsync('DELETE FROM intra_session_responses WHERE session_id = ?', [sessionId]);
       
       log.info(`Survey data deleted for session: ${sessionId}`);
       return { success: true };
