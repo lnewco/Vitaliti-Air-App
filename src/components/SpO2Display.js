@@ -43,7 +43,7 @@ const SpO2Display = ({ data, isConnected }) => {
         </Text>
       </View>
 
-      {/* BCI Status Information */}
+      {/* Wellue Status Information */}
       <View style={styles.statusContainer}>
         <View style={styles.statusRow}>
           <Text style={styles.statusLabel}>Finger:</Text>
@@ -61,10 +61,38 @@ const SpO2Display = ({ data, isConnected }) => {
           </Text>
         </View>
 
+        {data.perfusionIndex !== null && data.perfusionIndex !== undefined && (
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>Perfusion Index:</Text>
+            <Text style={[styles.statusValue, {
+              color: data.perfusionIndex >= 1.0 ? '#10B981' : 
+                     data.perfusionIndex >= 0.5 ? '#F59E0B' : '#EF4444'
+            }]}>
+              {data.perfusionIndex.toFixed(1)}%
+            </Text>
+          </View>
+        )}
+
         {data.isSearchingForPulse && (
           <View style={styles.statusRow}>
             <Text style={[styles.statusValue, { color: '#F59E0B' }]}>
               Searching for pulse...
+            </Text>
+          </View>
+        )}
+
+        {data.isMotionDetected && (
+          <View style={styles.statusRow}>
+            <Text style={[styles.statusValue, { color: '#F59E0B' }]}>
+              Motion detected - Please hold still
+            </Text>
+          </View>
+        )}
+
+        {data.isLowPerfusion && (
+          <View style={styles.statusRow}>
+            <Text style={[styles.statusValue, { color: '#EF4444' }]}>
+              Low perfusion - Adjust finger position
             </Text>
           </View>
         )}

@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-const SafetyIndicator = ({ spo2, isConnected, isFingerDetected }) => {
+const SafetyIndicator = ({ spo2, isConnected, isFingerDetected, isMotionDetected, isLowPerfusion }) => {
   const safetyState = determineSafetyState(spo2, isConnected, isFingerDetected);
+  const hasWarning = isMotionDetected || isLowPerfusion;
   
   return (
     <View style={[styles.indicator, { backgroundColor: getStateColor(safetyState) }]}>
@@ -11,6 +12,12 @@ const SafetyIndicator = ({ spo2, isConnected, isFingerDetected }) => {
       </Text>
       {safetyState === 'NO_DATA' && (
         <Text style={styles.subText}>Check device connection</Text>
+      )}
+      {isMotionDetected && (
+        <Text style={styles.subText}>Motion detected - Hold still for accurate reading</Text>
+      )}
+      {isLowPerfusion && (
+        <Text style={styles.subText}>Low perfusion - Adjust finger position</Text>
       )}
     </View>
   );

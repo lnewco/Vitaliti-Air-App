@@ -24,10 +24,10 @@ class BluetoothService {
     this.connectionRecoveryTimer = null;
     this.lastDisconnectTime = null;
 
-    // BCI Protocol specific UUIDs (Pulse Oximeter)
-    this.BCI_SERVICE_UUID = '49535343-FE7D-4AE5-8FA9-9FAFD205E455';
-    this.BCI_DATA_CHARACTERISTIC_UUID = '49535343-1E4D-4BD9-BA61-23C647249616'; // Device sends data to app (notifiable)
-    this.BCI_COMMAND_CHARACTERISTIC_UUID = '49535343-8841-43F4-A8D4-ECBE34729BB3'; // App sends commands to device
+    // Wellue Protocol specific UUIDs (Pulse Oximeter)
+    this.WELLUE_SERVICE_UUID = '6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
+    this.WELLUE_TX_CHARACTERISTIC_UUID = '6E400003-B5A3-F393-E0A9-E50E24DCCA9E'; // Device sends data to app (notify)
+    this.WELLUE_RX_CHARACTERISTIC_UUID = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E'; // App sends commands to device (write)
   }
 
   // Reference counting for proper lifecycle management
@@ -142,8 +142,8 @@ class BluetoothService {
       this.currentScanType = deviceType;
       this.isScanning = true;
       
-      // Pulse oximeters reliably advertise their service UUID
-      const serviceUUIDs = [this.BCI_SERVICE_UUID];
+      // Wellue pulse oximeters advertise their service UUID
+      const serviceUUIDs = [this.WELLUE_SERVICE_UUID];
       
       log.info(`Starting ${deviceType} scan with service filter:`, serviceUUIDs);
       
@@ -216,7 +216,11 @@ class BluetoothService {
   getDeviceType(device) {
     // Check service UUIDs first (most reliable)
     if (device.serviceUUIDs) {
-      if (device.serviceUUIDs.includes(this.BCI_SERVICE_UUID)) {
+      // Check for Wellue service UUID (case-insensitive comparison)
+      const hasWellueService = device.serviceUUIDs.some(uuid => 
+        uuid.toUpperCase() === this.WELLUE_SERVICE_UUID.toUpperCase()
+      );
+      if (hasWellueService) {
         return 'pulse-ox';
       }
     }
@@ -226,8 +230,8 @@ class BluetoothService {
     const localName = device.localName || '';
     const deviceText = (name + ' ' + localName).toLowerCase();
     
-    // Check for pulse oximeter keywords
-    const pulseOxKeywords = ['berry', 'med', 'bci', 'pulse', 'oximeter', 'spo2'];
+    // Check for Wellue pulse oximeter keywords
+    const pulseOxKeywords = ['wellue', 'o2ring', 'oxylink', 'pulse', 'oximeter', 'spo2', 'fingertip'];
     const hasPulseOxKeyword = pulseOxKeywords.some(keyword =>
       deviceText.includes(keyword.toLowerCase())
     );
@@ -237,7 +241,7 @@ class BluetoothService {
     return 'unknown';
   }
 
-  isBCIDevice(device) {
+  isWellueDevice(device) {
     return this.getDeviceType(device) === 'pulse-ox';
   }
 
@@ -260,8 +264,8 @@ class BluetoothService {
       if (deviceType === 'pulse-ox') {
         this.pulseOxDevice = discoveredDevice;
         this.isPulseOxConnected = true;
-        log.info('Pulse Oximeter services discovered');
-        await this.setupBCINotifications(discoveredDevice);
+        log.info('Wellue Pulse Oximeter services discovered');
+        await this.setupWellueNotifications(discoveredDevice);
       } else {
         log.warn('Unsupported device type:', deviceType);
         throw new Error(`Unsupported device type: ${deviceType}`);
@@ -294,62 +298,61 @@ class BluetoothService {
     }
   }
 
-  async setupBCINotifications(device) {
+  async setupWellueNotifications(device) {
     try {
-      log.info('Setting up BCI notifications...');
+      log.info('Setting up Wellue notifications...');
       
-      // Get the BCI service
+      // Get the Wellue service
       const services = await device.services();
       log.info('Available services:', services.map(s => s.uuid));
       
-      const bciService = services.find(service => 
-        service.uuid.toUpperCase() === this.BCI_SERVICE_UUID.toUpperCase()
+      const wellueService = services.find(service => 
+        service.uuid.toUpperCase() === this.WELLUE_SERVICE_UUID.toUpperCase()
       );
       
-      if (!bciService) {
-        log.error('❌ BCI service not found!');
+      if (!wellueService) {
+        log.error('❌ Wellue service not found!');
         log.info('Available services:', services.map(s => s.uuid));
         return;
       }
       
-      log.info('Found BCI service:', bciService.uuid);
+      log.info('Found Wellue service:', wellueService.uuid);
       
       // Get characteristics
-      const characteristics = await bciService.characteristics();
-      log.info('BCI service characteristics:', characteristics.map(c => ({
+      const characteristics = await wellueService.characteristics();
+      log.info('Wellue service characteristics:', characteristics.map(c => ({
         uuid: c.uuid,
         isNotifiable: c.isNotifiable,
         isReadable: c.isReadable,
         isWritable: c.isWritable
       })));
       
-      // Find the send characteristic (this is the one that sends data TO us)
-      // Note: The protocol naming is from device perspective, so "Send" means device sends to us
-      const dataCharacteristic = characteristics.find(char =>
-        char.uuid.toUpperCase() === this.BCI_DATA_CHARACTERISTIC_UUID.toUpperCase()
+      // Find the TX characteristic (device sends data to app)
+      const txCharacteristic = characteristics.find(char =>
+        char.uuid.toUpperCase() === this.WELLUE_TX_CHARACTERISTIC_UUID.toUpperCase()
       );
       
-      if (!dataCharacteristic) {
-        log.error('❌ BCI data characteristic not found!');
+      if (!txCharacteristic) {
+        log.error('❌ Wellue TX characteristic not found!');
         return;
       }
       
-      log.info('Found BCI data characteristic:', dataCharacteristic.uuid);
+      log.info('Found Wellue TX characteristic:', txCharacteristic.uuid);
       log.info('� Characteristic properties:', {
-        isNotifiable: dataCharacteristic.isNotifiable,
-        isReadable: dataCharacteristic.isReadable,
-        isWritable: dataCharacteristic.isWritable
+        isNotifiable: txCharacteristic.isNotifiable,
+        isReadable: txCharacteristic.isReadable,
+        isWritable: txCharacteristic.isWritable
       });
       
       // Enable notifications
-      if (dataCharacteristic.isNotifiable) {
-        log.info('� Enabling BCI data notifications...');
+      if (txCharacteristic.isNotifiable) {
+        log.info('� Enabling Wellue data notifications...');
         
-        dataCharacteristic.monitor((error, characteristic) => {
+        txCharacteristic.monitor((error, characteristic) => {
           if (error) {
             // Handle cancellation errors gracefully (happens when disconnecting or removing finger)
             if (error.message && error.message.includes('cancelled')) {
-              log.info('� BCI data monitoring stopped (connection cancelled)');
+              log.info('� Wellue data monitoring stopped (connection cancelled)');
               this.handleDeviceDisconnected();
             } else {
               log.error('Notification error:', error);
@@ -359,30 +362,30 @@ class BluetoothService {
           }
           
           if (characteristic && characteristic.value) {
-            // log.info('� Raw BCI data received:', characteristic.value); // Disabled: high frequency logging
-            this.handleBCIDataReceived(characteristic.value);
+            // log.info('� Raw Wellue data received:', characteristic.value); // Disabled: high frequency logging
+            this.handleWellueDataReceived(characteristic.value);
           }
         });
         
-        log.info('BCI notifications enabled');
+        log.info('Wellue notifications enabled');
       } else {
-        log.error('❌ BCI data characteristic is not notifiable');
+        log.error('❌ Wellue TX characteristic is not notifiable');
       }
       
     } catch (error) {
-      log.error('Error setting up BCI notifications:', error);
+      log.error('Error setting up Wellue notifications:', error);
     }
   }
 
-  handleBCIDataReceived(data) {
+  handleWellueDataReceived(data) {
     try {
       // Safety check - ensure manager is not destroyed
       if (this.isDestroyed) {
-        log.warn('Cannot handle BCI data - BleManager is destroyed');
+        log.warn('Cannot handle Wellue data - BleManager is destroyed');
         return;
       }
       
-      const parsedData = this.parseBCIData(data);
+      const parsedData = this.parseWellueData(data);
       if (parsedData) {
         // Send to UI callback if available
         if (this.onPulseOxDataReceived) {
@@ -395,145 +398,130 @@ class BluetoothService {
         }
       }
     } catch (error) {
-      log.error('Error handling BCI data:', error);
+      log.error('Error handling Wellue data:', error);
     }
   }
 
-  parseBCIData(base64Data) {
+  parseWellueData(base64Data) {
     try {
-      // log.info('Parsing BCI data:', base64Data); // Disabled: high frequency logging
+      // log.info('Parsing Wellue data:', base64Data); // Disabled: high frequency logging
       
       // Decode base64 to buffer
       const buffer = Buffer.from(base64Data, 'base64');
       // log.info('Buffer length:', buffer.length); // Disabled: high frequency logging
       // log.info('Raw bytes (hex):', Array.from(buffer).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
       
-      // Handle different packet sizes
-      let packets = [];
-      
-      if (buffer.length === 5) {
-        // Single 5-byte packet
-        packets = [buffer];
-      } else if (buffer.length === 20) {
-        // Four 5-byte packets concatenated
-        // log.info('� Processing 20-byte packet as 4x5-byte packets'); // Disabled: high frequency logging
-        for (let i = 0; i < 4; i++) {
-          const packetStart = i * 5;
-          const packet = buffer.slice(packetStart, packetStart + 5);
-          packets.push(packet);
-        }
-      } else {
-        log.info('Unexpected buffer length:', buffer.length, 'bytes. Processing as best effort...');
-        // Try to process first 5 bytes if available
-        if (buffer.length >= 5) {
-          packets = [buffer.slice(0, 5)];
-        } else {
-          log.info('Buffer too short for BCI parsing');
+      // Wellue protocol uses 8-byte packets
+      if (buffer.length !== 8) {
+        log.warn('Unexpected Wellue packet length:', buffer.length, 'bytes (expected 8)');
+        // Try to process if we have at least 8 bytes
+        if (buffer.length < 8) {
           return null;
         }
       }
       
-      // Process the latest (most recent) packet
-      const latestPacket = packets[packets.length - 1];
-      // log.info('Processing latest packet:', Array.from(latestPacket).map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(' ')); // Disabled: high frequency logging
-      
-      return this.parseSingle5BytePacket(latestPacket, base64Data);
+      // Parse the 8-byte Wellue packet
+      return this.parseWellue8BytePacket(buffer, base64Data);
       
     } catch (error) {
-      log.error('❌ Error parsing BCI data:', error);
+      log.error('❌ Error parsing Wellue data:', error);
       return null;
     }
   }
 
-  parseSingle5BytePacket(buffer, originalBase64Data) {
+  parseWellue8BytePacket(buffer, originalBase64Data) {
     try {
-      // Extract bytes according to BCI protocol
-      const byte1 = buffer[0]; // Signal strength, probe status, pulse beep, sync bit
-      const byte2 = buffer[1]; // Pleth, sync bit  
-      const byte3 = buffer[2]; // Bargraph, finger detection, pulse searching, pulse rate bit 7
-      const byte4 = buffer[3]; // Pulse rate bits 0-6, sync bit
-      const byte5 = buffer[4]; // SpO2 bits 0-6, sync bit
+      // Extract bytes according to Wellue protocol (8-byte packet)
+      const byte1 = buffer[0]; // Status flags
+      const byte2 = buffer[1]; // Plethysmogram waveform
+      const byte3 = buffer[2]; // Bargraph (signal strength)
+      const byte4 = buffer[3]; // Perfusion Index (PI)
+      const byte5 = buffer[4]; // SpO2 value
+      const byte6 = buffer[5]; // Pulse Rate value
+      const byte7 = buffer[6]; // Reserved
+      const byte8 = buffer[7]; // Reserved
       
-      // log.info('BCI Bytes:', { // Disabled: high frequency logging
+      // log.info('Wellue Bytes:', { // Disabled: high frequency logging
       //   byte1: '0x' + byte1.toString(16).padStart(2, '0').toUpperCase(),
-      //   byte2: '0x' + byte2.toString(16).padStart(2, '0').toUpperCase(), 
+      //   byte2: '0x' + byte2.toString(16).padStart(2, '0').toUpperCase(),
       //   byte3: '0x' + byte3.toString(16).padStart(2, '0').toUpperCase(),
       //   byte4: '0x' + byte4.toString(16).padStart(2, '0').toUpperCase(),
-      //   byte5: '0x' + byte5.toString(16).padStart(2, '0').toUpperCase()
+      //   byte5: '0x' + byte5.toString(16).padStart(2, '0').toUpperCase(),
+      //   byte6: '0x' + byte6.toString(16).padStart(2, '0').toUpperCase(),
+      //   byte7: '0x' + byte7.toString(16).padStart(2, '0').toUpperCase(),
+      //   byte8: '0x' + byte8.toString(16).padStart(2, '0').toUpperCase()
       // });
       
-      // Parse according to BCI protocol specification
+      // Parse status flags (byte 1)
+      const isFingerDetected = (byte1 & 0x10) === 0;  // Bit 4: 0=finger in, 1=finger out
+      const isSearchingForPulse = (byte1 & 0x08) !== 0; // Bit 3: 1=searching
+      const isLowPerfusion = (byte1 & 0x02) !== 0; // Bit 1: 1=low PI
+      const isMotionDetected = (byte1 & 0x01) !== 0; // Bit 0: 1=motion detected
       
-      // Signal strength (byte 1, bits 0-3)
-      const signalStrength = byte1 & 0x0F;
-      const isSignalValid = signalStrength !== 0x0F;
+      // Parse plethysmogram waveform (byte 2)
+      const pleth = byte2; // Direct value 0-255
+      const isPlethValid = pleth !== 0 && isFingerDetected;
       
-      // Probe status (byte 1, bit 5)
-      const isProbePlugged = (byte1 & 0x20) === 0;
+      // Parse bargraph/signal strength (byte 3)
+      const bargraph = byte3 & 0x0F; // Lower 4 bits
+      const signalStrength = bargraph; // Use bargraph as signal strength indicator
       
-      // Finger detection (byte 3, bit 4) 
-      const isFingerDetected = (byte3 & 0x10) === 0;
+      // Parse Perfusion Index (byte 4)
+      const perfusionIndexRaw = byte4;
+      // PI is typically expressed as percentage (0-20% range)
+      const perfusionIndex = perfusionIndexRaw / 10.0; // Convert to percentage
+      const isPIValid = isFingerDetected && !isSearchingForPulse;
       
-      // Pulse searching (byte 3, bit 5)
-      const isSearchingForPulse = (byte3 & 0x20) !== 0;
-      
-      // Parse pulse rate: ((byte3 & 0x40) << 1) | (byte4 & 0x7F)
-      const pulseRateRaw = ((byte3 & 0x40) << 1) | (byte4 & 0x7F);
-      const isPulseRateValid = pulseRateRaw !== 0xFF && pulseRateRaw >= 25 && pulseRateRaw <= 250;
-      const pulseRate = isPulseRateValid ? pulseRateRaw : null;
-      
-      // Parse SpO2: byte5 & 0x7F  
-      const spo2Raw = byte5 & 0x7F;
-      const isSpo2Valid = spo2Raw !== 0x7F && spo2Raw >= 35 && spo2Raw <= 100;
+      // Parse SpO2 (byte 5)
+      const spo2Raw = byte5;
+      const isSpo2Valid = spo2Raw !== 0xFF && spo2Raw >= 35 && spo2Raw <= 100 && isFingerDetected && !isSearchingForPulse;
       const spo2 = isSpo2Valid ? spo2Raw : null;
       
-      // Parse pleth (waveform) - byte 2, bits 0-6
-      const pleth = byte2 & 0x7F;
-      const isPlethValid = pleth !== 0;
+      // Parse Pulse Rate (byte 6)
+      const pulseRateRaw = byte6;
+      const isPulseRateValid = pulseRateRaw !== 0xFF && pulseRateRaw >= 25 && pulseRateRaw <= 250 && isFingerDetected && !isSearchingForPulse;
+      const pulseRate = isPulseRateValid ? pulseRateRaw : null;
       
-      // Extract bargraph (Byte 3, bits 0-3) - likely the PI indicator
-      const bargraph = byte3 & 0x0F;
-      const isBargraphValid = bargraph !== 0;
-      
-      // log.info('� BCI Parsed Values:', { // Disabled: high frequency logging
-      //   signalStrength,
-      //   isSignalValid,
-      //   isProbePlugged,
+      // log.info('Wellue Parsed Values:', { // Disabled: high frequency logging
+      //   status: byte1,
       //   isFingerDetected,
       //   isSearchingForPulse,
-      //   pulseRateRaw,
-      //   pulseRate,
-      //   spo2Raw,
-      //   spo2,
+      //   isLowPerfusion,
+      //   isMotionDetected,
       //   pleth,
-      //   isPlethValid,
       //   bargraph,
-      //   isBargraphValid
+      //   perfusionIndex,
+      //   spo2,
+      //   pulseRate
       // });
       
-      // Return data even if values are invalid so we can show status
+      // Return enhanced data structure with Wellue-specific fields
       const result = {
         spo2,
         heartRate: pulseRate,
+        perfusionIndex: isPIValid ? perfusionIndex : null,
         signalStrength,
         isFingerDetected,
         isSearchingForPulse,
+        isLowPerfusion,
+        isMotionDetected,
         pleth: isPlethValid ? pleth : null,
-        bargraph: isBargraphValid ? bargraph : null,  // Add bargraph to returned data
+        bargraph,
         timestamp: Date.now(),
-        rawData: originalBase64Data
+        rawData: originalBase64Data,
+        protocol: 'wellue'
       };
       
       if (spo2 !== null || pulseRate !== null) {
-        // log.info('Valid BCI data:', result); // Disabled: high frequency logging
+        // log.info('Valid Wellue data:', result); // Disabled: high frequency logging
       } else {
-        // log.info('BCI status data (no valid measurements):', result); // Disabled: high frequency logging
+        // log.info('Wellue status data (no valid measurements):', result); // Disabled: high frequency logging
       }
       
       return result;
       
     } catch (error) {
-      log.error('Error parsing individual BCI packet:', error);
+      log.error('Error parsing Wellue packet:', error);
       return null;
     }
   }
