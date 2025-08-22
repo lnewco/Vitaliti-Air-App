@@ -42,7 +42,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>6</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>LSMinimumSystemVersion</key>
@@ -62,12 +62,28 @@
     <string>This app uses Bluetooth to connect to your pulse oximeter device for monitoring SpO2 and heart rate.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to save photos</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your photos</string>
     <key>NSSupportsLiveActivities</key>
     <true/>
+    <key>UIAppFonts</key>
+    <array>
+      <string>MaterialIcons.ttf</string>
+      <string>MaterialCommunityIcons.ttf</string>
+      <string>Ionicons.ttf</string>
+      <string>Feather.ttf</string>
+      <string>FontAwesome.ttf</string>
+      <string>FontAwesome5_Regular.ttf</string>
+    </array>
     <key>UIBackgroundModes</key>
     <array>
       <string>bluetooth-central</string>
       <string>processing</string>
+      <string>background-fetch</string>
+      <string>background-processing</string>
+      <string>fetch</string>
     </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
