@@ -149,6 +149,7 @@ export const BluetoothProvider = ({ children }) => {
   const connectToDevice = useCallback(async (device) => {
     try {
       log.info(`📱 Context: Connecting to pulse oximeter: ${device.name || device.localName}`);
+      console.log('📱 Context: Calling BluetoothService.connectToDevice');
       
       await BluetoothService.connectToDevice(device, 'pulse-ox');
       

@@ -40,7 +40,18 @@
       "Bash(done)",
       "Bash(npm run lint:*)",
       "Bash(git rev-parse:*)",
-      "Bash(git for-each-ref:*)"
+      "Bash(git for-each-ref:*)",
+      "Bash(npx expo prebuild:*)",
+      "Bash(npx expo run:ios:*)",
+      "WebFetch(domain:docs.expo.dev)",
+      "Bash(npm info:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx expo start:*)",
+      "Bash(git rm:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(npx react-native start:*)",
+      "mcp__linear__list_issues"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
