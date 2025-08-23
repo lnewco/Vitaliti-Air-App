@@ -4,13 +4,13 @@ A React Native mobile application for Intermittent Hypoxia-Hyperoxia Training (I
 
 ## Overview
 
-Vitaliti Air is a streamlined training companion that guides users through IHHT sessions using real-time SpO2 and pulse rate feedback from Bluetooth-enabled pulse oximeters. The app implements the BCI Protocol V1.4 for medical device communication and provides safety monitoring throughout training sessions with a simplified, focused user experience.
+Vitaliti Air is a streamlined training companion that guides users through IHHT sessions using real-time SpO2 and pulse rate feedback from Bluetooth-enabled pulse oximeters. The app supports Wellue O2Ring and Checkme O2 devices for medical device communication and provides safety monitoring throughout training sessions with a simplified, focused user experience.
 
 ## Technology Stack
 
 - **Frontend**: React Native 0.79.5 with Expo ~53.0.20
 - **Backend**: Supabase (PostgreSQL, Authentication)
-- **Bluetooth**: react-native-ble-plx with BCI Protocol V1.4
+- **Bluetooth**: react-native-ble-plx with Wellue/Viatom protocol
 - **Navigation**: React Navigation 7.x (Stack + Bottom Tabs)
 - **State Management**: React Context API + AsyncStorage
 - **Charts**: react-native-chart-kit
@@ -149,16 +149,22 @@ const supabaseAnonKey = 'your-anon-key';
 
 ### Bluetooth Integration
 
-**BCI Protocol V1.4 Support**
-- Connects to BCI-compatible pulse oximeters
-- Real-time SpO2 and pulse rate monitoring
+**Wellue/Viatom Device Support**
+- Connects to Wellue O2Ring and Checkme O2 pulse oximeters
+- Real-time SpO2, pulse rate, and perfusion index monitoring
 - Automatic device discovery and pairing
-- Simplified connection management (pulse oximeter only)
+- Smart reconnection after disconnects
+- Battery level monitoring
+
+**Supported Devices**:
+- Wellue O2Ring (ring-style continuous monitor)
+- Checkme O2 (fingertip pulse oximeter)
+- Other Viatom-compatible devices
 
 **Key UUIDs**:
-- Service: `49535343-FE7D-4AE5-8FA9-9FAFD205E455`
-- Data: `49535343-1E4D-4BD9-BA61-23C647249616`
-- Command: `49535343-8841-43F4-A8D4-ECBE34729BB3`
+- Service: `14839ac4-7d7e-415c-9a42-167340cf2339`
+- TX (Read/Notify): `0734594a-a8e7-4b1a-a6b1-cd5243059a57`
+- RX (Write): `8b00ace7-eb0b-49b0-bbe9-9aee0a26e1a3`
 
 **Implementation**: `src/services/BluetoothService.js`, `src/context/BluetoothContext.js`
 
@@ -186,7 +192,96 @@ const supabaseAnonKey = 'your-anon-key';
 
 **Implementation**: `src/screens/IHHTTrainingScreen.js`, `src/services/EnhancedSessionManager.js`
 
-Note: The deprecated `SessionManager.js` has been removed. All session management is now handled by `EnhancedSessionManager.js`.
+### Session Recovery System
+
+**Automatic Recovery Features**
+- Sessions automatically recover after app crashes or force quits
+- Recovery available for sessions less than 10 minutes old
+- Phase timers and progress continue even when app is killed
+- Smart recovery prompts when reopening the app
+- Automatic Bluetooth reconnection to previously paired devices
+
+**Recovery Flow**:
+1. App detects interrupted session on launch
+2. User prompted to continue or start new session
+3. Session state restored including phase, cycle, and timings
+4. Bluetooth reconnection attempted automatically
+5. Data continuity maintained across interruption
+
+**Implementation**: `src/services/EnhancedSessionManager.js`
+
+### Health Screening & Safety System
+
+**Medical Contraindication Screening**
+The app includes comprehensive health screening to ensure user safety:
+
+**Automatic Exclusions**:
+- Heart disease or cardiovascular conditions
+- Pregnancy
+- Chronic Obstructive Pulmonary Disease (COPD)
+- Uncontrolled hypertension
+- Recent stroke or TIA
+- Severe asthma
+- Active cancer treatment
+- Epilepsy or seizure disorders
+
+**Safety Features**:
+- Users with contraindications cannot proceed with training
+- Legal liability waiver required before first session
+- Research consent optional for data collection
+- Age verification (18+ requirement)
+- Emergency contact information collection
+
+**Implementation**: `src/components/onboarding/`, `src/utils/surveyValidation.js`
+
+### Advanced Background Processing (iOS)
+
+**Aggressive Background Service**
+The app uses multiple iOS background techniques to maintain session continuity:
+
+**Background Modes**:
+1. **Bluetooth Central** - Maintains device connection
+2. **Background Processing** - Continues session timing
+3. **Background Fetch** - Periodic data sync
+4. **Silent Push Notifications** - Remote wake capability
+5. **Audio Session** - Silent audio for extended runtime
+6. **Location Updates** - Minimal power location tracking
+7. **Network Keepalive** - Maintains server connection
+8. **State Restoration** - Recovers after termination
+
+**Background Behavior**:
+- Sessions continue for full duration when backgrounded
+- Phase transitions occur automatically
+- Critical SpO2 alerts delivered within 5 seconds
+- Bluetooth reconnection within 10 seconds of foregrounding
+- Less than 5% data loss during background operation
+
+**Live Activities Support**:
+- Real-time session progress on lock screen
+- Dynamic Island integration (iOS 16.2+)
+- Phase tracking and timers
+- SpO2 and heart rate display
+- Compact, minimal, and expanded views
+
+**Implementation**: `src/services/AggressiveBackgroundService.js`, `modules/live-activity/`
+
+### Survey System
+
+**Comprehensive Feedback Collection**
+- Post-session surveys with validation
+- Multi-step survey flow with progress tracking
+- Scale inputs (1-10) for subjective metrics
+- Free-text notes for qualitative feedback
+- Real-time validation with error messages
+- Data persistence to Supabase
+
+**Survey Components**:
+- `SurveyModal.js` - Main survey container
+- `SurveyScaleInput.js` - Numeric scale inputs
+- `SurveyNotesInput.js` - Text feedback collection
+- `surveyValidation.js` - Validation logic
+
+**Implementation**: `src/components/survey/`, `src/utils/surveyValidation.js`
 
 ### Data Management
 
@@ -228,15 +323,17 @@ Note: The deprecated `SessionManager.js` has been removed. All session managemen
 
 ## Documentation
 
-### 📚 Design System
-For detailed information about the app's design system, theme implementation, and component library, see:
-- **[Design System Guide](docs/DESIGN_SYSTEM.md)** - Complete guide to the theme system, base components, and migration patterns
+### 📚 Core Documentation
+- **[Design System Guide](docs/DESIGN_SYSTEM.md)** - Theme system, base components, and UI patterns
+- **[Testing Guide](docs/TESTING.md)** - Comprehensive testing procedures and safety validation
+- **[Environment Setup](docs/ENVIRONMENT_SETUP.md)** - Configuration and API key management
+- **[Wellue Integration](docs/bluetooth_specs/WELLUE_INTEGRATION.md)** - Bluetooth protocol documentation
 
-### Additional Documentation
+### Quick Links
 - **Design System** - Theme tokens, components, patterns
-- **Architecture** - App structure and data flow
-- **Development** - Setup and debugging guides
-- **API** - Backend integration details
+- **Testing** - Safety testing, device testing, background testing
+- **Bluetooth** - Device integration and troubleshooting
+- **Database** - Schema and migrations
 
 ## Development Guidelines
 
@@ -259,18 +356,20 @@ For detailed information about the app's design system, theme implementation, an
 
 **Connection Flow**:
 1. Request permissions (Android location, Bluetooth)
-2. Scan for BCI service UUID
+2. Scan for Wellue/Viatom devices by name pattern
 3. Connect and discover characteristics
-4. Set up data notifications
-5. Parse incoming 5-byte BCI packets
+4. Enable notifications on TX characteristic
+5. Send periodic GET_RT_DATA commands
+6. Parse 13-byte response packets
 
-**Data Parsing**:
+**Data Format**:
 ```javascript
-// BCI Protocol V1.4 - 5-byte packet structure
-const signalStrength = byte1 & 0x0F;
-const isFingerDetected = (byte3 & 0x10) === 0;
-const pulseRate = ((byte3 & 0x40) << 1) | (byte4 & 0x7F);
-const spo2 = byte5 & 0x7F;
+// Wellue Protocol - 13-byte real-time data structure
+const spo2 = data[0];              // SpO2 percentage
+const heartRate = data[1] | (data[2] << 8); // Heart rate BPM
+const battery = data[7];            // Battery percentage
+const perfusionIndex = data[10] / 10; // PI value
+const isWearing = (data[11] & 0x01) === 1; // Wear status
 ```
 
 ### Safety Implementation
@@ -291,13 +390,16 @@ The database schema is managed through migrations located in `database/migration
 4. **004_surveys.sql** - Pre/post session surveys
 5. **005_protocol_config.sql** - IHHT protocol configuration (deprecated - now hardcoded)
 6. **006_security_policies.sql** - Row Level Security policies
+7. **008_add_hrv_to_readings.sql** - Heart Rate Variability support
+8. **009_calibration_sessions.sql** - Device calibration sessions
+9. **010_add_perfusion_index.sql** - Perfusion index tracking
 
 Key tables include:
 - `sessions` - Training session metadata
-- `readings` - Individual sensor readings
+- `readings` - Individual sensor readings (includes HRV and PI)
 - `user_profiles` - User account information
 - `survey_responses` - Session survey data
-- `protocol_templates` - IHHT protocol configurations
+- `calibration_sessions` - Device calibration data
 
 ## iOS Live Activities
 
@@ -428,7 +530,7 @@ eas build --profile production --platform ios
 **Bluetooth Disconnects**:
 - Normal behavior - should reconnect automatically
 - Check pulse oximeter battery level
-- Verify BCI Protocol V1.4 compatibility
+- Verify Wellue/Viatom device compatibility
 
 **Missing Notifications**:
 - Check notification permissions
@@ -451,7 +553,7 @@ eas build --profile production --platform ios
 
 **Device Discovery**:
 - Ensure pulse oximeter is in pairing mode
-- Check device compatibility (BCI Protocol V1.4)
+- Device name should start with "Checkme O2" or "Wellue"
 - Try restarting Bluetooth on phone
 
 ### Supabase Configuration
@@ -495,10 +597,11 @@ eas build --profile production --platform ios
 
 ## Medical Device Compliance
 
-- Implements BCI Protocol V1.4 specification
+- Implements Wellue/Viatom communication protocol
 - Follows medical device data handling best practices
-- Includes appropriate safety warnings and alerts
-- Maintains data integrity throughout transmission
+- Includes comprehensive health screening and contraindication checks
+- Maintains data integrity with CRC8 validation
+- Automatic safety exclusions for high-risk conditions
 
 ---
 
