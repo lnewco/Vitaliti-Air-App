@@ -51,7 +51,8 @@
       "Bash(gh pr list:*)",
       "Bash(gh pr view:*)",
       "Bash(npx react-native start:*)",
-      "mcp__linear__list_issues"
+      "mcp__linear__list_issues",
+      "Bash(git remote:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

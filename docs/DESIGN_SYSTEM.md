@@ -5,11 +5,11 @@
 The Vitaliti Air design system provides a consistent, accessible, and theme-aware UI foundation for the app. 
 
 ```javascript
-import { useTheme } from '../theme/useTheme';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Button, H1, Body, Container, Card } from '../components/base';
 
 function MyScreen() {
-  const { colors, spacing } = useTheme();
+  const { colors, spacing } = useAppTheme();
   
   return (
     <Container>
@@ -43,7 +43,7 @@ The theme system supports automatic light/dark mode switching with semantic colo
 
 ```javascript
 // Access theme in any component
-const { colors, typography, spacing, theme, toggleTheme } = useTheme();
+const { colors, typography, spacing, theme, toggleTheme } = useAppTheme();
 
 // Theme-aware styling
 style={{
@@ -137,7 +137,7 @@ import { H1, H2, H3, H4, H5, H6, Body, BodySmall, Label, Caption, Metric } from 
 Based on 4px grid with semantic spacing tokens:
 
 ```javascript
-const { spacing } = useTheme();
+const { spacing } = useAppTheme();
 
 // Base unit = 4px
 spacing.xs   // 4px
@@ -284,7 +284,7 @@ import { SafetyIndicator } from '../components/SafetyIndicator';
 
 ```javascript
 function OnboardingScreen({ title, subtitle, onNext, onBack }) {
-  const { colors } = useTheme();
+  const { colors } = useAppTheme();
   
   return (
     <Container>
@@ -320,7 +320,7 @@ function OnboardingScreen({ title, subtitle, onNext, onBack }) {
 
 ```javascript
 function DataScreen() {
-  const { colors, spacing } = useTheme();
+  const { colors, spacing } = useAppTheme();
   
   return (
     <Container scrollable>
@@ -346,7 +346,7 @@ function DataScreen() {
 
 ```javascript
 function FormScreen() {
-  const { colors } = useTheme();
+  const { colors } = useAppTheme();
   
   return (
     <Container keyboardAvoiding scrollable>
@@ -385,7 +385,7 @@ function FormScreen() {
 
 ```javascript
 function SettingsScreen() {
-  const { theme, toggleTheme, setTheme } = useTheme();
+  const { theme, toggleTheme, setTheme } = useAppTheme();
   
   return (
     <Container>
@@ -461,7 +461,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 
 // After
 import { View } from 'react-native';
-import { useTheme } from '../theme/useTheme';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Container, H1, Body, Button, Card } from '../components/base';
 ```
 
@@ -472,7 +472,7 @@ import { Container, H1, Body, Button, Card } from '../components/base';
 style={{ backgroundColor: '#FFFFFF', color: '#000000' }}
 
 // After
-const { colors } = useTheme();
+const { colors } = useAppTheme();
 style={{ backgroundColor: colors.surface.primary, color: colors.text.primary }}
 ```
 
@@ -553,7 +553,7 @@ style={{ backgroundColor: colors.surface.primary, color: colors.text.primary }}
 ```javascript
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import { useTheme } from '../theme/useTheme';
+import { useAppTheme } from '../theme/ThemeContext';
 import { 
   Container, 
   H1, 
@@ -565,7 +565,7 @@ import {
 import { MetricDisplay } from '../components/MetricDisplay';
 
 function SessionSummaryScreen({ navigation, route }) {
-  const { colors, spacing } = useTheme();
+  const { colors, spacing } = useAppTheme();
   const { session } = route.params;
   
   return (
@@ -634,11 +634,11 @@ export default SessionSummaryScreen;
 ```javascript
 import React from 'react';
 import { View } from 'react-native';
-import { useTheme } from '../theme/useTheme';
+import { useAppTheme } from '../theme/ThemeContext';
 import { Card, H3, Body, Caption, Badge, VectorIcon } from '../components/base';
 
 function SessionCard({ session, onPress }) {
-  const { colors, spacing } = useTheme();
+  const { colors, spacing } = useAppTheme();
   
   const getStatusColor = () => {
     if (session.status === 'completed') return colors.success[500];
@@ -684,9 +684,7 @@ function SessionCard({ session, onPress }) {
 
 ## Resources
 
-- [Component Storybook](#) (Coming soon)
-- [Figma Design Files](#) (Coming soon)
-- [Theme Playground](#) (Coming soon)
+Additional resources and tools for the design system are in development.
 
 ## Contributing
 
