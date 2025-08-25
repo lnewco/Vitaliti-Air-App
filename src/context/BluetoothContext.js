@@ -24,8 +24,8 @@ const createMockBluetoothService = () => {
   };
   
   const generateMockSpO2Data = () => {
-    // Generate wide SpO2 range for testing all adaptive instructions
-    const baseSpO2 = 80 + Math.random() * 18; // 80-98 range (wider for testing)
+    // Generate realistic SpO2 range
+    const baseSpO2 = 95 + Math.random() * 4; // 95-99 range (normal range)
     const heartRate = 60 + Math.random() * 40; // 60-100 range
     
     return {
@@ -74,7 +74,6 @@ const createMockBluetoothService = () => {
       dataInterval = setInterval(async () => {
         if (onDataReceivedCallback && isConnected) {
           const mockData = generateMockSpO2Data();
-          console.log('📱 Mock: Generated SpO2 data:', mockData.spo2, 'HR:', mockData.heartRate);
           
           // Send to callback (for UI updates)
           onDataReceivedCallback(mockData);

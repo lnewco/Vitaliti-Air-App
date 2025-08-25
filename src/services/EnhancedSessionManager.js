@@ -732,8 +732,8 @@ class EnhancedSessionManager {
               showDuringTransition: true
             });
             
-            // Record the altitude adjustment event
-            await this.recordAdaptiveEvent('altitude_adjustment', {
+            // Record the altitude adjustment event (use 'dial_adjustment' to match DB constraint)
+            await this.recordAdaptiveEvent('dial_adjustment', {
               adjustment: altitudeAdjustment.adjustment,
               new_level: altitudeAdjustment.newLevel,
               reason: altitudeAdjustment.reason
