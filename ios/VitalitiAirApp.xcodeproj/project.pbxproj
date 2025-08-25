@@ -147,7 +147,7 @@
 				BB2F792C24A3F905000567C9 /* Expo.plist */,
 			);
 			name = Supporting;
-			path = VitalitiAirApp/Supporting;
+			path = Supporting;
 			sourceTree = "<group>";
 		};
 		C3AEB60DED314F8FABC57526 /* Pods */ = {
