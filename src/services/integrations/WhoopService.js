@@ -9,8 +9,8 @@ class WhoopService {
     // Use environment variables for credentials
     this.clientId = process.env.EXPO_PUBLIC_WHOOP_CLIENT_ID || 'ef01edf8-b61c-4cac-99a0-d0825098dace';
     this.clientSecret = process.env.EXPO_PUBLIC_WHOOP_CLIENT_SECRET || '1529284de2cde1574018824932aeec53222eee78487bd3ea63f87ae44d716aeb';
-    // Use the Expo auth proxy URL that's registered with Whoop
-    this.redirectUri = 'https://auth.expo.io/@anonymous/Vitaliti-Air-App/whoop-callback';
+    // Use proper app scheme for EAS builds
+    this.redirectUri = 'vitalitiair://whoop-callback';
     
     console.log('🔧 Whoop Service initialized with credentials');
     console.log('🔗 Redirect URI:', this.redirectUri);

@@ -9,8 +9,8 @@ class OuraService {
     // Use environment variables for credentials
     this.clientId = process.env.EXPO_PUBLIC_OURA_CLIENT_ID || '';
     this.clientSecret = process.env.EXPO_PUBLIC_OURA_CLIENT_SECRET || '';
-    // Try a standard OAuth test redirect URI
-    this.redirectUri = 'https://www.google.com';
+    // Use proper app scheme for EAS builds
+    this.redirectUri = 'vitalitiair://oura-callback';
     
     console.log('🔧 Oura Service initialized');
     console.log('🔗 Redirect URI:', this.redirectUri);

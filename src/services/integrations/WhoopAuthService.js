@@ -42,9 +42,8 @@ class WhoopAuthService {
     try {
       console.log('🔄 Starting Whoop authentication...');
       
-      // Use the EXACT redirect URI that's registered with Whoop
-      // This must match what's in your Whoop app settings
-      const redirectUri = 'https://auth.expo.io/@anonymous/Vitaliti-Air-App/whoop-callback';
+      // Use proper app scheme for EAS builds
+      const redirectUri = 'vitalitiair://whoop-callback';
       
       console.log('📱 Using redirect URI:', redirectUri);
       

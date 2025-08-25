@@ -4,20 +4,14 @@ import {
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
-  Alert,
-  Linking,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform
+  Alert
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Container, Card, Button } from '../components/base';
 import { H2, Body, BodySmall, Caption } from '../components/base/Typography';
 import SafeIcon from '../components/base/SafeIcon';
 import { useAppTheme } from '../theme';
 import { useAuth } from '../auth/AuthContext';
-import OuraService from '../services/integrations/OuraService';
-import WhoopService from '../services/integrations/WhoopService';
+import IntegrationManager from '../services/integrations/IntegrationManager';
 
 const IntegrationsScreen = ({ navigation }) => {
   const { colors, spacing, shadows } = useAppTheme();
@@ -25,713 +19,409 @@ const IntegrationsScreen = ({ navigation }) => {
   const [ouraConnected, setOuraConnected] = useState(false);
   const [whoopConnected, setWhoopConnected] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [manualCode, setManualCode] = useState('');
-  // Persist the manual input state so it survives navigation
-  const [showManualInput, setShowManualInput] = useState(false);
-  // Add Oura manual input state
-  const [ouraManualCode, setOuraManualCode] = useState('');
-  const [showOuraManualInput, setShowOuraManualInput] = useState(false);
+  const [lastSync, setLastSync] = useState({ oura: null, whoop: null });
 
   useEffect(() => {
-    checkIntegrations();
-    setupDeepLinking();
-    // Check if we were in the middle of connecting Whoop or Oura
-    checkPendingConnections();
-  }, []);
+    if (user?.id) {
+      initializeAndCheckStatus();
+    }
+  }, [user?.id]);
 
-  const checkPendingConnections = async () => {
+  const initializeAndCheckStatus = async () => {
     try {
-      const pendingWhoop = await AsyncStorage.getItem('pendingWhoopConnection');
-      const pendingOura = await AsyncStorage.getItem('pendingOuraConnection');
+      // Initialize integration manager
+      await IntegrationManager.initialize(user.id);
       
-      if (pendingWhoop === 'true') {
-        setShowManualInput(true);
-        console.log('Restored pending Whoop connection state');
-      }
-      
-      if (pendingOura === 'true') {
-        setShowOuraManualInput(true);
-        console.log('Restored pending Oura connection state');
-      }
+      // Check current status
+      await refreshIntegrationStatus();
     } catch (error) {
-      console.log('Error checking pending connections:', error);
+      console.error('Initialization error:', error);
     }
   };
 
-  const checkIntegrations = async () => {
+  const refreshIntegrationStatus = async () => {
     if (!user?.id) return;
     
-    const [ouraStatus, whoopStatus] = await Promise.all([
-      OuraService.hasActiveIntegration(user.id),
-      WhoopService.hasActiveIntegration(user.id)
-    ]);
-
-    setOuraConnected(ouraStatus);
-    setWhoopConnected(whoopStatus);
-  };
-
-  const setupDeepLinking = () => {
-    // Handle deep links for OAuth callbacks
-    const handleUrl = (url) => {
-      console.log('🔗 Deep link received:', url.url);
-      
-      // Check for new URL scheme format: vitalitiair://integrations/whoop or vitalitiair://integrations/oura
-      if (url.url.includes('vitalitiair://integrations/oura')) {
-        handleOuraCallback(url.url);
-      } else if (url.url.includes('vitalitiair://integrations/whoop')) {
-        handleWhoopCallback(url.url);
-      }
-      // Legacy URL format support
-      else if (url.url.includes('oura-callback')) {
-        handleOuraCallback(url.url);
-      } else if (url.url.includes('whoop-callback')) {
-        handleWhoopCallback(url.url);
-      }
-    };
-
-    const subscription = Linking.addEventListener('url', handleUrl);
-    
-    // Check if app was opened with a URL
-    Linking.getInitialURL().then((url) => {
-      if (url) handleUrl({ url });
-    });
-
-    return () => subscription.remove();
-  };
-
-  const handleOuraCallback = async (url) => {
-    const code = new URL(url).searchParams.get('code');
-    if (code && user?.id) {
-      setLoading(true);
-      const result = await OuraService.handleCallback(code, user.id);
-      setLoading(false);
-      
-      if (result.success) {
-        setOuraConnected(true);
-        Alert.alert('Success', 'Oura Ring connected successfully!');
-      } else {
-        Alert.alert('Error', 'Failed to connect Oura Ring');
-      }
-    }
-  };
-
-  const handleWhoopCallback = async (url) => {
-    const code = new URL(url).searchParams.get('code');
-    if (code && user?.id) {
-      setLoading(true);
-      const result = await WhoopService.handleCallback(code, user.id);
-      setLoading(false);
-      
-      if (result.success) {
-        setWhoopConnected(true);
-        Alert.alert('Success', 'Whoop connected successfully!');
-      } else {
-        Alert.alert('Error', 'Failed to connect Whoop');
-      }
-    }
-  };
-
-  // Manual code submission for Whoop
-  const handleManualWhoopCode = async () => {
-    if (!manualCode || !user?.id) {
-      Alert.alert('Error', 'Please enter the authorization code');
-      return;
-    }
-
-    setLoading(true);
     try {
-      // Extract just the code if a full URL was pasted
-      let code = manualCode;
-      if (manualCode.includes('code=')) {
-        const urlParams = new URLSearchParams(manualCode.split('?')[1]);
-        code = urlParams.get('code');
-      }
-
-      const result = await WhoopService.handleCallback(code, user.id);
-      
-      if (result.success) {
-        setWhoopConnected(true);
-        setShowManualInput(false);
-        setManualCode('');
-        // Clear the pending state
-        await AsyncStorage.removeItem('pendingWhoopConnection');
-        Alert.alert('Success', 'Whoop connected successfully!');
-      } else {
-        Alert.alert('Error', result.error || 'Failed to connect Whoop');
-      }
+      const statuses = await IntegrationManager.getIntegrationStatuses(user.id);
+      setOuraConnected(statuses.oura.connected);
+      setWhoopConnected(statuses.whoop.connected);
+      setLastSync({
+        oura: statuses.oura.lastSync,
+        whoop: statuses.whoop.lastSync
+      });
     } catch (error) {
-      Alert.alert('Error', 'Failed to process authorization code');
-      console.error('Manual Whoop auth error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Manual code submission for Oura
-  const handleManualOuraCode = async () => {
-    if (!ouraManualCode || !user?.id) {
-      Alert.alert('Error', 'Please enter the authorization URL');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Extract just the code if a full URL was pasted
-      let code = ouraManualCode;
-      if (ouraManualCode.includes('code=')) {
-        const urlParams = new URLSearchParams(ouraManualCode.split('?')[1]);
-        code = urlParams.get('code');
-      }
-
-      const result = await OuraService.handleCallback(code, user.id);
-      
-      if (result.success) {
-        setOuraConnected(true);
-        setShowOuraManualInput(false);
-        setOuraManualCode('');
-        // Clear the pending state
-        await AsyncStorage.removeItem('pendingOuraConnection');
-        Alert.alert('Success', 'Oura connected successfully!');
-      } else {
-        Alert.alert('Error', result.error || 'Failed to connect Oura');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to process authorization code');
-      console.error('Manual Oura auth error:', error);
-    } finally {
-      setLoading(false);
+      console.error('Status check error:', error);
     }
   };
 
   const connectOura = async () => {
-    if (!user?.id) return;
-    
-    // Check if Oura credentials are configured
-    if (!process.env.EXPO_PUBLIC_OURA_CLIENT_ID || !process.env.EXPO_PUBLIC_OURA_CLIENT_SECRET) {
-      Alert.alert(
-        'Configuration Required', 
-        'Oura API credentials are not configured. Please set EXPO_PUBLIC_OURA_CLIENT_ID and EXPO_PUBLIC_OURA_CLIENT_SECRET in your .env file.'
-      );
+    if (!user?.id) {
+      Alert.alert('Error', 'Please log in first');
       return;
     }
-    
-    // Show the manual input field immediately and save state
-    setShowOuraManualInput(true);
-    await AsyncStorage.setItem('pendingOuraConnection', 'true');
-    
-    // Then show the instructions and open the browser
-    setTimeout(() => {
-      Alert.alert(
-        'Connect Oura',
-        'A text field has appeared below. After authorizing with Oura, copy the FULL URL from the redirect page and paste it in the text field to complete the connection.',
-        [
-          { text: 'Cancel', style: 'cancel', onPress: async () => {
-            setShowOuraManualInput(false);
-            setOuraManualCode('');
-            await AsyncStorage.removeItem('pendingOuraConnection');
-          }},
-          {
-            text: 'Open Oura Authorization',
-            onPress: () => {
-              const authUrl = OuraService.getAuthUrl(user.id);
-              Linking.openURL(authUrl);
-            }
-          }
-        ]
-      );
-    }, 100);
+
+    try {
+      setLoading(true);
+      const result = await IntegrationManager.startOuraAuth(user.id);
+      
+      if (result.success) {
+        Alert.alert(
+          'Opening Oura Authorization',
+          'You will be redirected to Oura to authorize access. After authorization, you will be automatically returned to the app.',
+          [{ text: 'OK' }]
+        );
+        // Refresh status after a few seconds to catch the callback
+        setTimeout(refreshIntegrationStatus, 3000);
+      } else {
+        Alert.alert('Error', result.error || 'Failed to start Oura connection');
+      }
+    } catch (error) {
+      console.error('Oura connection error:', error);
+      Alert.alert('Error', 'Failed to connect to Oura');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const connectWhoop = async () => {
-    if (!user?.id) return;
-    
-    // Check if Whoop credentials are configured
-    if (!process.env.EXPO_PUBLIC_WHOOP_CLIENT_ID || !process.env.EXPO_PUBLIC_WHOOP_CLIENT_SECRET) {
-      Alert.alert(
-        'Configuration Required', 
-        'Whoop API credentials are not configured. Please set EXPO_PUBLIC_WHOOP_CLIENT_ID and EXPO_PUBLIC_WHOOP_CLIENT_SECRET in your .env file.'
-      );
+    if (!user?.id) {
+      Alert.alert('Error', 'Please log in first');
       return;
     }
-    
-    // Show the manual input field immediately and save state
-    setShowManualInput(true);
-    await AsyncStorage.setItem('pendingWhoopConnection', 'true');
-    
-    // Then show the instructions and open the browser
-    setTimeout(() => {
-      Alert.alert(
-        'Connect Whoop',
-        'A text field has appeared below. After authorizing with Whoop, you\'ll see a "Not Found" page. Copy the FULL URL from that page and paste it in the text field to complete the connection.',
-        [
-          { text: 'Cancel', style: 'cancel', onPress: async () => {
-            setShowManualInput(false);
-            setManualCode('');
-            await AsyncStorage.removeItem('pendingWhoopConnection');
-          }},
-          {
-            text: 'Open Whoop Authorization',
-            onPress: () => {
-              const authUrl = WhoopService.getAuthUrl(user.id);
-              Linking.openURL(authUrl);
-            }
-          }
-        ]
-      );
-    }, 100);
+
+    try {
+      setLoading(true);
+      const result = await IntegrationManager.startWhoopAuth(user.id);
+      
+      if (result.success) {
+        Alert.alert('Success', result.message || 'Whoop connected successfully!');
+        await refreshIntegrationStatus();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to connect to Whoop');
+      }
+    } catch (error) {
+      console.error('Whoop connection error:', error);
+      Alert.alert('Error', 'Failed to connect to Whoop');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const disconnectOura = async () => {
+    if (!user?.id) return;
+    
     Alert.alert(
       'Disconnect Oura',
       'Are you sure you want to disconnect your Oura Ring?',
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Disconnect',
-          style: 'destructive',
-          onPress: async () => {
+        { text: 'Disconnect', style: 'destructive', onPress: async () => {
+          try {
             setLoading(true);
-            await OuraService.disconnect(user.id);
-            setOuraConnected(false);
-            setShowOuraManualInput(false);
-            setOuraManualCode('');
-            // Clear any pending connection state
-            await AsyncStorage.removeItem('pendingOuraConnection');
+            const result = await IntegrationManager.disconnectIntegration(user.id, 'oura');
+            if (result.success) {
+              setOuraConnected(false);
+              setLastSync(prev => ({ ...prev, oura: null }));
+              Alert.alert('Success', 'Oura Ring disconnected');
+            } else {
+              Alert.alert('Error', result.error || 'Failed to disconnect Oura');
+            }
+          } catch (error) {
+            Alert.alert('Error', 'Failed to disconnect Oura Ring');
+          } finally {
             setLoading(false);
           }
-        }
+        }}
       ]
     );
   };
 
   const disconnectWhoop = async () => {
+    if (!user?.id) return;
+    
     Alert.alert(
       'Disconnect Whoop',
-      'Are you sure you want to disconnect your Whoop?',
+      'Are you sure you want to disconnect your Whoop device?',
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Disconnect',
-          style: 'destructive',
-          onPress: async () => {
+        { text: 'Disconnect', style: 'destructive', onPress: async () => {
+          try {
             setLoading(true);
-            await WhoopService.disconnect(user.id);
-            setWhoopConnected(false);
-            setShowManualInput(false);
-            setManualCode('');
-            // Clear any pending connection state
-            await AsyncStorage.removeItem('pendingWhoopConnection');
+            const result = await IntegrationManager.disconnectIntegration(user.id, 'whoop');
+            if (result.success) {
+              setWhoopConnected(false);
+              setLastSync(prev => ({ ...prev, whoop: null }));
+              Alert.alert('Success', 'Whoop disconnected');
+            } else {
+              Alert.alert('Error', result.error || 'Failed to disconnect Whoop');
+            }
+          } catch (error) {
+            Alert.alert('Error', 'Failed to disconnect Whoop');
+          } finally {
             setLoading(false);
           }
-        }
+        }}
       ]
     );
   };
 
-  const syncOuraData = async () => {
-    setLoading(true);
+  const syncData = async () => {
+    if (!user?.id) return;
+    
     try {
-      const result = await OuraService.syncAllData(user.id, 14); // Sync last 14 days for stability
+      setLoading(true);
+      const result = await IntegrationManager.syncAllIntegrations(user.id);
       
       if (result.success) {
-        Alert.alert(
-          '✅ Oura Sync Complete', 
-          `Successfully synced ${result.data.totalRecords} records:\n\n` +
-          `• Sleep: ${result.data.sleep}\n` +
-          `• Activity: ${result.data.activity}\n` +
-          `• Readiness: ${result.data.readiness}\n` +
-          `• Heart Rate: ${result.data.heartRate}\n` +
-          `• Workouts: ${result.data.workouts}\n` +
-          `• SpO2: ${result.data.spo2}\n` +
-          `• Sessions: ${result.data.sessions}\n` +
-          `• Tags: ${result.data.tags}`
-        );
+        const { summary } = result;
+        const message = `Sync completed successfully!\n\nOura: ${summary.ouraRecords} records\nWhoop: ${summary.whoopRecords} records\nTotal: ${summary.totalRecords} records`;
+        Alert.alert('Sync Complete', message);
+        await refreshIntegrationStatus(); // Update last sync times
       } else {
-        Alert.alert('Sync Failed', result.error || 'Failed to sync Oura data');
+        Alert.alert('Sync Failed', result.error || 'Unable to sync data');
       }
     } catch (error) {
-      Alert.alert('Error', 'An error occurred while syncing Oura data');
-      console.error('Oura sync error:', error);
+      console.error('Sync error:', error);
+      Alert.alert('Error', 'Failed to sync data');
     } finally {
       setLoading(false);
     }
   };
 
-  const syncWhoopData = async () => {
-    setLoading(true);
-    try {
-      console.log('📱 Starting Whoop sync...');
-      console.log('📱 User object:', user);
-      console.log('📱 User ID:', user?.id);
-      
-      if (!user?.id) {
-        Alert.alert('Error', 'User not authenticated. Please login again.');
-        return;
-      }
-      
-      const result = await WhoopService.syncAllData(user.id, 500); // Sync last 500 days to ensure we get all historical data from July 10
-      
-      if (result.success) {
-        Alert.alert(
-          '✅ Whoop Sync Complete', 
-          `Successfully synced ${result.data.totalRecords} records:\n\n` +
-          `• Recovery: ${result.data.recovery}\n` +
-          `• Sleep: ${result.data.sleep}\n` +
-          `• Workouts: ${result.data.workouts}\n` +
-          `• Cycles: ${result.data.cycles}\n` +
-          `• Strain: ${result.data.strain}\n` +
-          `• Physiological: ${result.data.physiological}\n` +
-          `• Profile: ${result.data.profile}`
-        );
-      } else {
-        Alert.alert('Sync Failed', result.error || 'Failed to sync Whoop data');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'An error occurred while syncing Whoop data');
-      console.error('Whoop sync error:', error);
-    } finally {
-      setLoading(false);
-    }
+  const formatLastSync = (timestamp) => {
+    if (!timestamp) return 'Never';
+    const date = new Date(timestamp);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.surface.background,
+    },
     header: {
-      paddingVertical: spacing.lg,
-      paddingHorizontal: spacing.screenPadding,
-      backgroundColor: colors.surface.card,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border.light,
-      marginBottom: spacing.lg,
-    },
-    headerContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    title: {
-      marginLeft: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
     },
     content: {
-      paddingHorizontal: spacing.screenPadding,
+      paddingHorizontal: spacing.lg,
     },
     integrationCard: {
       marginBottom: spacing.md,
-      padding: spacing.lg,
     },
     integrationHeader: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: spacing.md,
+      justifyContent: 'space-between',
+      marginBottom: spacing.sm,
     },
     integrationInfo: {
       flexDirection: 'row',
       alignItems: 'center',
     },
-    integrationLogo: {
-      width: 40,
-      height: 40,
-      marginRight: spacing.md,
+    integrationIcon: {
+      marginRight: spacing.sm,
     },
-    statusBadge: {
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderRadius: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginLeft: spacing.sm,
     },
-    connectedBadge: {
-      backgroundColor: colors.success[100],
+    connectedDot: {
+      backgroundColor: colors.success[500],
     },
-    disconnectedBadge: {
-      backgroundColor: colors.text.secondary + '20',
+    disconnectedDot: {
+      backgroundColor: colors.neutral[400],
     },
-    statusText: {
-      marginLeft: spacing.xs,
+    integrationDetails: {
+      marginTop: spacing.sm,
     },
-    description: {
-      marginBottom: spacing.lg,
+    lastSyncText: {
+      color: colors.text.secondary,
+      fontSize: 12,
+      marginTop: spacing.xs,
+    },
+    actionButton: {
+      marginTop: spacing.sm,
+    },
+    syncSection: {
+      marginTop: spacing.lg,
+      paddingTop: spacing.lg,
+      borderTopWidth: 1,
+      borderTopColor: colors.neutral[200],
+    },
+    syncDescription: {
+      textAlign: 'center',
+      marginBottom: spacing.md,
       color: colors.text.secondary,
     },
-    buttonRow: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-    },
-    button: {
-      flex: 1,
-    },
-    note: {
-      padding: spacing.lg,
-      backgroundColor: colors.info[50],
-      borderRadius: 8,
-      marginTop: spacing.lg,
-    },
-    noteText: {
-      color: colors.info[700],
-    },
-    manualInput: {
-      marginTop: spacing.md,
-      padding: spacing.md,
-      backgroundColor: colors.surface.background,
-      borderRadius: 8,
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: colors.border.light,
-      borderRadius: 8,
-      padding: spacing.sm,
-      marginBottom: spacing.sm,
-      color: colors.text.primary,
-      fontSize: 12,
-    }
   });
 
   return (
-    <KeyboardAvoidingView 
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
-    >
-      <Container safe scroll backgroundColor={colors.surface.background}>
-        {/* Header */}
+    <Container safe backgroundColor={colors.surface.background}>
+      <ScrollView style={styles.container}>
         <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <SafeIcon name="link" size="lg" color={colors.primary[500]} />
-          <H2 style={styles.title}>Integrations</H2>
+          <H2>Integrations</H2>
+          <Caption color="secondary" style={{ marginTop: spacing.xs }}>
+            Connect your wearable devices to sync health data automatically
+          </Caption>
         </View>
-      </View>
 
-      <View style={styles.content}>
-        {/* Oura Integration */}
-        <Card style={styles.integrationCard}>
-          <View style={styles.integrationHeader}>
-            <View style={styles.integrationInfo}>
-              <SafeIcon name="ring" size="lg" color={colors.primary[500]} />
-              <View>
-                <Body weight="semibold">Oura Ring</Body>
-                <Caption>Sleep & Recovery Tracking</Caption>
+        <View style={styles.content}>
+          {/* Oura Ring Integration */}
+          <Card style={styles.integrationCard}>
+            <Card.Body>
+              <View style={styles.integrationHeader}>
+                <View style={styles.integrationInfo}>
+                  <SafeIcon 
+                    name="radio" 
+                    size="md" 
+                    color={ouraConnected ? colors.success[500] : colors.neutral[400]}
+                    style={styles.integrationIcon} 
+                  />
+                  <Body weight="semibold">Oura Ring</Body>
+                  <View style={[
+                    styles.statusDot, 
+                    ouraConnected ? styles.connectedDot : styles.disconnectedDot
+                  ]} />
+                </View>
               </View>
-            </View>
-            <View style={[
-              styles.statusBadge, 
-              ouraConnected ? styles.connectedBadge : styles.disconnectedBadge
-            ]}>
-              <SafeIcon 
-                name={ouraConnected ? "check-circle" : "x-circle"} 
-                size="xs" 
-                color={ouraConnected ? colors.success[600] : colors.text.secondary}
-              />
-              <Caption style={styles.statusText}>
-                {ouraConnected ? 'Connected' : 'Not Connected'}
-              </Caption>
-            </View>
-          </View>
+              
+              <View style={styles.integrationDetails}>
+                <BodySmall color="secondary">
+                  {ouraConnected ? 
+                    'Connected - Syncing sleep, activity, and readiness data' :
+                    'Connect your Oura Ring to track sleep quality, recovery, and daily activity'
+                  }
+                </BodySmall>
+                
+                {ouraConnected && (
+                  <Caption style={styles.lastSyncText}>
+                    Last sync: {formatLastSync(lastSync.oura)}
+                  </Caption>
+                )}
+              </View>
+              
+              <View style={styles.actionButton}>
+                {ouraConnected ? (
+                  <Button 
+                    title="Disconnect"
+                    variant="secondary"
+                    size="sm"
+                    onPress={disconnectOura}
+                    loading={loading}
+                    disabled={loading}
+                  />
+                ) : (
+                  <Button 
+                    title="Connect Oura Ring"
+                    variant="primary"
+                    size="sm"
+                    onPress={connectOura}
+                    loading={loading}
+                    disabled={loading}
+                  />
+                )}
+              </View>
+            </Card.Body>
+          </Card>
 
-          <BodySmall style={styles.description}>
-            Connect your Oura Ring to sync sleep quality, HRV, body temperature, 
-            and recovery data with your Vitaliti training sessions.
-          </BodySmall>
+          {/* Whoop Integration */}
+          <Card style={styles.integrationCard}>
+            <Card.Body>
+              <View style={styles.integrationHeader}>
+                <View style={styles.integrationInfo}>
+                  <SafeIcon 
+                    name="activity" 
+                    size="md" 
+                    color={whoopConnected ? colors.success[500] : colors.neutral[400]}
+                    style={styles.integrationIcon} 
+                  />
+                  <Body weight="semibold">Whoop</Body>
+                  <View style={[
+                    styles.statusDot, 
+                    whoopConnected ? styles.connectedDot : styles.disconnectedDot
+                  ]} />
+                </View>
+              </View>
+              
+              <View style={styles.integrationDetails}>
+                <BodySmall color="secondary">
+                  {whoopConnected ? 
+                    'Connected - Syncing recovery, strain, and sleep data' :
+                    'Connect your Whoop device to track recovery, strain, and detailed sleep metrics'
+                  }
+                </BodySmall>
+                
+                {whoopConnected && (
+                  <Caption style={styles.lastSyncText}>
+                    Last sync: {formatLastSync(lastSync.whoop)}
+                  </Caption>
+                )}
+              </View>
+              
+              <View style={styles.actionButton}>
+                {whoopConnected ? (
+                  <Button 
+                    title="Disconnect"
+                    variant="secondary"
+                    size="sm"
+                    onPress={disconnectWhoop}
+                    loading={loading}
+                    disabled={loading}
+                  />
+                ) : (
+                  <Button 
+                    title="Connect Whoop"
+                    variant="primary"
+                    size="sm"
+                    onPress={connectWhoop}
+                    loading={loading}
+                    disabled={loading}
+                  />
+                )}
+              </View>
+            </Card.Body>
+          </Card>
 
-          <View style={styles.buttonRow}>
-            {ouraConnected ? (
-              <>
-                <Button
-                  title="Sync Data"
-                  variant="outline"
-                  size="small"
-                  onPress={syncOuraData}
-                  disabled={loading}
-                  style={styles.button}
-                />
-                <Button
-                  title="Disconnect"
-                  variant="outline"
-                  size="small"
-                  onPress={disconnectOura}
-                  disabled={loading}
-                  style={styles.button}
-                  color="error"
-                />
-              </>
-            ) : (
-              <Button
-                title="Connect Oura"
-                variant="primary"
-                size="small"
-                onPress={connectOura}
+          {/* Manual Sync Section */}
+          {(ouraConnected || whoopConnected) && (
+            <View style={styles.syncSection}>
+              <Body weight="semibold" style={{ textAlign: 'center', marginBottom: spacing.sm }}>
+                Data Synchronization
+              </Body>
+              <BodySmall style={styles.syncDescription}>
+                Data syncs automatically every 6 hours. You can also manually sync your latest data.
+              </BodySmall>
+              <Button 
+                title="Sync Now"
+                variant="secondary"
+                onPress={syncData}
+                loading={loading}
                 disabled={loading}
-                style={styles.button}
               />
-            )}
-          </View>
-
-          {/* Manual code input for Oura Expo Go limitation */}
-          {!ouraConnected && showOuraManualInput && (
-            <View style={styles.manualInput}>
-              <Caption style={{ marginBottom: spacing.xs, fontWeight: 'bold' }}>
-                Step 2: Complete Connection
-              </Caption>
-              <Caption style={{ marginBottom: spacing.sm, color: colors.text.secondary }}>
-                After authorizing, copy the ENTIRE URL from the redirect page
-              </Caption>
-              <TextInput
-                style={styles.input}
-                placeholder="https://cloud.ouraring.com/..."
-                placeholderTextColor={colors.text.tertiary}
-                value={ouraManualCode}
-                onChangeText={setOuraManualCode}
-                autoCapitalize="none"
-                autoCorrect={false}
-                multiline={true}
-                numberOfLines={3}
-              />
-              <View style={styles.buttonRow}>
-                <Button
-                  title="Cancel"
-                  variant="secondary"
-                  size="small"
-                  onPress={async () => {
-                    setShowOuraManualInput(false);
-                    setOuraManualCode('');
-                    // Clear the pending state
-                    await AsyncStorage.removeItem('pendingOuraConnection');
-                  }}
-                  style={styles.button}
-                />
-                <Button
-                  title="Complete Connection"
-                  variant="primary"
-                  size="small"
-                  onPress={handleManualOuraCode}
-                  disabled={loading || !ouraManualCode}
-                  style={styles.button}
-                />
-              </View>
-            </View>
-          )}
-        </Card>
-
-        {/* Whoop Integration */}
-        <Card style={styles.integrationCard}>
-          <View style={styles.integrationHeader}>
-            <View style={styles.integrationInfo}>
-              <SafeIcon name="activity" size="lg" color={colors.primary[500]} />
-              <View>
-                <Body weight="semibold">Whoop</Body>
-                <Caption>Performance & Strain Tracking</Caption>
-              </View>
-            </View>
-            <View style={[
-              styles.statusBadge, 
-              whoopConnected ? styles.connectedBadge : styles.disconnectedBadge
-            ]}>
-              <SafeIcon 
-                name={whoopConnected ? "check-circle" : "x-circle"} 
-                size="xs" 
-                color={whoopConnected ? colors.success[600] : colors.text.secondary}
-              />
-              <Caption style={styles.statusText}>
-                {whoopConnected ? 'Connected' : 'Not Connected'}
-              </Caption>
-            </View>
-          </View>
-
-          {/* Manual code input for Expo Go limitation */}
-          {!whoopConnected && showManualInput && (
-            <View style={styles.manualInput}>
-              <Caption style={{ marginBottom: spacing.xs, fontWeight: 'bold' }}>
-                Step 2: Complete Connection
-              </Caption>
-              <Caption style={{ marginBottom: spacing.sm, color: colors.text.secondary }}>
-                After authorizing, copy the ENTIRE URL from the error page (it starts with "http://localhost")
-              </Caption>
-              <TextInput
-                style={styles.input}
-                placeholder="http://localhost:19006/whoop-callback?code=..."
-                placeholderTextColor={colors.text.tertiary}
-                value={manualCode}
-                onChangeText={setManualCode}
-                autoCapitalize="none"
-                autoCorrect={false}
-                multiline={true}
-                numberOfLines={3}
-              />
-              <View style={styles.buttonRow}>
-                <Button
-                  title="Cancel"
-                  variant="secondary"
-                  size="small"
-                  onPress={async () => {
-                    setShowManualInput(false);
-                    setManualCode('');
-                    // Clear the pending state
-                    await AsyncStorage.removeItem('pendingWhoopConnection');
-                  }}
-                  style={styles.button}
-                />
-                <Button
-                  title="Complete Connection"
-                  variant="primary"
-                  size="small"
-                  onPress={handleManualWhoopCode}
-                  disabled={loading || !manualCode}
-                  style={styles.button}
-                />
-              </View>
             </View>
           )}
 
-          <BodySmall style={styles.description}>
-            Connect your Whoop to sync strain, recovery, sleep performance, 
-            and HRV data with your Vitaliti training sessions.
-          </BodySmall>
-
-          <View style={styles.buttonRow}>
-            {whoopConnected ? (
-              <>
-                <Button
-                  title="Sync Data"
-                  variant="outline"
-                  size="small"
-                  onPress={syncWhoopData}
-                  disabled={loading}
-                  style={styles.button}
-                />
-                <Button
-                  title="Disconnect"
-                  variant="outline"
-                  size="small"
-                  onPress={disconnectWhoop}
-                  disabled={loading}
-                  style={styles.button}
-                  color="error"
-                />
-              </>
-            ) : (
-              <Button
-                title="Connect Whoop"
-                variant="primary"
-                size="small"
-                onPress={connectWhoop}
-                disabled={loading}
-                style={styles.button}
-              />
-            )}
-          </View>
-        </Card>
-
-        {/* Note */}
-        <View style={styles.note}>
-          <BodySmall style={styles.noteText}>
-            Note: Your health data is encrypted and stored securely. 
-            We only access the data you explicitly authorize and never 
-            share it with third parties.
-          </BodySmall>
+          {/* Information Section */}
+          <Card style={{ marginTop: spacing.lg, marginBottom: spacing.xl }}>
+            <Card.Body>
+              <Body weight="semibold" style={{ marginBottom: spacing.sm }}>
+                How It Works
+              </Body>
+              <BodySmall color="secondary" style={{ lineHeight: 18 }}>
+                • Connect your devices using secure OAuth authentication{'\n'}
+                • Data syncs automatically in the background{'\n'}
+                • View your metrics in the Vitaliti Air analytics dashboard{'\n'}
+                • All data is encrypted and stored securely
+              </BodySmall>
+            </Card.Body>
+          </Card>
         </View>
-      </View>
+      </ScrollView>
     </Container>
-    </KeyboardAvoidingView>
   );
 };
 
