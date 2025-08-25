@@ -41,12 +41,18 @@ class EnhancedSessionManager {
     this.listeners = [];
     
     // IHHT Protocol state
-    this.currentPhase = 'HYPOXIC'; // 'HYPOXIC' | 'HYPEROXIC' | 'TRANSITION'
+    this.currentPhase = 'HYPOXIC'; // 'HYPOXIC' | 'HYPEROXIC'
     this.currentCycle = 1;
     this.phaseStartTime = null;
     this.phaseTimeRemaining = 300; // Will be set based on protocol
     this.phaseTimer = null;
-    this.nextPhaseAfterTransition = null; // Track what phase comes after transition
+    
+    // Recovery phase monitoring
+    this.recoveryStartTime = null;
+    this.recoveryTargetMet = false;
+    this.recoveryTargetMetTime = null;
+    this.readyForNextPhase = false;
+    this.currentSpo2 = 0;
     
     // Protocol configuration (defaults)
     this.protocolConfig = {
@@ -508,28 +514,25 @@ class EnhancedSessionManager {
   }
 
   async sendPhaseStartNotification(phase) {
-    // Only send notification if app is not active
-    if (this.appState === 'active') {
-      console.log('📱 App is active, skipping phase notification');
-      return;
-    }
-    
+    // Always send audible notifications for phase changes
     try {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') return;
       
-      const phaseAction = phase === 'HYPEROXIC' ? 'Take OFF mask' : 'Put ON mask';
+      const phaseTitle = phase === 'HYPEROXIC' ? 'Starting Recovery Phase' : 'Starting Altitude Phase';
+      const phaseAction = 'Please switch mask';
       
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: `🔵 ${phase === 'HYPEROXIC' ? 'Hyperoxic' : 'Hypoxic'} Phase Now`,
+          title: phaseTitle,
           body: phaseAction,
-          data: { type: 'phaseStart', phase }
+          data: { type: 'phaseStart', phase },
+          sound: true
         },
         trigger: null // Send immediately
       });
       
-      console.log(`📱 Sent immediate "${phase} Phase Now" notification`);
+      console.log(`📱 Sent immediate "${phaseTitle}" notification`);
     } catch (error) {
       console.error('❌ Error sending phase start notification:', error);
     }
@@ -551,14 +554,18 @@ class EnhancedSessionManager {
         return;
       }
 
-      // Don't schedule notifications at session start (when phase just started)
-      // Only schedule when we're mid-phase and have enough time remaining
+      // Don't schedule notifications for recovery phase (handled by UI)
+      if (this.currentPhase === 'HYPEROXIC') {
+        console.log('📱 Recovery phase - notifications handled by UI');
+        return;
+      }
+      
+      // Only schedule for altitude phase
       const warningTime = (this.phaseTimeRemaining - 30) * 1000;
-      console.log(`📱 Notification timing: phaseTimeRemaining=${this.phaseTimeRemaining}s, warningTime=${warningTime}ms, currentPhase=${this.currentPhase}`);
+      console.log(`📱 Notification timing: phaseTimeRemaining=${this.phaseTimeRemaining}s, warningTime=${warningTime}ms`);
       
       // Skip notifications if we just started the phase (within first 10 seconds)
-      const phaseDuration = this.currentPhase === 'HYPOXIC' ? this.protocolConfig.hypoxicDuration : this.protocolConfig.hyperoxicDuration;
-      const timeElapsedInPhase = phaseDuration - this.phaseTimeRemaining;
+      const timeElapsedInPhase = this.protocolConfig.hypoxicDuration - this.phaseTimeRemaining;
       
       if (timeElapsedInPhase < 10) {
         console.log(`📱 Skipping notifications - phase just started (${timeElapsedInPhase}s elapsed)`);
@@ -566,13 +573,12 @@ class EnhancedSessionManager {
       }
       
       if (warningTime > 0) {
-        const nextPhase = this.currentPhase === 'HYPOXIC' ? 'Hyperoxic' : 'Hypoxic';
-        
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: `⏰ ${nextPhase} Phase Coming Up`,
-            body: `Get ready to switch in 30 seconds`,
-            data: { type: 'phaseWarning' }
+            title: '⏰ Recovery Phase Coming Up',
+            body: 'Get ready to switch mask in 30 seconds',
+            data: { type: 'phaseWarning' },
+            sound: true
           },
           trigger: {
             seconds: Math.max(1, Math.floor(warningTime / 1000))
@@ -582,14 +588,13 @@ class EnhancedSessionManager {
       
       // Schedule phase change notification
       const changeTime = this.phaseTimeRemaining * 1000;
-      const nextPhase = this.currentPhase === 'HYPOXIC' ? 'Hyperoxic' : 'Hypoxic';
-      const instruction = nextPhase === 'Hypoxic' ? 'Put ON mask' : 'Take OFF mask';
       
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: `${nextPhase === 'Hypoxic' ? '🔴' : '🔵'} ${nextPhase} Phase Now`,
-          body: instruction,
-          data: { type: 'phaseChange' }
+          title: 'Starting Recovery Phase',
+          body: 'Please switch mask',
+          data: { type: 'phaseChange' },
+          sound: true
         },
         trigger: {
           seconds: Math.max(1, Math.floor(changeTime / 1000))
@@ -612,11 +617,9 @@ class EnhancedSessionManager {
       
       // Calculate time remaining based on elapsed time
       const elapsed = Math.floor((Date.now() - this.phaseStartTime) / 1000);
-      const phaseDuration = this.currentPhase === 'TRANSITION'
-        ? 10  // Transition phase is always 10 seconds
-        : this.currentPhase === 'HYPOXIC' 
-          ? this.protocolConfig.hypoxicDuration 
-          : this.protocolConfig.hyperoxicDuration;
+      const phaseDuration = this.currentPhase === 'HYPOXIC' 
+        ? this.protocolConfig.hypoxicDuration 
+        : this.protocolConfig.hyperoxicDuration;
       
       this.phaseTimeRemaining = Math.max(0, phaseDuration - elapsed);
       
@@ -678,50 +681,44 @@ class EnhancedSessionManager {
   async advancePhase() {
     console.log(`🔄 Advancing from ${this.currentPhase} phase (Cycle ${this.currentCycle})`);
 
-    // If currently in TRANSITION, move to the scheduled phase
-    if (this.currentPhase === 'TRANSITION') {
-      this.currentPhase = this.nextPhaseAfterTransition;
-      this.phaseTimeRemaining = this.nextPhaseAfterTransition === 'HYPEROXIC' 
-        ? this.protocolConfig.hyperoxicDuration 
-        : this.protocolConfig.hypoxicDuration;
-      this.phaseStartTime = Date.now();
-      
-      console.log(`🔄 Transition complete - starting ${this.currentPhase} phase`);
-      
-      // Send notification for actual phase start
-      await this.sendPhaseStartNotification(this.currentPhase);
-      this.nextPhaseAfterTransition = null;
-      return;
-    }
-
-    // When transitioning from HYPOXIC, go to TRANSITION first
+    // When transitioning from HYPOXIC (Altitude) to HYPEROXIC (Recovery)
     if (this.currentPhase === 'HYPOXIC') {
-      this.currentPhase = 'TRANSITION';
-      this.nextPhaseAfterTransition = 'HYPEROXIC';
-      this.phaseTimeRemaining = 10; // 10 seconds
+      this.currentPhase = 'HYPEROXIC';
+      this.phaseTimeRemaining = this.protocolConfig.hyperoxicDuration;
       this.phaseStartTime = Date.now();
       
-      console.log('⚠️ Entering mask switch transition → Take OFF mask for Hyperoxic phase');
+      // Reset recovery monitoring
+      this.recoveryStartTime = Date.now();
+      this.recoveryTargetMet = false;
+      this.recoveryTargetMetTime = null;
+      this.readyForNextPhase = false;
+      
+      console.log('🔵 Starting Recovery Phase - monitor for SpO2 ≥95%');
+      
+      // Send immediate notification
+      await this.sendPhaseStartNotification('HYPEROXIC');
       
     } else if (this.currentPhase === 'HYPEROXIC') {
       // Check if session is complete
       if (this.currentCycle >= this.protocolConfig.totalCycles) {
-        console.log(`🎉 DEBUG: Session completing - cycle ${this.currentCycle}/${this.protocolConfig.totalCycles}`);
+        console.log(`🎉 Session completing - cycle ${this.currentCycle}/${this.protocolConfig.totalCycles}`);
         await this.completeSession();
         return;
       }
 
-      // Move to next cycle via transition
+      // Move to next cycle - start Altitude phase
       this.currentCycle++;
-      this.currentPhase = 'TRANSITION';
-      this.nextPhaseAfterTransition = 'HYPOXIC';
-      this.phaseTimeRemaining = 10; // 10 seconds
+      this.currentPhase = 'HYPOXIC';
+      this.phaseTimeRemaining = this.protocolConfig.hypoxicDuration;
       this.phaseStartTime = Date.now();
       
       // Update database with new cycle
       await this.updateSessionCycle();
       
-      console.log(`⚠️ Entering mask switch transition → PUT ON mask for Hypoxic phase (Cycle ${this.currentCycle})`);
+      console.log(`🔴 Starting Altitude Phase (Cycle ${this.currentCycle})`);
+      
+      // Send immediate notification
+      await this.sendPhaseStartNotification('HYPOXIC');
     }
 
     // Schedule new notifications for this phase
@@ -734,7 +731,8 @@ class EnhancedSessionManager {
     this.notify('phaseAdvanced', {
       currentPhase: this.currentPhase,
       currentCycle: this.currentCycle,
-      phaseTimeRemaining: this.phaseTimeRemaining
+      phaseTimeRemaining: this.phaseTimeRemaining,
+      readyForNextPhase: this.readyForNextPhase
     });
   }
 
@@ -964,6 +962,13 @@ class EnhancedSessionManager {
     this.phaseStartTime = null;
     this.readingBuffer = [];
     this.hasActiveLiveActivity = false;
+    
+    // Reset recovery monitoring
+    this.recoveryStartTime = null;
+    this.recoveryTargetMet = false;
+    this.recoveryTargetMetTime = null;
+    this.readyForNextPhase = false;
+    this.currentSpo2 = 0;
     
     // Stop HKWorkout if running
     if (this.isUsingHKWorkout) {
@@ -1307,7 +1312,6 @@ class EnhancedSessionManager {
       isPaused: this.isPaused,
       currentSession: this.currentSession,
       currentPhase: this.currentPhase,
-      nextPhaseAfterTransition: this.nextPhaseAfterTransition,
       currentCycle: this.currentCycle,
       phaseTimeRemaining: this.phaseTimeRemaining,
       sessionStartTime: this.startTime, // Add session start time for UI timer
@@ -1317,7 +1321,11 @@ class EnhancedSessionManager {
       hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
       capabilities: runtimeEnvironment.capabilities,
       environment: runtimeEnvironment.environmentName,
-      currentAltitudeLevel: this.currentAltitudeLevel
+      currentAltitudeLevel: this.currentAltitudeLevel,
+      // Recovery phase monitoring
+      readyForNextPhase: this.readyForNextPhase,
+      recoveryTargetMetTime: this.recoveryTargetMetTime,
+      currentSpo2: this.currentSpo2
     };
   }
 
@@ -1326,6 +1334,80 @@ class EnhancedSessionManager {
       this.currentAltitudeLevel = level;
       this.notify('altitudeLevelChanged', { level });
     }
+  }
+
+  // Update current SpO2 for recovery monitoring
+  updateSpO2(spo2Value) {
+    this.currentSpo2 = spo2Value;
+    
+    // Check recovery phase requirements
+    if (this.currentPhase === 'HYPEROXIC' && !this.readyForNextPhase) {
+      this.checkRecoveryRequirements();
+    }
+    
+    // Check for low SpO2 safety alert
+    if (this.isActive && !this.isPaused && spo2Value > 0 && spo2Value <= 83) {
+      this.sendLowSpO2Alert();
+    }
+  }
+
+  checkRecoveryRequirements() {
+    // Check if SpO2 >= 95% for at least 1 minute
+    if (this.currentSpo2 >= 95) {
+      if (!this.recoveryTargetMetTime) {
+        this.recoveryTargetMetTime = Date.now();
+        console.log('🎯 Recovery target met - starting 1 minute timer');
+      } else {
+        const timeAtTarget = Math.floor((Date.now() - this.recoveryTargetMetTime) / 1000);
+        if (timeAtTarget >= 60 && !this.readyForNextPhase) {
+          this.readyForNextPhase = true;
+          console.log('✅ Recovery complete - ready for next phase');
+          this.notify('recoveryComplete', {
+            readyForNextPhase: true,
+            timeAtTarget
+          });
+        }
+      }
+    } else {
+      // Reset if SpO2 drops below target
+      if (this.recoveryTargetMetTime) {
+        console.log('⚠️ SpO2 dropped below 95% - resetting recovery timer');
+        this.recoveryTargetMetTime = null;
+        this.readyForNextPhase = false;
+      }
+    }
+  }
+
+  async sendLowSpO2Alert() {
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') return;
+      
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'SpO2 Low - Lift Mask',
+          body: 'Take a breath of room air',
+          data: { type: 'spo2Alert', spo2: this.currentSpo2 },
+          sound: true,
+          priority: 'high'
+        },
+        trigger: null // Send immediately
+      });
+      
+      console.log('🚨 Low SpO2 alert sent');
+    } catch (error) {
+      console.error('❌ Error sending SpO2 alert:', error);
+    }
+  }
+
+  // Manual confirmation to proceed to next phase (for recovery phase)
+  confirmReadyForNextPhase() {
+    if (this.currentPhase === 'HYPEROXIC' && this.readyForNextPhase) {
+      console.log('👍 User confirmed ready for next phase');
+      this.advancePhase();
+      return true;
+    }
+    return false;
   }
 
   // Set protocol configuration (called before starting session)
