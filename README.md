@@ -234,36 +234,23 @@ The app includes comprehensive health screening to ensure user safety:
 
 **Implementation**: `src/components/onboarding/`, `src/utils/surveyValidation.js`
 
-### Advanced Background Processing (iOS)
-
-**Aggressive Background Service**
-The app uses multiple iOS background techniques to maintain session continuity:
+### iOS Background Processing
 
 **Background Modes**:
-1. **Bluetooth Central** - Maintains device connection
-2. **Background Processing** - Continues session timing
-3. **Background Fetch** - Periodic data sync
-4. **Silent Push Notifications** - Remote wake capability
-5. **Audio Session** - Silent audio for extended runtime
-6. **Location Updates** - Minimal power location tracking
-7. **Network Keepalive** - Maintains server connection
-8. **State Restoration** - Recovers after termination
+The app uses standard iOS background modes to maintain functionality:
+
+1. **bluetooth-central** - Maintains pulse oximeter connection
+2. **processing** - Allows periodic background tasks
+3. **fetch** - Enables background data updates
 
 **Background Behavior**:
-- Sessions continue for full duration when backgrounded
-- Phase transitions occur automatically
-- Critical SpO2 alerts delivered within 5 seconds
-- Bluetooth reconnection within 10 seconds of foregrounding
-- Less than 5% data loss during background operation
+- Limited to ~30 second execution windows
+- Bluetooth connection may suspend after ~10 seconds
+- Automatic reconnection when app returns to foreground
+- Critical SpO2 alerts delivered as local notifications
+- Session recovery available if app is terminated
 
-**Live Activities Support**:
-- Real-time session progress on lock screen
-- Dynamic Island integration (iOS 16.2+)
-- Phase tracking and timers
-- SpO2 and heart rate display
-- Compact, minimal, and expanded views
-
-**Implementation**: `src/services/AggressiveBackgroundService.js`, `modules/live-activity/`
+**Note**: iOS restricts background execution to preserve battery life. The app will attempt to maintain connectivity but cannot guarantee continuous background operation beyond system limits.
 
 ### Survey System
 
@@ -401,13 +388,6 @@ Key tables include:
 - `survey_responses` - Session survey data
 - `calibration_sessions` - Device calibration data
 
-## iOS Live Activities
-
-The app includes iOS Live Activity support for displaying session progress on the lock screen:
-
-- **Target**: `targets/widget/`
-- **Configuration**: App Groups entitlement
-- **Module**: Custom live activity module in `modules/live-activity/`
 
 ## Build Configuration
 
@@ -415,8 +395,7 @@ The app includes iOS Live Activity support for displaying session progress on th
 
 **iOS**:
 - Deployment target: iOS 16.2+
-- Background modes: Bluetooth, processing
-- Live Activities support
+- Background modes: bluetooth-central, processing, fetch
 - App Groups entitlement
 
 **Android**:
@@ -439,10 +418,10 @@ The app includes iOS Live Activity support for displaying session progress on th
 ## Background Functionality
 
 ### iOS Background Modes
-The app is configured with the following background modes for continuous operation:
-- **Bluetooth Central**: Maintains pulse oximeter connection when app is backgrounded
-- **Background Processing**: Continues session timing and safety monitoring
-- **Expected Duration**: iOS allows ~30 seconds of background processing with periodic execution windows
+The app is configured with the following background modes:
+- **bluetooth-central**: Maintains pulse oximeter connection when app is backgrounded
+- **processing**: Enables periodic background task execution
+- **fetch**: Allows background data updates
 
 ### Background Behavior
 - **Session Continuity**: IHHT sessions continue running when app is backgrounded
@@ -457,28 +436,43 @@ The app is configured with the following background modes for continuous operati
 - **Battery Impact**: Background BLE operations consume additional power
 - **User Settings**: Requires Background App Refresh enabled for optimal performance
 
-## Build Types & Testing
+## Building & Deployment
 
-### Build Profiles
+### EAS Build Profiles
 
-| Build Type | Use Case | Background Testing | Installation |
-|------------|----------|-------------------|--------------|
-| **Development** | Debugging with dev server | Limited | Requires `npx expo start --dev-client` |
-| **Preview** | Realistic background testing | ✅ **Recommended** | Direct install via QR/link |
-| **Production** | App Store/TestFlight | Full capability | App Store distribution |
+| Profile | Use Case | Distribution | Signing |
+|---------|----------|--------------|---------|
+| **development** | Local debugging | Internal | Development certificate |
+| **preview** | Testing & QA | Internal (Ad Hoc) | Distribution certificate |
+| **production** | App Store/TestFlight | App Store | Distribution certificate |
 
-### Creating Builds
+### Building for iOS
 
 ```bash
-# Development build (debugging)
-eas build --profile development --platform ios
+# Install EAS CLI globally
+npm install -g eas-cli
 
-# Preview build (background testing) - RECOMMENDED
+# Login to Expo account
+eas login
+
+# Build for testing (Ad Hoc distribution)
 eas build --profile preview --platform ios
 
-# Production build (App Store)
+# Build for TestFlight/App Store
 eas build --profile production --platform ios
 ```
+
+### Submitting to TestFlight
+
+```bash
+# Submit the latest production build
+eas submit --platform ios --latest
+
+# Or submit a specific build
+eas submit --platform ios --id <build-id>
+```
+
+**Note**: Only production builds can be submitted to TestFlight. Preview builds use Ad Hoc provisioning and will be rejected by App Store Connect.
 
 ## Background Testing Instructions
 
@@ -514,11 +508,11 @@ eas build --profile production --platform ios
 
 ### Expected Results
 
-✅ **Session continues** for full 35-minute duration when backgrounded  
-✅ **Phase transitions** occur automatically (Hypoxic ↔ Hyperoxic)  
-✅ **Critical alerts** delivered within 5 seconds of SpO2 < 80%  
+✅ **Session recovery** when returning to app  
 ✅ **Bluetooth reconnection** within 10 seconds of app foregrounding  
-✅ **Data preservation** with < 5% reading loss during background operation  
+✅ **Critical alerts** delivered as notifications when SpO2 < 80%  
+⚠️ **Limited background execution** (~30 seconds at a time)  
+⚠️ **Bluetooth may suspend** during extended background periods  
 
 ### Troubleshooting Background Issues
 

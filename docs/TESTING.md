@@ -126,43 +126,42 @@ eas build --profile preview --platform ios
 # Install and test
 1. Start IHHT session
 2. Press home button to background app
-3. Wait 10 minutes
+3. Wait 2-3 minutes
 4. Return to app
 ```
 
 **Expected Results**:
-- ✅ Session continues running
-- ✅ Phase transitions occur on schedule
-- ✅ Less than 5% data loss
-- ✅ Bluetooth maintains connection
+- ✅ Session timer continues
+- ✅ Data is preserved
+- ⚠️ Bluetooth may disconnect after ~30 seconds
+- ⚠️ Will reconnect when app returns to foreground
 
-### 2. Live Activities Testing
-
-**Test Procedure**:
-1. Start session on iOS 16.2+ device
-2. Lock phone screen
-3. Observe lock screen and Dynamic Island
-
-**Expected Results**:
-- ✅ Live Activity appears on lock screen
-- ✅ Shows current phase and progress
-- ✅ Updates in real-time
-- ✅ SpO2 and HR display correctly
-- ✅ Dynamic Island shows compact view
-
-### 3. Extended Background Test
+### 2. Session Recovery Test
 
 **Test Procedure**:
-1. Start 50-minute full session
-2. Background app after 5 minutes
-3. Use other apps normally
-4. Return after session completes
+1. Start IHHT session
+2. Force quit the app (swipe up and remove)
+3. Wait 1-2 minutes
+4. Reopen the app
 
 **Expected Results**:
-- ✅ Full session completes
-- ✅ All 5 cycles recorded
-- ✅ Survey prompt appears on return
-- ✅ Data synced to Supabase
+- ✅ Prompts to recover session if < 10 minutes
+- ✅ Session state restored
+- ✅ Bluetooth reconnection attempted
+- ✅ Can continue or start new session
+
+### 3. Critical Alert Test
+
+**Test Procedure**:
+1. Start session with pulse oximeter
+2. Background the app
+3. Remove finger to trigger low SpO2
+4. Check for notification
+
+**Expected Results**:
+- ✅ Local notification appears for critical SpO2
+- ✅ Notification shows warning message
+- ⚠️ Delivery depends on iOS notification settings
 
 ## Database & Sync Testing
 
