@@ -17,6 +17,7 @@ import serviceFactory from './ServiceFactory';
 import runtimeEnvironment from '../utils/RuntimeEnvironment';
 import AggressiveBackgroundService from './AggressiveBackgroundService';
 import HKWorkoutService from './native/HKWorkoutService';
+import AdaptiveInstructionEngine from './AdaptiveInstructionEngine';
 
 // Configure notification handling
 Notifications.setNotificationHandler({
@@ -41,24 +42,23 @@ class EnhancedSessionManager {
     this.listeners = [];
     
     // IHHT Protocol state
-    this.currentPhase = 'HYPOXIC'; // 'HYPOXIC' | 'HYPEROXIC'
+    this.currentPhase = 'ALTITUDE'; // 'ALTITUDE' | 'RECOVERY' | 'TRANSITION'
     this.currentCycle = 1;
     this.phaseStartTime = null;
     this.phaseTimeRemaining = 300; // Will be set based on protocol
     this.phaseTimer = null;
+    this.nextPhaseAfterTransition = null; // Track what phase comes after transition
     
-    // Recovery phase monitoring
-    this.recoveryStartTime = null;
-    this.recoveryTargetMet = false;
-    this.recoveryTargetMetTime = null;
-    this.readyForNextPhase = false;
-    this.currentSpo2 = 0;
+    // Adaptive instruction system
+    this.adaptiveEngine = new AdaptiveInstructionEngine();
+    this.currentSessionType = 'calibration'; // Will be determined based on user history
+    this.adaptiveInstructionCallback = null;
     
     // Protocol configuration (defaults)
     this.protocolConfig = {
       totalCycles: 3,
-      hypoxicDuration: 420,    // 7 minutes in seconds
-      hyperoxicDuration: 180   // 3 minutes in seconds
+      altitudeDuration: 420,    // 7 minutes in seconds (renamed from hypoxicDuration)
+      recoveryDuration: 180     // 3 minutes in seconds (renamed from hyperoxicDuration)
     };
     
     // Service references (will be loaded based on environment)
@@ -232,8 +232,10 @@ class EnhancedSessionManager {
         currentCycle: this.currentCycle,
         phaseTimeRemaining: this.phaseTimeRemaining,
         totalCycles: this.protocolConfig.totalCycles,
-        hypoxicDuration: this.protocolConfig.hypoxicDuration,
-        hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
+        hypoxicDuration: this.protocolConfig.altitudeDuration,
+        hyperoxicDuration: this.protocolConfig.recoveryDuration,
+        altitudeDuration: this.protocolConfig.altitudeDuration,
+        recoveryDuration: this.protocolConfig.recoveryDuration,
       });
       
       // Update Live Activity if supported
@@ -323,12 +325,19 @@ class EnhancedSessionManager {
       // Update protocol configuration
       this.protocolConfig = {
         totalCycles: protocolConfig.totalCycles || this.protocolConfig.totalCycles,
-        hypoxicDuration: protocolConfig.hypoxicDuration || this.protocolConfig.hypoxicDuration,
-        hyperoxicDuration: protocolConfig.hyperoxicDuration || this.protocolConfig.hyperoxicDuration
+        altitudeDuration: protocolConfig.hypoxicDuration || this.protocolConfig.altitudeDuration,
+        recoveryDuration: protocolConfig.hyperoxicDuration || this.protocolConfig.recoveryDuration
       };
+
+      // Determine session type (calibration vs training)
+      await this.determineSessionType();
+      console.log(`📊 Starting ${this.currentSessionType} session`);
       
       // Store additional protocol data for session creation
       const defaultAltitudeLevel = protocolConfig.defaultAltitudeLevel || 6;
+      
+      // Initialize adaptive engine with the starting altitude phase
+      this.adaptiveEngine.startAltitudePhase(sessionId, 1, defaultAltitudeLevel, this.currentSessionType);
       const baselineHRV = protocolConfig.baselineHRV || null;
       
       // Create session in Supabase with proper session data
@@ -353,9 +362,9 @@ class EnhancedSessionManager {
       this.isActive = true;
       this.isPaused = false;
       this.startTime = Date.now();
-      this.currentPhase = 'HYPOXIC';
+      this.currentPhase = 'ALTITUDE';
       this.currentCycle = 1;
-      this.phaseTimeRemaining = this.protocolConfig.hypoxicDuration;
+      this.phaseTimeRemaining = this.protocolConfig.altitudeDuration;
       this.phaseStartTime = Date.now();
       this.readingBuffer = [];
 
@@ -397,8 +406,8 @@ class EnhancedSessionManager {
           currentCycle: this.currentCycle,
           phaseTimeRemaining: this.phaseTimeRemaining,
           totalCycles: this.protocolConfig.totalCycles,
-          hypoxicDuration: this.protocolConfig.hypoxicDuration,
-          hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
+          hypoxicDuration: this.protocolConfig.altitudeDuration,
+          hyperoxicDuration: this.protocolConfig.recoveryDuration,
         });
       }
       
@@ -410,8 +419,8 @@ class EnhancedSessionManager {
           currentCycle: this.currentCycle,
           phaseTimeRemaining: this.phaseTimeRemaining,
           totalCycles: this.protocolConfig.totalCycles,
-          hypoxicDuration: this.protocolConfig.hypoxicDuration,
-          hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
+          hypoxicDuration: this.protocolConfig.altitudeDuration,
+          hyperoxicDuration: this.protocolConfig.recoveryDuration,
         });
       }
 
@@ -468,8 +477,10 @@ class EnhancedSessionManager {
         currentCycle: this.currentCycle,
         totalCycles: this.protocolConfig.totalCycles,
         phaseTimeRemaining: this.phaseTimeRemaining,
-        hypoxicDuration: this.protocolConfig.hypoxicDuration,
-        hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
+        hypoxicDuration: this.protocolConfig.altitudeDuration,
+        hyperoxicDuration: this.protocolConfig.recoveryDuration,
+        altitudeDuration: this.protocolConfig.altitudeDuration,
+        recoveryDuration: this.protocolConfig.recoveryDuration,
       });
 
       if (result.success) {
@@ -514,25 +525,28 @@ class EnhancedSessionManager {
   }
 
   async sendPhaseStartNotification(phase) {
-    // Always send audible notifications for phase changes
+    // Only send notification if app is not active
+    if (this.appState === 'active') {
+      console.log('📱 App is active, skipping phase notification');
+      return;
+    }
+    
     try {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') return;
       
-      const phaseTitle = phase === 'HYPEROXIC' ? 'Starting Recovery Phase' : 'Starting Altitude Phase';
-      const phaseAction = 'Please switch mask';
+      const phaseAction = phase === 'RECOVERY' ? 'Take OFF mask' : 'Put ON mask';
       
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: phaseTitle,
+          title: `🔵 ${phase === 'RECOVERY' ? 'Recovery' : 'Altitude'} Phase Now`,
           body: phaseAction,
-          data: { type: 'phaseStart', phase },
-          sound: true
+          data: { type: 'phaseStart', phase }
         },
         trigger: null // Send immediately
       });
       
-      console.log(`📱 Sent immediate "${phaseTitle}" notification`);
+      console.log(`📱 Sent immediate "${phase} Phase Now" notification`);
     } catch (error) {
       console.error('❌ Error sending phase start notification:', error);
     }
@@ -554,18 +568,14 @@ class EnhancedSessionManager {
         return;
       }
 
-      // Don't schedule notifications for recovery phase (handled by UI)
-      if (this.currentPhase === 'HYPEROXIC') {
-        console.log('📱 Recovery phase - notifications handled by UI');
-        return;
-      }
-      
-      // Only schedule for altitude phase
+      // Don't schedule notifications at session start (when phase just started)
+      // Only schedule when we're mid-phase and have enough time remaining
       const warningTime = (this.phaseTimeRemaining - 30) * 1000;
-      console.log(`📱 Notification timing: phaseTimeRemaining=${this.phaseTimeRemaining}s, warningTime=${warningTime}ms`);
+      console.log(`📱 Notification timing: phaseTimeRemaining=${this.phaseTimeRemaining}s, warningTime=${warningTime}ms, currentPhase=${this.currentPhase}`);
       
       // Skip notifications if we just started the phase (within first 10 seconds)
-      const timeElapsedInPhase = this.protocolConfig.hypoxicDuration - this.phaseTimeRemaining;
+      const phaseDuration = this.currentPhase === 'ALTITUDE' ? this.protocolConfig.altitudeDuration : this.protocolConfig.recoveryDuration;
+      const timeElapsedInPhase = phaseDuration - this.phaseTimeRemaining;
       
       if (timeElapsedInPhase < 10) {
         console.log(`📱 Skipping notifications - phase just started (${timeElapsedInPhase}s elapsed)`);
@@ -573,12 +583,13 @@ class EnhancedSessionManager {
       }
       
       if (warningTime > 0) {
+        const nextPhase = this.currentPhase === 'ALTITUDE' ? 'Recovery' : 'Altitude';
+        
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: '⏰ Recovery Phase Coming Up',
-            body: 'Get ready to switch mask in 30 seconds',
-            data: { type: 'phaseWarning' },
-            sound: true
+            title: `⏰ ${nextPhase} Phase Coming Up`,
+            body: `Get ready to switch in 30 seconds`,
+            data: { type: 'phaseWarning' }
           },
           trigger: {
             seconds: Math.max(1, Math.floor(warningTime / 1000))
@@ -588,13 +599,14 @@ class EnhancedSessionManager {
       
       // Schedule phase change notification
       const changeTime = this.phaseTimeRemaining * 1000;
+      const nextPhase = this.currentPhase === 'ALTITUDE' ? 'Recovery' : 'Altitude';
+      const instruction = nextPhase === 'Altitude' ? 'Put ON mask' : 'Take OFF mask';
       
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: 'Starting Recovery Phase',
-          body: 'Please switch mask',
-          data: { type: 'phaseChange' },
-          sound: true
+          title: `${nextPhase === 'Altitude' ? '🔴' : '🔵'} ${nextPhase} Phase Now`,
+          body: instruction,
+          data: { type: 'phaseChange' }
         },
         trigger: {
           seconds: Math.max(1, Math.floor(changeTime / 1000))
@@ -617,9 +629,11 @@ class EnhancedSessionManager {
       
       // Calculate time remaining based on elapsed time
       const elapsed = Math.floor((Date.now() - this.phaseStartTime) / 1000);
-      const phaseDuration = this.currentPhase === 'HYPOXIC' 
-        ? this.protocolConfig.hypoxicDuration 
-        : this.protocolConfig.hyperoxicDuration;
+      const phaseDuration = this.currentPhase === 'TRANSITION'
+        ? 10  // Transition phase is always 10 seconds
+        : this.currentPhase === 'ALTITUDE' 
+          ? this.protocolConfig.altitudeDuration 
+          : this.protocolConfig.recoveryDuration;
       
       this.phaseTimeRemaining = Math.max(0, phaseDuration - elapsed);
       
@@ -681,44 +695,81 @@ class EnhancedSessionManager {
   async advancePhase() {
     console.log(`🔄 Advancing from ${this.currentPhase} phase (Cycle ${this.currentCycle})`);
 
-    // When transitioning from HYPOXIC (Altitude) to HYPEROXIC (Recovery)
-    if (this.currentPhase === 'HYPOXIC') {
-      this.currentPhase = 'HYPEROXIC';
-      this.phaseTimeRemaining = this.protocolConfig.hyperoxicDuration;
+    // If currently in TRANSITION, move to the scheduled phase
+    if (this.currentPhase === 'TRANSITION') {
+      this.currentPhase = this.nextPhaseAfterTransition;
+      this.phaseTimeRemaining = this.nextPhaseAfterTransition === 'RECOVERY' 
+        ? this.protocolConfig.recoveryDuration 
+        : this.protocolConfig.altitudeDuration;
       this.phaseStartTime = Date.now();
       
-      // Reset recovery monitoring
-      this.recoveryStartTime = Date.now();
-      this.recoveryTargetMet = false;
-      this.recoveryTargetMetTime = null;
-      this.readyForNextPhase = false;
+      console.log(`🔄 Transition complete - starting ${this.currentPhase} phase`);
       
-      console.log('🔵 Starting Recovery Phase - monitor for SpO2 ≥95%');
+      // Send notification for actual phase start
+      await this.sendPhaseStartNotification(this.currentPhase);
+      this.nextPhaseAfterTransition = null;
+      return;
+    }
+
+    // When transitioning from ALTITUDE, go to TRANSITION first
+    if (this.currentPhase === 'ALTITUDE') {
+      // Calculate altitude adjustment for NEXT altitude phase (if any)
+      if (this.adaptiveEngine) {
+        try {
+          const altitudeAdjustment = this.adaptiveEngine.calculateNextAltitudeLevel();
+          console.log('🎯 Altitude adjustment calculation:', altitudeAdjustment);
+          
+          // Show altitude adjustment instruction to user if needed
+          if (altitudeAdjustment.adjustment !== 0 && this.adaptiveInstructionCallback) {
+            this.adaptiveInstructionCallback({
+              type: 'altitude_adjustment',
+              adjustment: altitudeAdjustment.adjustment,
+              newLevel: altitudeAdjustment.newLevel,
+              reason: altitudeAdjustment.reason,
+              message: altitudeAdjustment.adjustment > 0 
+                ? `Increase altitude to level ${altitudeAdjustment.newLevel}` 
+                : `Decrease altitude to level ${altitudeAdjustment.newLevel}`,
+              showDuringTransition: true
+            });
+            
+            // Record the altitude adjustment event (use 'dial_adjustment' to match DB constraint)
+            await this.recordAdaptiveEvent('dial_adjustment', {
+              adjustment: altitudeAdjustment.adjustment,
+              new_level: altitudeAdjustment.newLevel,
+              reason: altitudeAdjustment.reason
+            });
+          }
+        } catch (error) {
+          console.error('❌ Error calculating altitude adjustment:', error);
+        }
+      }
       
-      // Send immediate notification
-      await this.sendPhaseStartNotification('HYPEROXIC');
+      this.currentPhase = 'TRANSITION';
+      this.nextPhaseAfterTransition = 'RECOVERY';
+      this.phaseTimeRemaining = 10; // 10 seconds
+      this.phaseStartTime = Date.now();
       
-    } else if (this.currentPhase === 'HYPEROXIC') {
+      console.log('⚠️ Entering mask switch transition → Take OFF mask for Recovery phase');
+      
+    } else if (this.currentPhase === 'RECOVERY') {
       // Check if session is complete
       if (this.currentCycle >= this.protocolConfig.totalCycles) {
-        console.log(`🎉 Session completing - cycle ${this.currentCycle}/${this.protocolConfig.totalCycles}`);
+        console.log(`🎉 DEBUG: Session completing - cycle ${this.currentCycle}/${this.protocolConfig.totalCycles}`);
         await this.completeSession();
         return;
       }
 
-      // Move to next cycle - start Altitude phase
+      // Move to next cycle via transition
       this.currentCycle++;
-      this.currentPhase = 'HYPOXIC';
-      this.phaseTimeRemaining = this.protocolConfig.hypoxicDuration;
+      this.currentPhase = 'TRANSITION';
+      this.nextPhaseAfterTransition = 'ALTITUDE';
+      this.phaseTimeRemaining = 10; // 10 seconds
       this.phaseStartTime = Date.now();
       
       // Update database with new cycle
       await this.updateSessionCycle();
       
-      console.log(`🔴 Starting Altitude Phase (Cycle ${this.currentCycle})`);
-      
-      // Send immediate notification
-      await this.sendPhaseStartNotification('HYPOXIC');
+      console.log(`⚠️ Entering mask switch transition → PUT ON mask for Hypoxic phase (Cycle ${this.currentCycle})`);
     }
 
     // Schedule new notifications for this phase
@@ -731,8 +782,7 @@ class EnhancedSessionManager {
     this.notify('phaseAdvanced', {
       currentPhase: this.currentPhase,
       currentCycle: this.currentCycle,
-      phaseTimeRemaining: this.phaseTimeRemaining,
-      readyForNextPhase: this.readyForNextPhase
+      phaseTimeRemaining: this.phaseTimeRemaining
     });
   }
 
@@ -956,19 +1006,12 @@ class EnhancedSessionManager {
     this.isPaused = false;
     this.startTime = null;
     this.pauseTime = null;
-    this.currentPhase = 'HYPOXIC';
+    this.currentPhase = 'ALTITUDE';
     this.currentCycle = 1;
     this.phaseTimeRemaining = 0;
     this.phaseStartTime = null;
     this.readingBuffer = [];
     this.hasActiveLiveActivity = false;
-    
-    // Reset recovery monitoring
-    this.recoveryStartTime = null;
-    this.recoveryTargetMet = false;
-    this.recoveryTargetMetTime = null;
-    this.readyForNextPhase = false;
-    this.currentSpo2 = 0;
     
     // Stop HKWorkout if running
     if (this.isUsingHKWorkout) {
@@ -994,6 +1037,11 @@ class EnhancedSessionManager {
     };
 
     this.readingBuffer.push(enhancedReading);
+
+    // Process adaptive instructions with SpO2 data
+    if (reading.spo2 && reading.spo2 > 0) {
+      await this.processAdaptiveInstruction(reading);
+    }
 
     // Flush if buffer is full
     if (this.readingBuffer.length >= this.BATCH_SIZE) {
@@ -1110,12 +1158,14 @@ class EnhancedSessionManager {
           // Store recovery data for UI to access
           const recoveryData = {
             sessionId: session.id,
-            currentPhase: backgroundState?.currentPhase || session.currentPhase || 'HYPOXIC',
+            currentPhase: backgroundState?.currentPhase || session.currentPhase || 'ALTITUDE',
             currentCycle: backgroundState?.currentCycle || session.currentCycle || 1,
             phaseTimeRemaining: backgroundState?.phaseTimeRemaining || session.phaseTimeRemaining || 180,
             totalCycles: session.totalCycles || 3,
-            hypoxicDuration: session.hypoxicDuration || 420,
-            hyperoxicDuration: session.hyperoxicDuration || 180,
+            hypoxicDuration: session.hypoxicDuration || this.protocolConfig.altitudeDuration || 420,
+            hyperoxicDuration: session.hyperoxicDuration || this.protocolConfig.recoveryDuration || 180,
+            altitudeDuration: this.protocolConfig.altitudeDuration || 420,
+            recoveryDuration: this.protocolConfig.recoveryDuration || 180,
             startTime: session.startTime,
             sessionAge: Math.round(sessionAge / 1000), // seconds
             backgroundTime: backgroundState?.totalBackgroundTime || 0,
@@ -1205,8 +1255,8 @@ class EnhancedSessionManager {
       // Restore protocol configuration
       this.protocolConfig = {
         totalCycles: recoveryData.totalCycles,
-        hypoxicDuration: recoveryData.hypoxicDuration,
-        hyperoxicDuration: recoveryData.hyperoxicDuration
+        altitudeDuration: recoveryData.hypoxicDuration,
+        recoveryDuration: recoveryData.hyperoxicDuration
       };
       
       // Restore session progress
@@ -1231,8 +1281,8 @@ class EnhancedSessionManager {
           currentCycle: this.currentCycle,
           phaseTimeRemaining: this.phaseTimeRemaining,
           totalCycles: this.protocolConfig.totalCycles,
-          hypoxicDuration: this.protocolConfig.hypoxicDuration,
-          hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
+          hypoxicDuration: this.protocolConfig.altitudeDuration,
+          hyperoxicDuration: this.protocolConfig.recoveryDuration,
         });
       }
       
@@ -1244,8 +1294,8 @@ class EnhancedSessionManager {
           currentCycle: this.currentCycle,
           phaseTimeRemaining: this.phaseTimeRemaining,
           totalCycles: this.protocolConfig.totalCycles,
-          hypoxicDuration: this.protocolConfig.hypoxicDuration,
-          hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
+          hypoxicDuration: this.protocolConfig.altitudeDuration,
+          hyperoxicDuration: this.protocolConfig.recoveryDuration,
         });
       }
       
@@ -1312,6 +1362,7 @@ class EnhancedSessionManager {
       isPaused: this.isPaused,
       currentSession: this.currentSession,
       currentPhase: this.currentPhase,
+      nextPhaseAfterTransition: this.nextPhaseAfterTransition,
       currentCycle: this.currentCycle,
       phaseTimeRemaining: this.phaseTimeRemaining,
       sessionStartTime: this.startTime, // Add session start time for UI timer
@@ -1321,11 +1372,7 @@ class EnhancedSessionManager {
       hyperoxicDuration: this.protocolConfig.hyperoxicDuration,
       capabilities: runtimeEnvironment.capabilities,
       environment: runtimeEnvironment.environmentName,
-      currentAltitudeLevel: this.currentAltitudeLevel,
-      // Recovery phase monitoring
-      readyForNextPhase: this.readyForNextPhase,
-      recoveryTargetMetTime: this.recoveryTargetMetTime,
-      currentSpo2: this.currentSpo2
+      currentAltitudeLevel: this.currentAltitudeLevel
     };
   }
 
@@ -1336,87 +1383,13 @@ class EnhancedSessionManager {
     }
   }
 
-  // Update current SpO2 for recovery monitoring
-  updateSpO2(spo2Value) {
-    this.currentSpo2 = spo2Value;
-    
-    // Check recovery phase requirements
-    if (this.currentPhase === 'HYPEROXIC' && !this.readyForNextPhase) {
-      this.checkRecoveryRequirements();
-    }
-    
-    // Check for low SpO2 safety alert
-    if (this.isActive && !this.isPaused && spo2Value > 0 && spo2Value <= 83) {
-      this.sendLowSpO2Alert();
-    }
-  }
-
-  checkRecoveryRequirements() {
-    // Check if SpO2 >= 95% for at least 1 minute
-    if (this.currentSpo2 >= 95) {
-      if (!this.recoveryTargetMetTime) {
-        this.recoveryTargetMetTime = Date.now();
-        console.log('🎯 Recovery target met - starting 1 minute timer');
-      } else {
-        const timeAtTarget = Math.floor((Date.now() - this.recoveryTargetMetTime) / 1000);
-        if (timeAtTarget >= 60 && !this.readyForNextPhase) {
-          this.readyForNextPhase = true;
-          console.log('✅ Recovery complete - ready for next phase');
-          this.notify('recoveryComplete', {
-            readyForNextPhase: true,
-            timeAtTarget
-          });
-        }
-      }
-    } else {
-      // Reset if SpO2 drops below target
-      if (this.recoveryTargetMetTime) {
-        console.log('⚠️ SpO2 dropped below 95% - resetting recovery timer');
-        this.recoveryTargetMetTime = null;
-        this.readyForNextPhase = false;
-      }
-    }
-  }
-
-  async sendLowSpO2Alert() {
-    try {
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== 'granted') return;
-      
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'SpO2 Low - Lift Mask',
-          body: 'Take a breath of room air',
-          data: { type: 'spo2Alert', spo2: this.currentSpo2 },
-          sound: true,
-          priority: 'high'
-        },
-        trigger: null // Send immediately
-      });
-      
-      console.log('🚨 Low SpO2 alert sent');
-    } catch (error) {
-      console.error('❌ Error sending SpO2 alert:', error);
-    }
-  }
-
-  // Manual confirmation to proceed to next phase (for recovery phase)
-  confirmReadyForNextPhase() {
-    if (this.currentPhase === 'HYPEROXIC' && this.readyForNextPhase) {
-      console.log('👍 User confirmed ready for next phase');
-      this.advancePhase();
-      return true;
-    }
-    return false;
-  }
-
   // Set protocol configuration (called before starting session)
   setProtocol(config) {
     console.log('🔧 Setting protocol configuration:', config);
     this.protocolConfig = {
       totalCycles: config.totalCycles || 3,
-      hypoxicDuration: config.hypoxicDuration || 420,
-      hyperoxicDuration: config.hyperoxicDuration || 180
+      altitudeDuration: config.hypoxicDuration || 420,
+      recoveryDuration: config.hyperoxicDuration || 180
     };
   }
 
@@ -1491,9 +1464,9 @@ class EnhancedSessionManager {
       // Update phase time remaining based on native timer
       const now = Date.now();
       const phaseElapsed = Math.floor((now - this.phaseStartTime) / 1000);
-      const expectedRemaining = this.currentPhase === 'HYPOXIC' 
-        ? this.protocolConfig.hypoxicDuration - phaseElapsed
-        : this.protocolConfig.hyperoxicDuration - phaseElapsed;
+      const expectedRemaining = this.currentPhase === 'ALTITUDE' 
+        ? this.protocolConfig.altitudeDuration - phaseElapsed
+        : this.protocolConfig.recoveryDuration - phaseElapsed;
       
       // Only update if there's a significant difference (> 2 seconds)
       if (Math.abs(this.phaseTimeRemaining - expectedRemaining) > 2) {
@@ -1512,6 +1485,117 @@ class EnhancedSessionManager {
       console.log('🔄 HKWorkout requesting BLE reconnection:', deviceId);
       // This would trigger reconnection logic if needed
     });
+  }
+
+  // Adaptive instruction system methods
+  setAdaptiveInstructionCallback(callback) {
+    this.adaptiveInstructionCallback = callback;
+    console.log('📋 Adaptive instruction callback set');
+  }
+
+  async determineSessionType() {
+    try {
+      // Check if user has completed any sessions with the new adaptive system
+      const completedSessions = await DatabaseService.getCompletedAdaptiveSessions();
+      this.currentSessionType = completedSessions.length === 0 ? 'calibration' : 'training';
+      console.log(`📊 Session type determined: ${this.currentSessionType} (${completedSessions.length} completed sessions found)`);
+      return this.currentSessionType;
+    } catch (error) {
+      console.error('❌ Error determining session type:', error);
+      // Default to calibration for safety - this will be the most common case initially
+      this.currentSessionType = 'calibration';
+      console.log(`📊 Session type defaulted to: ${this.currentSessionType} (due to error)`);
+      return this.currentSessionType;
+    }
+  }
+
+  async processAdaptiveInstruction(spo2Data) {
+    if (!this.isActive || !this.adaptiveEngine) {
+      console.log('🔇 Skipping adaptive processing - session not active or engine not initialized');
+      return;
+    }
+
+    if (!spo2Data || typeof spo2Data.spo2 !== 'number' || spo2Data.spo2 <= 0) {
+      console.log('🔇 Skipping adaptive processing - invalid SpO2 data:', spo2Data);
+      return;
+    }
+
+    try {
+      console.log(`🎯 Processing adaptive instruction - SpO2: ${spo2Data.spo2}%, Phase: ${this.currentPhase}, Type: ${this.currentSessionType}`);
+      
+      // Process SpO2 reading for mask lift instructions based on current phase
+      let maskLiftInstruction = null;
+      if (this.currentPhase === 'ALTITUDE') {
+        maskLiftInstruction = this.adaptiveEngine.processAltitudeSpO2Reading(
+          spo2Data.spo2,
+          this.currentSessionType,
+          Date.now()
+        );
+      } else if (this.currentPhase === 'RECOVERY') {
+        const recoveryResult = this.adaptiveEngine.processRecoverySpO2Reading(
+          spo2Data.spo2,
+          Date.now()
+        );
+        // Recovery processing returns different info, not mask lift instructions
+        console.log('🔵 Recovery phase SpO2 processing:', recoveryResult);
+      }
+
+      if (maskLiftInstruction) {
+        console.log('🎯 Mask lift instruction triggered:', maskLiftInstruction);
+        
+        if (this.adaptiveInstructionCallback) {
+          try {
+            this.adaptiveInstructionCallback({
+              type: 'mask_lift',
+              ...maskLiftInstruction
+            });
+          } catch (callbackError) {
+            console.error('❌ Error in adaptive instruction callback:', callbackError);
+          }
+        } else {
+          console.log('⚠️ Adaptive instruction callback not set - instruction will be logged only');
+        }
+
+        // Record the adaptive event
+        await this.recordAdaptiveEvent('mask_lift', {
+          spo2_value: spo2Data.spo2,
+          threshold: maskLiftInstruction.threshold,
+          message: maskLiftInstruction.message
+        });
+      }
+
+                 // Note: Altitude phases run for full 7 minutes - no early advancement based on SpO2
+
+    } catch (error) {
+      console.error('❌ Error processing adaptive instruction:', error);
+    }
+  }
+
+  async recordAdaptiveEvent(eventType, data) {
+    if (!this.currentSession) return;
+
+    try {
+      const eventData = {
+        session_id: this.currentSession.id,
+        event_type: eventType,
+        event_timestamp: new Date().toISOString(),
+        altitude_phase_number: this.currentPhase === 'ALTITUDE' ? this.currentCycle : null,
+        recovery_phase_number: this.currentPhase === 'RECOVERY' ? this.currentCycle : null,
+        current_altitude_level: this.protocolConfig.defaultAltitudeLevel || 6,
+        spo2_value: data.spo2_value || null,
+        additional_data: JSON.stringify(data)
+      };
+
+      await DatabaseService.saveAdaptiveEvent(eventData);
+      console.log(`📝 Recorded adaptive event: ${eventType}`);
+    } catch (error) {
+      console.error(`❌ Failed to record adaptive event ${eventType}:`, error);
+    }
+  }
+
+  getPhaseElapsedTime() {
+    if (!this.phaseStartTime) return 0;
+    return Math.floor((Date.now() - this.phaseStartTime) / 1000);
   }
 }
 
