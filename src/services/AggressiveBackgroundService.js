@@ -188,7 +188,8 @@ export default class AggressiveBackgroundService {
     // Start all background strategies
     await this.startHeartbeat();
     await this.startSilentAudio();
-    await this.scheduleKeepAliveNotifications();
+    // Commented out to avoid visible notifications
+    // await this.scheduleKeepAliveNotifications();
     await this.startNetworkKeepalive();
     
     if (this.backgroundTimer) {
@@ -313,8 +314,8 @@ export default class AggressiveBackgroundService {
         }
         await this.startHeartbeat();
         
-        // Schedule emergency notifications only once
-        await this.scheduleEmergencyNotifications();
+        // Commented out to avoid visible notifications
+        // await this.scheduleEmergencyNotifications();
         
         // Save background entry state
         const state = await this.getSessionState();
@@ -349,7 +350,7 @@ export default class AggressiveBackgroundService {
       await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Session Recovery',
-          body: 'Maintaining session state',
+          body: 'Session active in background',
           data: { 
             type: 'emergency_keepalive', 
             sessionId: this.sessionData.id,

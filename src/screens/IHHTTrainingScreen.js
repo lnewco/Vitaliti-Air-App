@@ -22,7 +22,6 @@ import { useAppTheme } from '../theme';
 const PHASE_TYPES = {
   HYPOXIC: 'HYPOXIC',
   HYPEROXIC: 'HYPEROXIC',
-  TRANSITION: 'TRANSITION',
   COMPLETED: 'COMPLETED',
   PAUSED: 'PAUSED',
   TERMINATED: 'TERMINATED'
@@ -58,6 +57,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const [sessionInfo, setSessionInfo] = useState(EnhancedSessionManager.getSessionInfo());
   const [forceUpdate, setForceUpdate] = useState({});
   const [altitudeLevel, setAltitudeLevel] = useState(protocolConfig.defaultAltitudeLevel || 6); // Initialize from protocol config
+  const [lastSpO2Alert, setLastSpO2Alert] = useState(0); // Track last alert to avoid spam
   
   // Monitor session info changes and update local state
   useEffect(() => {
@@ -70,6 +70,11 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       // Force re-render to update timers
       setForceUpdate({});
       
+      // Update SpO2 in session manager for recovery monitoring
+      if (pulseOximeterData?.spo2) {
+        EnhancedSessionManager.updateSpO2(pulseOximeterData.spo2);
+      }
+      
       // Auto-end session if completed
       if (info.currentPhase === 'COMPLETED' && sessionStarted) {
         console.log('🎉 Session completed - navigating to post-session survey');
@@ -78,7 +83,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     }, 1000); // Update every second to match the timer
 
     return () => clearInterval(interval);
-  }, [sessionStarted]);
+  }, [sessionStarted, pulseOximeterData]);
 
   // Session control functions
   const startSession = async () => {
@@ -176,6 +181,11 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const skipToNextPhase = () => {
     EnhancedSessionManager.skipToNextPhase();
   };
+  
+  const confirmNextPhase = () => {
+    // Used when recovery requirements are met
+    EnhancedSessionManager.confirmReadyForNextPhase();
+  };
 
   // Track previous connection state to detect changes
   const wasConnectedRef = useRef(isPulseOxConnected);
@@ -250,6 +260,21 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   // Get current readings with fallbacks
   const currentSpo2 = pulseOximeterData?.spo2 || 0;  // Fixed: use lowercase spo2
   const currentPR = pulseOximeterData?.heartRate || 0;
+  
+  // Monitor for low SpO2 and trigger vibration
+  useEffect(() => {
+    if (currentSpo2 > 0 && currentSpo2 <= 83 && sessionStarted && sessionInfo.isActive) {
+      // Only vibrate once per low reading (avoid spam)
+      if (lastSpO2Alert !== currentSpo2) {
+        Vibration.vibrate([500, 200, 500]); // Pattern: vibrate, pause, vibrate
+        setLastSpO2Alert(currentSpo2);
+        console.log('🚨 Low SpO2 detected:', currentSpo2);
+      }
+    } else if (currentSpo2 > 83) {
+      // Reset when SpO2 recovers
+      setLastSpO2Alert(0);
+    }
+  }, [currentSpo2, sessionStarted, sessionInfo.isActive]);
   
   // Handle navigation back button
   const handleBackPress = () => {
@@ -918,6 +943,31 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       color: colors.text.secondary,
       marginLeft: 8,
     },
+    recoveryMonitor: {
+      marginTop: 15,
+      padding: 10,
+      backgroundColor: colors.surface.elevated,
+      borderRadius: 8,
+    },
+    recoveryText: {
+      fontSize: 14,
+      color: colors.text.primary,
+      textAlign: 'center',
+      marginVertical: 2,
+    },
+    nextPhaseButton: {
+      marginTop: 15,
+      backgroundColor: colors.primary[500],
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    nextPhaseButtonText: {
+      color: colors.white,
+      fontSize: 16,
+      fontWeight: '600',
+    },
   });
 
   return (
@@ -926,11 +976,9 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       
       {/* Header */}
       <View style={[styles.header, { 
-        backgroundColor: sessionInfo.currentPhase === 'TRANSITION' 
-          ? colors.neutral[theme === 'dark' ? 700 : 400]  // Subtle neutral for transition
-          : sessionInfo.currentPhase === 'HYPOXIC' 
-            ? colors.primary[theme === 'dark' ? 600 : 500]  // Blue for hypoxic
-            : colors.success[theme === 'dark' ? 600 : 500]  // Green for hyperoxic
+        backgroundColor: sessionInfo.currentPhase === 'HYPOXIC' 
+          ? colors.primary[theme === 'dark' ? 600 : 500]  // Blue for altitude
+          : colors.success[theme === 'dark' ? 600 : 500]  // Green for recovery
       }]}>
         <TouchableOpacity 
           style={[styles.backButton, (!sessionStarted || !sessionInfo.isActive) && styles.backButtonDisabled]} 
@@ -960,6 +1008,16 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
               </Text>
             </View>
           )}
+          
+          {/* Low SpO2 Warning */}
+          {currentSpo2 > 0 && currentSpo2 <= 83 && sessionInfo.isActive && (
+            <View style={[styles.dataCard, { backgroundColor: colors.error[100], marginTop: 10 }]}>
+              <Text style={[styles.cardTitle, { color: colors.error[800] }]}>🚨 SpO2 Low - Lift Mask</Text>
+              <Text style={[styles.phaseMessage, { color: colors.error[700] }]}>
+                Take a breath of room air (Current: {currentSpo2}%)
+              </Text>
+            </View>
+          )}
 
           {/* Main Timer Display */}
           <View style={styles.mainTimer}>
@@ -968,47 +1026,54 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           </View>
 
           {/* Phase Card */}
-          {sessionInfo.currentPhase === 'TRANSITION' ? (
-            // Transition phase card - mask switching instructions (calmer design)
-            <View style={[styles.phaseCard, { 
-              backgroundColor: theme === 'dark' 
-                ? colors.neutral[800]  // Dark mode: subtle dark background
-                : colors.neutral[100]  // Light mode: subtle light background
-            }]}>
-
-              <Text style={styles.phaseTitle}>Switching Phase</Text>
-              <Text style={[styles.phaseMessage, { 
-                fontSize: 16, 
-                fontWeight: '500',
-                color: theme === 'dark' ? colors.text.primary : colors.text.secondary 
-              }]}>
-                {sessionInfo.nextPhaseAfterTransition === 'HYPOXIC' 
-                  ? 'Please put on your mask' 
-                  : 'Please remove your mask'}
-              </Text>
-              <Text style={[styles.phaseTimer, { 
-                fontSize: 20, 
-                color: colors.primary[500],
-                fontWeight: '500'
-              }]}>
-                {formatTime(sessionInfo.phaseTimeRemaining)}
-              </Text>
-            </View>
-          ) : (
-            // Regular hypoxic/hyperoxic phase card
-            <View style={[styles.phaseCard, { backgroundColor: phaseColors.light }]}>
-
-              <Text style={styles.phaseTitle}>
-                {sessionInfo.currentPhase === 'HYPOXIC' ? 'Hypoxic Phase' : 'Hyperoxic Phase'}
-              </Text>
-              <Text style={styles.phaseMessage}>
-                {sessionInfo.currentPhase === 'HYPOXIC' ? 'Reduced oxygen exposure' : 'Recovery with normal oxygen'}
-              </Text>
-              <Text style={styles.phaseTimer}>{formatTime(sessionInfo.phaseTimeRemaining)} remaining</Text>
+          <View style={[styles.phaseCard, { backgroundColor: phaseColors.light }]}>
+            <Text style={styles.phaseTitle}>
+              {sessionInfo.currentPhase === 'HYPOXIC' ? 'Altitude Phase' : 'Recovery Phase'}
+            </Text>
+            
+            {sessionInfo.currentPhase === 'HYPOXIC' ? (
+              <>
+                <Text style={styles.phaseMessage}>Reduced oxygen exposure</Text>
+                <Text style={styles.phaseTimer}>{formatTime(sessionInfo.phaseTimeRemaining)} remaining</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.phaseMessage}>
+                  {sessionInfo.readyForNextPhase 
+                    ? 'Recovery complete - switch mask when ready' 
+                    : `Monitoring SpO2 - Target: ≥95% for 1 minute`}
+                </Text>
+                <Text style={styles.phaseTimer}>{formatTime(sessionInfo.phaseTimeRemaining)} remaining</Text>
+                
+                {/* Recovery monitoring display */}
+                {!sessionInfo.readyForNextPhase && (
+                  <View style={styles.recoveryMonitor}>
+                    <Text style={styles.recoveryText}>
+                      Current SpO2: {currentSpo2 || '--'}%
+                    </Text>
+                    {sessionInfo.recoveryTargetMetTime && (
+                      <Text style={styles.recoveryText}>
+                        Time at target: {Math.floor((Date.now() - sessionInfo.recoveryTargetMetTime) / 1000)}s / 60s
+                      </Text>
+                    )}
+                  </View>
+                )}
+                
+                {/* Ready for next phase button */}
+                {sessionInfo.readyForNextPhase && (
+                  <TouchableOpacity 
+                    style={styles.nextPhaseButton}
+                    onPress={confirmNextPhase}
+                  >
+                    <Text style={styles.nextPhaseButtonText}>Mask Switched - Start Altitude Phase</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
               
-              {/* Altitude Level Slider - Show during all hypoxic phases */}
-              {sessionInfo.currentPhase === 'HYPOXIC' && (
-                <View style={styles.altitudeSliderContainer}>
+            {/* Altitude Level Slider - Show during altitude phases */}
+            {sessionInfo.currentPhase === 'HYPOXIC' && (
+              <View style={styles.altitudeSliderContainer}>
                   <Text style={styles.altitudeLabel}>
                     Altitude Level: {altitudeLevel || 6}
                   </Text>
@@ -1035,10 +1100,9 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
                     <Text style={styles.sliderLabel}>6</Text>
                     <Text style={styles.sliderLabel}>11 (High)</Text>
                   </View>
-                </View>
-              )}
-            </View>
-          )}
+              </View>
+            )}
+          </View>
 
           {/* Vital Signs */}
           <View style={styles.dataCard}>
