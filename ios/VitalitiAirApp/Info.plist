@@ -83,8 +83,6 @@
     <array>
       <string>bluetooth-central</string>
       <string>processing</string>
-      <string>background-fetch</string>
-      <string>background-processing</string>
       <string>fetch</string>
     </array>
     <key>UILaunchStoryboardName</key>

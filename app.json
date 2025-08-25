@@ -26,12 +26,9 @@
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to your Wellue O2Ring or Checkme O2 device for monitoring SpO2 and heart rate.",
         "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to connect to your Wellue O2Ring or Checkme O2 device for monitoring SpO2 and heart rate.",
-        "NSSupportsLiveActivities": true,
         "UIBackgroundModes": [
           "bluetooth-central",
           "processing",
-          "background-fetch",
-          "background-processing",
           "fetch"
         ],
         "ITSAppUsesNonExemptEncryption": false
