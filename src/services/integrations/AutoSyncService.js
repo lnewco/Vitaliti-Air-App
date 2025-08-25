@@ -1,8 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as BackgroundFetch from 'expo-background-fetch';
-import * as TaskManager from 'expo-task-manager';
 import { AppState } from 'react-native';
 import IntegrationManager from './IntegrationManager';
+
+// Conditional imports for expo packages
+let BackgroundFetch = null;
+let TaskManager = null;
+
+try {
+  BackgroundFetch = require('expo-background-fetch');
+  TaskManager = require('expo-task-manager');
+} catch (error) {
+  console.log('Background fetch not available:', error.message);
+}
 
 const BACKGROUND_SYNC_TASK = 'background-integration-sync';
 
@@ -34,6 +43,11 @@ class AutoSyncService {
   }
 
   async registerBackgroundTask() {
+    if (!TaskManager || !BackgroundFetch) {
+      console.log('📱 Background fetch not available - using app state sync only');
+      return;
+    }
+
     try {
       // Define the background task
       TaskManager.defineTask(BACKGROUND_SYNC_TASK, async () => {
@@ -75,6 +89,12 @@ class AutoSyncService {
       await this.registerBackgroundTask();
     }
 
+    if (!BackgroundFetch) {
+      console.log('📱 Using app state sync only (no background fetch)');
+      await AsyncStorage.setItem('currentUserId', this.userId);
+      return;
+    }
+
     try {
       await BackgroundFetch.registerTaskAsync(BACKGROUND_SYNC_TASK, {
         minimumInterval: 6 * 60 * 60, // 6 hours
@@ -88,12 +108,16 @@ class AutoSyncService {
       console.log('✅ Background sync scheduled (every 6 hours)');
     } catch (error) {
       console.error('Failed to start background sync:', error);
+      // Fallback to app state sync only
+      await AsyncStorage.setItem('currentUserId', this.userId);
     }
   }
 
   async stopBackgroundSync() {
     try {
-      await BackgroundFetch.unregisterTaskAsync(BACKGROUND_SYNC_TASK);
+      if (BackgroundFetch) {
+        await BackgroundFetch.unregisterTaskAsync(BACKGROUND_SYNC_TASK);
+      }
       await AsyncStorage.removeItem('currentUserId');
       console.log('🛑 Background sync stopped');
     } catch (error) {
@@ -202,6 +226,10 @@ class AutoSyncService {
 
   // Check if background sync is enabled
   async isBackgroundSyncEnabled() {
+    if (!BackgroundFetch) {
+      return false;
+    }
+    
     try {
       const status = await BackgroundFetch.getStatusAsync();
       return status === BackgroundFetch.BackgroundFetchStatus.Available;
