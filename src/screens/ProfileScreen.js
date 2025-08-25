@@ -268,6 +268,16 @@ const ProfileScreen = ({ navigation }) => {
         </Card.Body>
       </Card>
 
+      {/* Integrations Section */}
+      <View style={styles.section}>
+        <Button
+          title="⚡ Manage Integrations"
+          variant="secondary"
+          onPress={() => navigation.navigate('Integrations')}
+          fullWidth
+        />
+      </View>
+
       {/* Actions Section */}
       <View style={styles.section}>
         <Button

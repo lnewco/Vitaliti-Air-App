@@ -106,6 +106,27 @@ class AuthService {
       log.info('OTP Code length:', otpCode?.length);
       log.info('OTP Code (masked):', otpCode ? otpCode.substring(0, 2) + '****' : 'empty');
 
+      // TEMPORARY: Development bypass for Danyal
+      if (otpCode === '123456' && phoneNumber.includes('6508805248')) {
+        log.info('✅ Using development bypass for Danyal');
+        const mockUser = {
+          id: 'da754dc4-e0bb-45f3-8547-71c2a6f2786c',
+          phone: phoneNumber,
+          phone_confirmed_at: new Date().toISOString(),
+          confirmed_at: new Date().toISOString()
+        };
+        this.currentUser = mockUser;
+        
+        // Notify auth state change listeners
+        this.authStateChangeListeners.forEach(listener => {
+          listener('SIGNED_IN', mockUser);
+        });
+        
+        // Create profile if needed
+        await this.createUserProfileIfNeeded(mockUser, phoneNumber);
+        return { success: true, user: mockUser, session: { user: mockUser } };
+      }
+
       const cleanPhone = this.formatPhoneNumber(phoneNumber);
       log.info('Formatted phone:', cleanPhone);
       

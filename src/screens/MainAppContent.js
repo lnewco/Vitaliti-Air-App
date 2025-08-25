@@ -12,6 +12,7 @@ import SimplifiedSessionSetup from './SimplifiedSessionSetup';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import ProfileScreen from './ProfileScreen';
+import IntegrationsScreen from './IntegrationsScreen';
 import SessionRecoveryManager from '../components/SessionRecoveryManager';
 import SafeIcon from '../components/base/SafeIcon';
 
@@ -140,6 +141,15 @@ const MainStack = ({ onNavigateToSession }) => {
         options={{
           presentation: 'card',
           title: 'Post-Session Survey',
+        }}
+      />
+      
+      <Stack.Screen 
+        name="Integrations" 
+        component={IntegrationsScreen}
+        options={{
+          presentation: 'card',
+          title: 'Integrations',
         }}
       />
     </Stack.Navigator>

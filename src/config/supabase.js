@@ -24,4 +24,5 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 // React Native doesn't have localStorage - using AsyncStorage instead
 
-export default supabase; 
+export default supabase;
+

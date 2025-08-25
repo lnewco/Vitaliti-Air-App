@@ -61,7 +61,7 @@ const DashboardScreen = ({ navigation }) => {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <SafeIcon name="lungs" size="lg" color={colors.primary[500]} />
-          <H2 style={styles.title}>Vitaliti Air</H2>
+          <H2 style={styles.title}>DANYAL'S BRANCH</H2>
         </View>
       </View>
 

@@ -77,23 +77,16 @@ const AppNavigator = () => {
           console.log('🔄 Could not check session status, proceeding with navigation check');
         }
         
+        // Skip navigation if we're already authenticated and in the main app
+        if (isAuthenticated && onboardingState === 'completed') {
+          console.log('🔄 Already in main app, skipping navigation');
+          return;
+        }
+        
         checkOnboardingStatus();
         
-        // Also check for completion transitions when app becomes active
-        if (isAuthenticated) {
-          checkForCompletionTransition();
-          
-          // Set up aggressive checking for forced completion
-          let checkCount = 0;
-          const maxChecks = 20; // 10 seconds of checking
-          const completionChecker = setInterval(async () => {
-            checkCount++;
-            await checkForCompletionTransition();
-            if (checkCount >= maxChecks) {
-              clearInterval(completionChecker);
-            }
-          }, 500);
-        }
+        // Don't check for completion transitions when already in main app
+        // This was causing unwanted navigation
       }
     };
 
@@ -264,21 +257,34 @@ const AppNavigator = () => {
       return;
     }
 
-    // If authenticated user, always navigate to main (handles returning users)
+    // If authenticated user, navigate to main only if not already there
     if (isAuthenticated && user) {
-      console.log('🔄 Authenticated user detected - navigating to main app');
       const currentRoute = navigationRef.current.getCurrentRoute();
-      if (!isInStack(currentRoute?.name, 'Main')) {
-        try {
-          navigationRef.current.reset({
-            index: 0,
-            routes: [{ name: 'Main' }],
-          });
-          console.log('✅ Navigation to main app successful');
-          return;
-        } catch (error) {
-          console.error('Navigation to main failed:', error);
-        }
+      console.log('🔄 Current route:', currentRoute?.name);
+      
+      // Don't navigate if we're in any of these screens (part of Main stack)
+      const mainStackScreens = ['Main', 'MainTabs', 'Home', 'Integrations', 'IntegrationsScreen', 'Profile', 'ProfileScreen', 'Sessions', 'Training'];
+      if (mainStackScreens.includes(currentRoute?.name)) {
+        console.log('🔄 Already in main app (screen: ' + currentRoute?.name + '), skipping navigation');
+        return;
+      }
+      
+      // Also check using the existing isInStack function
+      if (isInStack(currentRoute?.name, 'Main')) {
+        console.log('🔄 Already in main app stack, skipping navigation');
+        return;
+      }
+      
+      console.log('🔄 Authenticated user detected - navigating to main app');
+      try {
+        navigationRef.current.reset({
+          index: 0,
+          routes: [{ name: 'Main' }],
+        });
+        console.log('✅ Navigation to main app successful');
+        return;
+      } catch (error) {
+        console.error('Navigation to main failed:', error);
       }
       return;
     }

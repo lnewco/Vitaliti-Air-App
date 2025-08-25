@@ -12,6 +12,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "scheme": "vitalitiair",
     "ios": {
       "supportsTablet": true,
       "appleTeamId": "2726NBK599",

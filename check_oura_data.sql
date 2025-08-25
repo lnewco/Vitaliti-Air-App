@@ -1,0 +1,1 @@
+SELECT vendor, metric_type, COUNT(*), recorded_at FROM health_metrics WHERE user_id = 'da754dc4-e0bb-45f3-8547-71c2a6f2786c' AND vendor = 'oura' GROUP BY vendor, metric_type, recorded_at ORDER BY recorded_at DESC LIMIT 10;
