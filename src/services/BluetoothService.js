@@ -29,6 +29,11 @@ class BluetoothService {
     this.WELLUE_TX_CHARACTERISTIC_UUID = '0734594a-a8e7-4b1a-a6b1-cd5243059a57'; // Read/Notify characteristic
     this.WELLUE_RX_CHARACTERISTIC_UUID = '8b00ace7-eb0b-49b0-bbe9-9aee0a26e1a3'; // Write characteristic
     
+    // Berry Med BCI Protocol UUIDs (for testing)
+    this.BCI_SERVICE_UUID = '49535343-FE7D-4AE5-8FA9-9FAFD205E455';
+    this.BCI_DATA_CHARACTERISTIC_UUID = '49535343-1E4D-4BD9-BA61-23C647249616'; // Device sends data to app (notifiable)
+    this.BCI_COMMAND_CHARACTERISTIC_UUID = '49535343-8841-43F4-A8D4-ECBE34729BB3'; // App sends commands to device
+    
     // Wellue protocol commands
     this.WELLUE_CMD_GET_FILE_START = 0x03;  // Begin to read
     this.WELLUE_CMD_GET_FILE_DATA = 0x04;   // Read data
@@ -162,8 +167,8 @@ class BluetoothService {
       this.isScanning = true;
       
       // Scan for all devices since Wellue might not advertise service UUID
-      // We'll filter by name instead
-      const serviceUUIDs = null; // Scan for all devices
+      // We'll filter by name and service UUIDs to find both device types
+      const serviceUUIDs = null; // Scan for all devices to find both Wellue and Berry Med
       
       log.info(`Starting ${deviceType} scan without service filter to find Wellue devices`);
       
@@ -238,6 +243,15 @@ class BluetoothService {
         return 'pulse-ox';
       }
       
+      // Check for Berry Med BCI service UUID
+      const hasBCIService = device.serviceUUIDs.some(uuid => 
+        uuid.toUpperCase() === this.BCI_SERVICE_UUID.toUpperCase()
+      );
+      if (hasBCIService) {
+        log.debug('Found Berry Med BCI device by service UUID');
+        return 'pulse-ox';
+      }
+      
       log.debug('Device service UUIDs:', device.serviceUUIDs);
     }
 
@@ -255,14 +269,22 @@ class BluetoothService {
       return 'pulse-ox';
     }
     
-    // Check for Wellue pulse oximeter keywords - expanded list
+    // Check for pulse oximeter keywords - both Wellue and Berry Med
     const pulseOxKeywords = [
+      // Wellue devices
       'checkme o2',  // Full pattern (with space)
       'checkme',     // Partial pattern
       'wellue',      // Brand name
       'o2ring',      // Product name variant
       'oxylink',     // Product name variant
       'viatom',      // Manufacturer name
+      // Berry Med devices
+      'berry',       // Berry Med brand
+      'berrymed',    // Full brand name
+      'bci',         // BCI protocol
+      'bm1000c',     // Specific model
+      'bm-1000',     // Model variant
+      // Generic keywords
       'pulse',       // Generic keywords
       'oximeter',    
       'spo2',        
@@ -310,8 +332,24 @@ class BluetoothService {
       if (deviceType === 'pulse-ox') {
         this.pulseOxDevice = discoveredDevice;
         this.isPulseOxConnected = true;
-        log.info('Wellue services discovered');
-        await this.setupWellueNotifications(discoveredDevice);
+        
+        // Determine which protocol to use based on service UUIDs
+        const services = await discoveredDevice.services();
+        const serviceUUIDs = services.map(s => s.uuid.toUpperCase());
+        
+        const hasWellueService = serviceUUIDs.includes(this.WELLUE_SERVICE_UUID.toUpperCase());
+        const hasBCIService = serviceUUIDs.includes(this.BCI_SERVICE_UUID.toUpperCase());
+        
+        if (hasWellueService) {
+          log.info('Wellue device detected - using Wellue protocol');
+          await this.setupWellueNotifications(discoveredDevice);
+        } else if (hasBCIService) {
+          log.info('Berry Med BCI device detected - using BCI protocol');
+          await this.setupBCINotifications(discoveredDevice);
+        } else {
+          log.warn('Unknown pulse oximeter protocol - trying Wellue as fallback');
+          await this.setupWellueNotifications(discoveredDevice);
+        }
       } else {
         log.warn('Unsupported device type:', deviceType);
         throw new Error(`Unsupported device type: ${deviceType}`);
@@ -1137,6 +1175,210 @@ class BluetoothService {
         EnhancedSessionManager.setConnectionState('connected');
       }
     }, 30000); // 30 second recovery window
+  }
+
+  // Berry Med BCI Protocol Methods (for testing compatibility)
+  async setupBCINotifications(device) {
+    try {
+      log.info('Setting up BCI notifications...');
+      
+      // Get the BCI service
+      const services = await device.services();
+      log.info('Available services:', services.map(s => s.uuid));
+      
+      const bciService = services.find(service => 
+        service.uuid.toUpperCase() === this.BCI_SERVICE_UUID.toUpperCase()
+      );
+      
+      if (!bciService) {
+        log.error('❌ BCI service not found!');
+        log.info('Available services:', services.map(s => s.uuid));
+        return;
+      }
+      
+      log.info('✅ Found BCI service:', bciService.uuid);
+      
+      // Get characteristics
+      const characteristics = await bciService.characteristics();
+      log.info('BCI service characteristics:', characteristics.map(c => ({
+        uuid: c.uuid,
+        isNotifiable: c.isNotifiable,
+        isReadable: c.isReadable,
+        isWritable: c.isWritable
+      })));
+      
+      // Find the data characteristic
+      const dataCharacteristic = characteristics.find(char =>
+        char.uuid.toUpperCase() === this.BCI_DATA_CHARACTERISTIC_UUID.toUpperCase()
+      );
+      
+      if (!dataCharacteristic) {
+        log.error('❌ BCI data characteristic not found!');
+        return;
+      }
+      
+      log.info('✅ Found BCI data characteristic:', dataCharacteristic.uuid);
+      
+      // Enable notifications
+      if (dataCharacteristic.isNotifiable) {
+        log.info('📡 Enabling BCI data notifications...');
+        
+        dataCharacteristic.monitor((error, characteristic) => {
+          if (error) {
+            if (error.message && error.message.includes('cancelled')) {
+              log.info('📡 BCI data monitoring stopped (connection cancelled)');
+              this.handleDeviceDisconnected();
+            } else {
+              log.error('BCI notification error:', error);
+            }
+            return;
+          }
+          
+          if (characteristic && characteristic.value) {
+            // log.info('📦 Raw BCI data received:', characteristic.value); // Disabled: high frequency logging
+            this.handleBCIDataReceived(characteristic.value);
+          }
+        });
+        
+        log.info('✅ BCI notifications enabled');
+      } else {
+        log.error('❌ BCI data characteristic is not notifiable');
+      }
+      
+    } catch (error) {
+      log.error('Error setting up BCI notifications:', error);
+    }
+  }
+
+  handleBCIDataReceived(data) {
+    try {
+      // Safety check
+      if (this.isDestroyed) {
+        log.warn('Cannot handle BCI data - BleManager is destroyed');
+        return;
+      }
+      
+      const parsedData = this.parseBCIData(data);
+      if (parsedData) {
+        // Send to UI callback if available
+        if (this.onPulseOxDataReceived) {
+          this.onPulseOxDataReceived(parsedData);
+        }
+        
+        // Send to session manager if active
+        if (EnhancedSessionManager && EnhancedSessionManager.isActive) {
+          EnhancedSessionManager.addReading(parsedData);
+        }
+      }
+    } catch (error) {
+      log.error('Error handling BCI data:', error);
+    }
+  }
+
+  parseBCIData(base64Data) {
+    try {
+      // log.info('🔍 Parsing BCI data:', base64Data); // Disabled: high frequency logging
+      
+      // Decode base64 to buffer
+      const buffer = Buffer.from(base64Data, 'base64');
+      // log.info('📊 Buffer length:', buffer.length); // Disabled: high frequency logging
+      
+      // Handle different packet sizes
+      let packets = [];
+      
+      if (buffer.length === 5) {
+        // Single 5-byte packet
+        packets = [buffer];
+      } else if (buffer.length === 20) {
+        // Four 5-byte packets concatenated
+        for (let i = 0; i < 4; i++) {
+          const packetStart = i * 5;
+          const packet = buffer.slice(packetStart, packetStart + 5);
+          packets.push(packet);
+        }
+      } else {
+        // Try to process first 5 bytes if available
+        if (buffer.length >= 5) {
+          packets = [buffer.slice(0, 5)];
+        } else {
+          log.warn('Buffer too short for BCI parsing');
+          return null;
+        }
+      }
+      
+      // Process the latest packet
+      const latestPacket = packets[packets.length - 1];
+      return this.parseSingle5BytePacket(latestPacket, base64Data);
+      
+    } catch (error) {
+      log.error('❌ Error parsing BCI data:', error);
+      return null;
+    }
+  }
+
+  parseSingle5BytePacket(buffer, originalBase64Data) {
+    try {
+      // Extract bytes according to BCI protocol
+      const byte1 = buffer[0]; // Signal strength, probe status, pulse beep, sync bit
+      const byte2 = buffer[1]; // Pleth, sync bit  
+      const byte3 = buffer[2]; // Bargraph, finger detection, pulse searching, pulse rate bit 7
+      const byte4 = buffer[3]; // Pulse rate bits 0-6, sync bit
+      const byte5 = buffer[4]; // SpO2 bits 0-6, sync bit
+      
+      // Parse according to BCI protocol specification
+      
+      // Signal strength (byte 1, bits 0-3)
+      const signalStrength = byte1 & 0x0F;
+      
+      // Finger detection (byte 3, bit 4) 
+      const isFingerDetected = (byte3 & 0x10) === 0;
+      
+      // Pulse searching (byte 3, bit 5)
+      const isSearchingForPulse = (byte3 & 0x20) !== 0;
+      
+      // Parse pulse rate: ((byte3 & 0x40) << 1) | (byte4 & 0x7F)
+      const pulseRateRaw = ((byte3 & 0x40) << 1) | (byte4 & 0x7F);
+      const isPulseRateValid = pulseRateRaw !== 0xFF && pulseRateRaw >= 25 && pulseRateRaw <= 250;
+      const pulseRate = isPulseRateValid ? pulseRateRaw : null;
+      
+      // Parse SpO2: byte5 & 0x7F  
+      const spo2Raw = byte5 & 0x7F;
+      const isSpo2Valid = spo2Raw !== 0x7F && spo2Raw >= 35 && spo2Raw <= 100;
+      const spo2 = isSpo2Valid ? spo2Raw : null;
+      
+      // Parse pleth (waveform) - byte 2, bits 0-6
+      const pleth = byte2 & 0x7F;
+      const isPlethValid = pleth !== 0;
+      
+      // Return data compatible with Wellue format
+      const result = {
+        spo2,
+        heartRate: pulseRate,
+        signalStrength,
+        isFingerDetected,
+        isSearchingForPulse,
+        isLowPerfusion: false, // BCI doesn't have this
+        isMotionDetected: false, // BCI doesn't have this
+        pleth: isPlethValid ? pleth : null,
+        perfusionIndex: null, // BCI doesn't have PI
+        bargraph: null,
+        timestamp: Date.now(),
+        rawData: originalBase64Data,
+        protocol: 'bci' // Mark as BCI protocol
+      };
+      
+      if (spo2 !== null || pulseRate !== null) {
+        // log.info('✅ Valid BCI data:', result); // Disabled: high frequency logging
+      } else {
+        // log.info('⚠️ BCI status data (no valid measurements):', result); // Disabled: high frequency logging
+      }
+      
+      return result;
+      
+    } catch (error) {
+      log.error('Error parsing BCI packet:', error);
+      return null;
+    }
   }
 }
 

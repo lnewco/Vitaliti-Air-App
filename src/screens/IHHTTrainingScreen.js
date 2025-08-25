@@ -20,10 +20,13 @@ import { useAppTheme } from '../theme';
 // No longer need custom slider - using native component
 
 const PHASE_TYPES = {
-  HYPOXIC: 'HYPOXIC',
-  HYPEROXIC: 'HYPEROXIC',
+  ALTITUDE: 'ALTITUDE',
+  RECOVERY: 'RECOVERY', 
   TRANSITION: 'TRANSITION',
   COMPLETED: 'COMPLETED',
+  // Legacy support
+  HYPOXIC: 'ALTITUDE',
+  HYPEROXIC: 'RECOVERY',
   PAUSED: 'PAUSED',
   TERMINATED: 'TERMINATED'
 };
@@ -554,11 +557,11 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
             <Text style={styles.protocolValue}>{protocolConfig.totalCycles}</Text>
           </View>
           <View style={styles.protocolRow}>
-            <Text style={styles.protocolLabel}>Hypoxic Phase:</Text>
+            <Text style={styles.protocolLabel}>Altitude Phase:</Text>
             <Text style={styles.protocolValue}>{protocolConfig.hypoxicDuration} minutes</Text>
           </View>
           <View style={styles.protocolRow}>
-            <Text style={styles.protocolLabel}>Hyperoxic Phase:</Text>
+            <Text style={styles.protocolLabel}>Recovery Phase:</Text>
             <Text style={styles.protocolValue}>{protocolConfig.hyperoxicDuration} minutes</Text>
           </View>
           <View style={styles.protocolRow}>
@@ -598,8 +601,8 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   }
 
   // Determine phase colors
-  const isHypoxic = sessionInfo.currentPhase === 'HYPOXIC';
-  const phaseColors = isHypoxic 
+  const isAltitude = sessionInfo.currentPhase === 'ALTITUDE' || sessionInfo.currentPhase === 'HYPOXIC';
+  const phaseColors = isAltitude 
     ? { 
         primary: colors.primary[500], 
         light: theme === 'dark' ? colors.primary[900] : colors.primary[100] 
@@ -928,9 +931,9 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       <View style={[styles.header, { 
         backgroundColor: sessionInfo.currentPhase === 'TRANSITION' 
           ? colors.neutral[theme === 'dark' ? 700 : 400]  // Subtle neutral for transition
-          : sessionInfo.currentPhase === 'HYPOXIC' 
-            ? colors.primary[theme === 'dark' ? 600 : 500]  // Blue for hypoxic
-            : colors.success[theme === 'dark' ? 600 : 500]  // Green for hyperoxic
+          : (sessionInfo.currentPhase === 'ALTITUDE' || sessionInfo.currentPhase === 'HYPOXIC')
+            ? colors.primary[theme === 'dark' ? 600 : 500]  // Blue for altitude
+            : colors.success[theme === 'dark' ? 600 : 500]  // Green for recovery
       }]}>
         <TouchableOpacity 
           style={[styles.backButton, (!sessionStarted || !sessionInfo.isActive) && styles.backButtonDisabled]} 
@@ -982,7 +985,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
                 fontWeight: '500',
                 color: theme === 'dark' ? colors.text.primary : colors.text.secondary 
               }]}>
-                {sessionInfo.nextPhaseAfterTransition === 'HYPOXIC' 
+                {(sessionInfo.nextPhaseAfterTransition === 'ALTITUDE' || sessionInfo.nextPhaseAfterTransition === 'HYPOXIC')
                   ? 'Please put on your mask' 
                   : 'Please remove your mask'}
               </Text>
@@ -999,10 +1002,10 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
             <View style={[styles.phaseCard, { backgroundColor: phaseColors.light }]}>
 
               <Text style={styles.phaseTitle}>
-                {sessionInfo.currentPhase === 'HYPOXIC' ? 'Hypoxic Phase' : 'Hyperoxic Phase'}
+                {(sessionInfo.currentPhase === 'ALTITUDE' || sessionInfo.currentPhase === 'HYPOXIC') ? 'Altitude Phase' : 'Recovery Phase'}
               </Text>
               <Text style={styles.phaseMessage}>
-                {sessionInfo.currentPhase === 'HYPOXIC' ? 'Reduced oxygen exposure' : 'Recovery with normal oxygen'}
+                {(sessionInfo.currentPhase === 'ALTITUDE' || sessionInfo.currentPhase === 'HYPOXIC') ? 'Reduced oxygen exposure' : 'Recovery with normal oxygen'}
               </Text>
               <Text style={styles.phaseTimer}>{formatTime(sessionInfo.phaseTimeRemaining)} remaining</Text>
               

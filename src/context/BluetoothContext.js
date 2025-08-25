@@ -8,37 +8,142 @@ let BluetoothService = null;
 // Check if we're in Expo Go (which doesn't support native Bluetooth)
 const isExpoGo = Constants.appOwnership === 'expo';
 
-// Create comprehensive mock service for Expo Go and fallbacks
-const createMockBluetoothService = () => ({
-  acquireReference: () => {},
-  releaseReference: () => {},
-  setOnDeviceFound: () => {},
-  setOnPulseOximeterData: () => {},
-  setOnPulseOxDataReceived: () => {}, // This was missing!
-  setOnConnectionChange: () => {},
-  startScanning: () => Promise.resolve(),
-  stopScanning: () => Promise.resolve(),
-  connectToDevice: () => Promise.resolve(false),
-  disconnectDevice: () => Promise.resolve(),
-  isPulseOxConnected: false,
-  isAnyDeviceConnected: false,
-  // Additional methods that might be called
-  destroy: () => {},
-  cleanup: () => {},
-  getConnectedDevices: () => [],
-  reconnectDevices: () => Promise.resolve(false),
-});
+// Create comprehensive mock service for Expo Go and fallbacks with Berry Med simulation
+const createMockBluetoothService = () => {
+  let onDeviceFoundCallback = null;
+  let onDataReceivedCallback = null;
+  let isConnected = false;
+  let dataInterval = null;
+  
+  const mockBerryMedDevice = {
+    id: 'mock-berry-med-12345',
+    name: 'Berry Med BM1000C',
+    localName: 'BM1000C',
+    serviceUUIDs: ['49535343-FE7D-4AE5-8FA9-9FAFD205E455'], // BCI service UUID
+    deviceType: 'pulse-ox', // Required for device filtering
+  };
+  
+  const generateMockSpO2Data = () => {
+    // Generate wide SpO2 range for testing all adaptive instructions
+    const baseSpO2 = 80 + Math.random() * 18; // 80-98 range (wider for testing)
+    const heartRate = 60 + Math.random() * 40; // 60-100 range
+    
+    return {
+      spo2: Math.round(baseSpO2),
+      heartRate: Math.round(heartRate),
+      signalStrength: Math.round(Math.random() * 15),
+      isFingerDetected: true,
+      isSearchingForPulse: false,
+      isLowPerfusion: false,
+      isMotionDetected: false,
+      pleth: Math.round(Math.random() * 127),
+      perfusionIndex: null,
+      bargraph: null,
+      timestamp: Date.now(),
+      protocol: 'bci'
+    };
+  };
+  
+  return {
+    acquireReference: () => {},
+    releaseReference: () => {},
+    setOnDeviceFound: (callback) => { onDeviceFoundCallback = callback; },
+    setOnPulseOximeterData: (callback) => { onDataReceivedCallback = callback; },
+    setOnPulseOxDataReceived: (callback) => { onDataReceivedCallback = callback; },
+    setOnConnectionChange: () => {},
+    startScanning: () => {
+      console.log('📱 Mock: Starting scan for Berry Med device...');
+      // Simulate device discovery after 2 seconds
+      setTimeout(() => {
+        if (onDeviceFoundCallback) {
+          console.log('📱 Mock: Found Berry Med device');
+          onDeviceFoundCallback(mockBerryMedDevice);
+        }
+      }, 2000);
+      return Promise.resolve();
+    },
+    stopScanning: () => {
+      console.log('📱 Mock: Stopping scan');
+      return Promise.resolve();
+    },
+    connectToDevice: (device) => {
+      console.log('📱 Mock: Connecting to Berry Med device');
+      isConnected = true;
+      
+      // Start generating mock data every 1 second
+      dataInterval = setInterval(async () => {
+        if (onDataReceivedCallback && isConnected) {
+          const mockData = generateMockSpO2Data();
+          console.log('📱 Mock: Generated SpO2 data:', mockData.spo2, 'HR:', mockData.heartRate);
+          
+          // Send to callback (for UI updates)
+          onDataReceivedCallback(mockData);
+          
+          // Send to session manager if active (for adaptive processing)
+          try {
+            const { default: EnhancedSessionManager } = await import('../services/EnhancedSessionManager');
+            if (EnhancedSessionManager.isActive) {
+              EnhancedSessionManager.addReading(mockData);
+            }
+          } catch (error) {
+            // Session manager might not be available, that's okay
+          }
+        }
+      }, 1000);
+      
+      return Promise.resolve(true);
+    },
+    disconnectDevice: () => {
+      console.log('📱 Mock: Disconnecting device');
+      isConnected = false;
+      if (dataInterval) {
+        clearInterval(dataInterval);
+        dataInterval = null;
+      }
+      return Promise.resolve();
+    },
+    isPulseOxConnected: isConnected,
+    isAnyDeviceConnected: isConnected,
+    destroy: () => {
+      if (dataInterval) {
+        clearInterval(dataInterval);
+        dataInterval = null;
+      }
+    },
+    cleanup: () => {
+      if (dataInterval) {
+        clearInterval(dataInterval);
+        dataInterval = null;
+      }
+    },
+    getConnectedDevices: () => isConnected ? [mockBerryMedDevice] : [],
+    reconnectDevices: () => Promise.resolve(false),
+  };
+};
 
-if (isExpoGo) {
-  console.log('📱 Expo Go detected - using mock Bluetooth service');
-  BluetoothService = createMockBluetoothService();
-} else {
+// Check if BLE is available before trying to use real BluetoothService
+const isBLEAvailable = () => {
+  try {
+    // Check if the native BLE module is available
+    const { BleManager } = require('react-native-ble-plx');
+    return !!BleManager;
+  } catch (error) {
+    return false;
+  }
+};
+
+if (isBLEAvailable() && !isExpoGo) {
   try {
     BluetoothService = require('../services/BluetoothService').default;
+    console.log('📱 Using real BluetoothService');
   } catch (error) {
-    console.log('📱 BluetoothService not available - using mock service');
+    console.log('📱 BluetoothService failed to load - using mock service');
+    console.log('Error:', error.message);
     BluetoothService = createMockBluetoothService();
   }
+} else {
+  console.log('📱 BLE not available or Expo Go detected - using mock service');
+  BluetoothService = createMockBluetoothService();
 }
 
 const log = logger.createModuleLogger('BluetoothContext');
@@ -131,7 +236,7 @@ export const BluetoothProvider = ({ children }) => {
       setIsScanning(true);
       setDiscoveredDevices([]); // Clear previous devices
       
-      await BluetoothService.startScan('pulse-ox');
+      await BluetoothService.startScanning('pulse-ox');
       log.info('✅ Context: Scan started successfully');
     } catch (error) {
       log.error('❌ Context: Failed to start scan:', error);
@@ -143,7 +248,7 @@ export const BluetoothProvider = ({ children }) => {
   const stopScan = useCallback(async () => {
     try {
       log.info('🛑 Context: Stopping scan');
-      await BluetoothService.stopScan();
+      await BluetoothService.stopScanning();
       setIsScanning(false);
       log.info('✅ Context: Scan stopped');
     } catch (error) {

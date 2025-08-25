@@ -80,7 +80,18 @@ export default class ExpoBackgroundService extends BaseBackgroundService {
     // Cancel any existing notifications
     await Notifications.cancelAllScheduledNotificationsAsync();
     
-    const { currentPhase, currentCycle, totalCycles, hypoxicDuration, hyperoxicDuration } = sessionData;
+    const { currentPhase, currentCycle, totalCycles, hypoxicDuration, hyperoxicDuration, altitudeDuration, recoveryDuration } = sessionData;
+    
+    // Use new naming convention if available, fall back to old names
+    const actualHypoxicDuration = altitudeDuration || hypoxicDuration;
+    const actualHyperoxicDuration = recoveryDuration || hyperoxicDuration;
+    
+    // Validate session data
+    if (!currentPhase || !currentCycle || !totalCycles || !actualHypoxicDuration || !actualHyperoxicDuration) {
+      console.error('❌ Invalid session data for background notifications:', sessionData);
+      console.error('Available properties:', Object.keys(sessionData));
+      return;
+    }
     
     let notificationTime = Date.now();
     let phase = currentPhase;
@@ -89,8 +100,21 @@ export default class ExpoBackgroundService extends BaseBackgroundService {
     
     // Calculate and schedule notifications for remaining phases
     while (cycle <= totalCycles) {
-      const duration = phase === 'HYPOXIC' ? hypoxicDuration : hyperoxicDuration;
+      const duration = phase === 'HYPOXIC' ? actualHypoxicDuration : actualHyperoxicDuration;
+      
+      // Validate duration
+      if (!duration || typeof duration !== 'number' || duration <= 0) {
+        console.error('❌ Invalid duration for phase:', phase, duration);
+        break;
+      }
+      
       notificationTime += duration * 1000;
+      
+      // Validate notification time
+      if (isNaN(notificationTime)) {
+        console.error('❌ Invalid notification time calculated:', notificationTime);
+        break;
+      }
       
       // Switch phase
       if (phase === 'HYPOXIC') {
@@ -118,7 +142,19 @@ export default class ExpoBackgroundService extends BaseBackgroundService {
     
     // Schedule the notifications
     for (const notif of notifications) {
+      // Validate notification time
+      if (!notif.time || typeof notif.time !== 'number' || isNaN(notif.time)) {
+        console.error('❌ Invalid notification time:', notif.time);
+        continue;
+      }
+      
       const trigger = new Date(notif.time);
+      
+      // Validate the Date object
+      if (isNaN(trigger.getTime())) {
+        console.error('❌ Invalid Date created from time:', notif.time);
+        continue;
+      }
       
       try {
         await Notifications.scheduleNotificationAsync({
@@ -128,8 +164,10 @@ export default class ExpoBackgroundService extends BaseBackgroundService {
             sound: true,
             priority: 'high',
           },
-          trigger,
+          trigger: { type: 'date', date: trigger },
         });
+        
+        console.log(`📱 Scheduled background notification: ${notif.title} at ${trigger}`);
       } catch (error) {
         console.warn('⚠️ Failed to schedule notification:', error);
       }
