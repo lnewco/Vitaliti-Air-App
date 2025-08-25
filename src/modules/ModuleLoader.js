@@ -190,31 +190,9 @@ class ModuleLoader {
    * Load Live Activity module (iOS only)
    */
   async loadLiveActivityModule() {
-    const moduleName = 'liveActivity';
-    
-    if (this.modules[moduleName]) {
-      return this.modules[moduleName];
-    }
-
-    if (!runtimeEnvironment.hasCapability('liveActivities')) {
-      console.log('📱 LiveActivity: Not available (Expo Go or non-iOS)');
-      return this.createLiveActivityFallback();
-    }
-
-    try {
-      // This will be our custom native module
-      const LiveActivityModule = require('../../modules/live-activity').default;
-      
-      if (LiveActivityModule) {
-        console.log('✅ LiveActivity: Native module loaded successfully');
-        this.modules[moduleName] = LiveActivityModule;
-        return LiveActivityModule;
-      }
-    } catch (error) {
-      console.warn('⚠️ LiveActivity: Native module not available', error.message);
-    }
-
-    return this.createLiveActivityFallback();
+    // Live Activities are disabled
+    console.log('📱 LiveActivity: Disabled');
+    return null;
   }
 
   /**
