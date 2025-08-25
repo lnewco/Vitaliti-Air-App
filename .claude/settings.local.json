@@ -52,7 +52,14 @@
       "Bash(gh pr view:*)",
       "Bash(npx react-native start:*)",
       "mcp__linear__list_issues",
-      "Bash(git remote:*)"
+      "Bash(git remote:*)",
+      "Bash(git clean:*)",
+      "Bash(npm ls:*)",
+      "Bash(watchman:*)",
+      "Bash(npx expo config:*)",
+      "Read(//Users/stephenprice/Desktop/VitalitiCode/**)",
+      "Bash(ruby:*)",
+      "Bash(git restore:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

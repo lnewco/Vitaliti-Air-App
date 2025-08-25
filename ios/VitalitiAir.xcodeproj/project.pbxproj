@@ -8,40 +8,40 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		2A4DAF6161C464AE2C9C1D58 /* libPods-VitalitiAirApp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D08CE07D244BCC72F589246D /* libPods-VitalitiAirApp.a */; };
-		35FE1A1A7BF44A4D987C4A47 /* MaterialCommunityIcons.ttf in Resources */ = {isa = PBXBuildFile; fileRef = FEB5DD9B4C404814A07FA843 /* MaterialCommunityIcons.ttf */; };
-		3848DEB233FC4100B4AD6CBE /* MaterialIcons.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5625FE63129E41FD98FF52F0 /* MaterialIcons.ttf */; };
+		371981C907B341B3B5BAF9BF /* Ionicons.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8CC54A8949E445E58D5BB96B /* Ionicons.ttf */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		742B7AA829E5B6EAAF8E7314 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 858C427C3659655CBCE6B9AA /* ExpoModulesProvider.swift */; };
-		84D64ED521B64236AECBBB8B /* Ionicons.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 105130DE25B54DA0B9016BB2 /* Ionicons.ttf */; };
-		8F4BA93668EE41A897ED98AF /* FontAwesome.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 38D066B6BEBA49DC8A09D120 /* FontAwesome.ttf */; };
-		B3957258BAF54EBBA2A82F3B /* FontAwesome5_Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C46DF72E6D9B498EBB61CCD6 /* FontAwesome5_Regular.ttf */; };
+		441FDDC4A02F4C48807929C9 /* Feather.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 181BDA5F129C4FE9A1AB62FA /* Feather.ttf */; };
+		65804D11005E43ABBCDA7D8E /* FontAwesome.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E895F7C4F27646498CA35BAC /* FontAwesome.ttf */; };
+		71AB395DD6F84DDF9A48DA94 /* MaterialCommunityIcons.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E79E78AB41A84232B3DB018F /* MaterialCommunityIcons.ttf */; };
+		ABCC33A902206C58A3A9FEBE /* libPods-VitalitiAir.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 61153FC46063E2E66A733730 /* libPods-VitalitiAir.a */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		E73EB045F952A6BC72040B32 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B35DC9968A5B0861D8C378EF /* PrivacyInfo.xcprivacy */; };
+		C71F2895082646A8B6648C9C /* FontAwesome5_Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E4B5C55139CB411FA28E1419 /* FontAwesome5_Regular.ttf */; };
+		CC742D37603CFFCE33660C16 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 050000B2372B16F1A841EB2F /* ExpoModulesProvider.swift */; };
+		D761A3BC295346CC90634B1B /* MaterialIcons.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D863A4DCC6D24600A961A371 /* MaterialIcons.ttf */; };
+		DD949463D2E865111A8A5561 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1AD2918C655221434FEE5E4F /* PrivacyInfo.xcprivacy */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
-		FDAA6B4F870E4E988513DEEE /* Feather.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A51DC94451E9430EAFD6F2A5 /* Feather.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		105130DE25B54DA0B9016BB2 /* Ionicons.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = Ionicons.ttf; path = "../node_modules/react-native-vector-icons/Fonts/Ionicons.ttf"; sourceTree = "<group>"; };
-		13B07F961A680F5B00A75B9A /* VitalitiAirApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VitalitiAirApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = VitalitiAirApp/Images.xcassets; sourceTree = "<group>"; };
-		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = VitalitiAirApp/Info.plist; sourceTree = "<group>"; };
-		29F60E0F57DEADA01F79A904 /* Pods-VitalitiAirApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VitalitiAirApp.debug.xcconfig"; path = "Target Support Files/Pods-VitalitiAirApp/Pods-VitalitiAirApp.debug.xcconfig"; sourceTree = "<group>"; };
-		38D066B6BEBA49DC8A09D120 /* FontAwesome.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome.ttf"; sourceTree = "<group>"; };
-		5625FE63129E41FD98FF52F0 /* MaterialIcons.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = MaterialIcons.ttf; path = "../node_modules/react-native-vector-icons/Fonts/MaterialIcons.ttf"; sourceTree = "<group>"; };
-		858C427C3659655CBCE6B9AA /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-VitalitiAirApp/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		A51DC94451E9430EAFD6F2A5 /* Feather.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = Feather.ttf; path = "../node_modules/react-native-vector-icons/Fonts/Feather.ttf"; sourceTree = "<group>"; };
-		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = VitalitiAirApp/SplashScreen.storyboard; sourceTree = "<group>"; };
-		B35DC9968A5B0861D8C378EF /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = VitalitiAirApp/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		050000B2372B16F1A841EB2F /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-VitalitiAir/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		13B07F961A680F5B00A75B9A /* VitalitiAir.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VitalitiAir.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = VitalitiAir/Images.xcassets; sourceTree = "<group>"; };
+		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = VitalitiAir/Info.plist; sourceTree = "<group>"; };
+		181BDA5F129C4FE9A1AB62FA /* Feather.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = Feather.ttf; path = "../node_modules/react-native-vector-icons/Fonts/Feather.ttf"; sourceTree = "<group>"; };
+		1AD2918C655221434FEE5E4F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = VitalitiAir/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		21A9D28A34C06A882E953DCD /* Pods-VitalitiAir.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VitalitiAir.release.xcconfig"; path = "Target Support Files/Pods-VitalitiAir/Pods-VitalitiAir.release.xcconfig"; sourceTree = "<group>"; };
+		61153FC46063E2E66A733730 /* libPods-VitalitiAir.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-VitalitiAir.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		8CC54A8949E445E58D5BB96B /* Ionicons.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = Ionicons.ttf; path = "../node_modules/react-native-vector-icons/Fonts/Ionicons.ttf"; sourceTree = "<group>"; };
+		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = VitalitiAir/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		C46DF72E6D9B498EBB61CCD6 /* FontAwesome5_Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome5_Regular.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome5_Regular.ttf"; sourceTree = "<group>"; };
-		D08CE07D244BCC72F589246D /* libPods-VitalitiAirApp.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-VitalitiAirApp.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		DAFCA1C5F9402B2BFC397E73 /* Pods-VitalitiAirApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VitalitiAirApp.release.xcconfig"; path = "Target Support Files/Pods-VitalitiAirApp/Pods-VitalitiAirApp.release.xcconfig"; sourceTree = "<group>"; };
+		C8C1EE479BEDB55FAD68B46F /* Pods-VitalitiAir.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VitalitiAir.debug.xcconfig"; path = "Target Support Files/Pods-VitalitiAir/Pods-VitalitiAir.debug.xcconfig"; sourceTree = "<group>"; };
+		D863A4DCC6D24600A961A371 /* MaterialIcons.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = MaterialIcons.ttf; path = "../node_modules/react-native-vector-icons/Fonts/MaterialIcons.ttf"; sourceTree = "<group>"; };
+		E4B5C55139CB411FA28E1419 /* FontAwesome5_Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome5_Regular.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome5_Regular.ttf"; sourceTree = "<group>"; };
+		E79E78AB41A84232B3DB018F /* MaterialCommunityIcons.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = MaterialCommunityIcons.ttf; path = "../node_modules/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf"; sourceTree = "<group>"; };
+		E895F7C4F27646498CA35BAC /* FontAwesome.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome.ttf"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = VitalitiAirApp/AppDelegate.swift; sourceTree = "<group>"; };
-		F11748442D0722820044C1D9 /* VitalitiAirApp-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "VitalitiAirApp-Bridging-Header.h"; path = "VitalitiAirApp/VitalitiAirApp-Bridging-Header.h"; sourceTree = "<group>"; };
-		FEB5DD9B4C404814A07FA843 /* MaterialCommunityIcons.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = MaterialCommunityIcons.ttf; path = "../node_modules/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf"; sourceTree = "<group>"; };
+		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = VitalitiAir/AppDelegate.swift; sourceTree = "<group>"; };
+		F11748442D0722820044C1D9 /* VitalitiAir-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "VitalitiAir-Bridging-Header.h"; path = "VitalitiAir/VitalitiAir-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -49,49 +49,49 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2A4DAF6161C464AE2C9C1D58 /* libPods-VitalitiAirApp.a in Frameworks */,
+				ABCC33A902206C58A3A9FEBE /* libPods-VitalitiAir.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		13B07FAE1A68108700A75B9A /* VitalitiAirApp */ = {
+		13B07FAE1A68108700A75B9A /* VitalitiAir */ = {
 			isa = PBXGroup;
 			children = (
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
-				F11748442D0722820044C1D9 /* VitalitiAirApp-Bridging-Header.h */,
+				F11748442D0722820044C1D9 /* VitalitiAir-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				B35DC9968A5B0861D8C378EF /* PrivacyInfo.xcprivacy */,
+				1AD2918C655221434FEE5E4F /* PrivacyInfo.xcprivacy */,
 			);
-			name = VitalitiAirApp;
-			sourceTree = "<group>";
-		};
-		17E86FC6846550D97EC5787E /* VitalitiAirApp */ = {
-			isa = PBXGroup;
-			children = (
-				858C427C3659655CBCE6B9AA /* ExpoModulesProvider.swift */,
-			);
-			name = VitalitiAirApp;
+			name = VitalitiAir;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				D08CE07D244BCC72F589246D /* libPods-VitalitiAirApp.a */,
+				61153FC46063E2E66A733730 /* libPods-VitalitiAir.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		5CED24543C1C90E4C93B7CEF /* Pods */ = {
+		62A9CB33F092381076E09AF2 /* VitalitiAir */ = {
 			isa = PBXGroup;
 			children = (
-				29F60E0F57DEADA01F79A904 /* Pods-VitalitiAirApp.debug.xcconfig */,
-				DAFCA1C5F9402B2BFC397E73 /* Pods-VitalitiAirApp.release.xcconfig */,
+				050000B2372B16F1A841EB2F /* ExpoModulesProvider.swift */,
+			);
+			name = VitalitiAir;
+			sourceTree = "<group>";
+		};
+		62EA0EE16BE589D473D69234 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				C8C1EE479BEDB55FAD68B46F /* Pods-VitalitiAir.debug.xcconfig */,
+				21A9D28A34C06A882E953DCD /* Pods-VitalitiAir.release.xcconfig */,
 			);
 			name = Pods;
 			path = Pods;
@@ -107,13 +107,13 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
-				13B07FAE1A68108700A75B9A /* VitalitiAirApp */,
+				13B07FAE1A68108700A75B9A /* VitalitiAir */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				ABB6E6E1120F4F96AEAE5693 /* Resources */,
-				5CED24543C1C90E4C93B7CEF /* Pods */,
-				C2BA2CB90FE99F977F84DA0E /* ExpoModulesProviders */,
+				947355C420764F02833245DA /* Resources */,
+				62EA0EE16BE589D473D69234 /* Pods */,
+				CF57D950ECB48E1B18AD39A0 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -123,20 +123,20 @@
 		83CBBA001A601CBA00E9B192 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				13B07F961A680F5B00A75B9A /* VitalitiAirApp.app */,
+				13B07F961A680F5B00A75B9A /* VitalitiAir.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		ABB6E6E1120F4F96AEAE5693 /* Resources */ = {
+		947355C420764F02833245DA /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				5625FE63129E41FD98FF52F0 /* MaterialIcons.ttf */,
-				FEB5DD9B4C404814A07FA843 /* MaterialCommunityIcons.ttf */,
-				105130DE25B54DA0B9016BB2 /* Ionicons.ttf */,
-				A51DC94451E9430EAFD6F2A5 /* Feather.ttf */,
-				38D066B6BEBA49DC8A09D120 /* FontAwesome.ttf */,
-				C46DF72E6D9B498EBB61CCD6 /* FontAwesome5_Regular.ttf */,
+				D863A4DCC6D24600A961A371 /* MaterialIcons.ttf */,
+				E79E78AB41A84232B3DB018F /* MaterialCommunityIcons.ttf */,
+				8CC54A8949E445E58D5BB96B /* Ionicons.ttf */,
+				181BDA5F129C4FE9A1AB62FA /* Feather.ttf */,
+				E895F7C4F27646498CA35BAC /* FontAwesome.ttf */,
+				E4B5C55139CB411FA28E1419 /* FontAwesome5_Regular.ttf */,
 			);
 			name = Resources;
 			path = "";
@@ -148,13 +148,13 @@
 				BB2F792C24A3F905000567C9 /* Expo.plist */,
 			);
 			name = Supporting;
-			path = VitalitiAirApp/Supporting;
+			path = VitalitiAir/Supporting;
 			sourceTree = "<group>";
 		};
-		C2BA2CB90FE99F977F84DA0E /* ExpoModulesProviders */ = {
+		CF57D950ECB48E1B18AD39A0 /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				17E86FC6846550D97EC5787E /* VitalitiAirApp */,
+				62A9CB33F092381076E09AF2 /* VitalitiAir */,
 			);
 			name = ExpoModulesProviders;
 			sourceTree = "<group>";
@@ -162,26 +162,26 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		13B07F861A680F5B00A75B9A /* VitalitiAirApp */ = {
+		13B07F861A680F5B00A75B9A /* VitalitiAir */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "VitalitiAirApp" */;
+			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "VitalitiAir" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				2123EE0F5420DF7F50FF4609 /* [Expo] Configure project */,
+				3A222FBCA747AC49DD6DCCC4 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				0ADEE73BEDA7FB4D6B2C07F2 /* [CP] Embed Pods Frameworks */,
+				59B7F1C0538E75A4ADEFE4B7 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = VitalitiAirApp;
-			productName = VitalitiAirApp;
-			productReference = 13B07F961A680F5B00A75B9A /* VitalitiAirApp.app */;
+			name = VitalitiAir;
+			productName = VitalitiAir;
+			productReference = 13B07F961A680F5B00A75B9A /* VitalitiAir.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -197,7 +197,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "VitalitiAirApp" */;
+			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "VitalitiAir" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -210,7 +210,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				13B07F861A680F5B00A75B9A /* VitalitiAirApp */,
+				13B07F861A680F5B00A75B9A /* VitalitiAir */,
 			);
 		};
 /* End PBXProject section */
@@ -223,13 +223,13 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				3848DEB233FC4100B4AD6CBE /* MaterialIcons.ttf in Resources */,
-				35FE1A1A7BF44A4D987C4A47 /* MaterialCommunityIcons.ttf in Resources */,
-				84D64ED521B64236AECBBB8B /* Ionicons.ttf in Resources */,
-				FDAA6B4F870E4E988513DEEE /* Feather.ttf in Resources */,
-				8F4BA93668EE41A897ED98AF /* FontAwesome.ttf in Resources */,
-				B3957258BAF54EBBA2A82F3B /* FontAwesome5_Regular.ttf in Resources */,
-				E73EB045F952A6BC72040B32 /* PrivacyInfo.xcprivacy in Resources */,
+				D761A3BC295346CC90634B1B /* MaterialIcons.ttf in Resources */,
+				71AB395DD6F84DDF9A48DA94 /* MaterialCommunityIcons.ttf in Resources */,
+				371981C907B341B3B5BAF9BF /* Ionicons.ttf in Resources */,
+				441FDDC4A02F4C48807929C9 /* Feather.ttf in Resources */,
+				65804D11005E43ABBCDA7D8E /* FontAwesome.ttf in Resources */,
+				C71F2895082646A8B6648C9C /* FontAwesome5_Regular.ttf in Resources */,
+				DD949463D2E865111A8A5561 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -266,32 +266,14 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-VitalitiAirApp-checkManifestLockResult.txt",
+				"$(DERIVED_FILE_DIR)/Pods-VitalitiAir-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		0ADEE73BEDA7FB4D6B2C07F2 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-VitalitiAirApp/Pods-VitalitiAirApp-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-VitalitiAirApp/Pods-VitalitiAirApp-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		2123EE0F5420DF7F50FF4609 /* [Expo] Configure project */ = {
+		3A222FBCA747AC49DD6DCCC4 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -308,7 +290,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-VitalitiAirApp/expo-configure-project.sh\"\n";
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-VitalitiAir/expo-configure-project.sh\"\n";
+		};
+		59B7F1C0538E75A4ADEFE4B7 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-VitalitiAir/Pods-VitalitiAir-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-VitalitiAir/Pods-VitalitiAir-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
 		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -316,7 +316,7 @@
 			files = (
 			);
 			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-VitalitiAirApp/Pods-VitalitiAirApp-resources.sh",
+				"${PODS_ROOT}/Target Support Files/Pods-VitalitiAir/Pods-VitalitiAir-resources.sh",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXApplication/ExpoApplication_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/EXConstants.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/ExpoConstants_privacy.bundle",
@@ -355,7 +355,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-VitalitiAirApp/Pods-VitalitiAirApp-resources.sh\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-VitalitiAir/Pods-VitalitiAir-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -366,7 +366,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				742B7AA829E5B6EAAF8E7314 /* ExpoModulesProvider.swift in Sources */,
+				CC742D37603CFFCE33660C16 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -375,11 +375,11 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 29F60E0F57DEADA01F79A904 /* Pods-VitalitiAirApp.debug.xcconfig */;
+			baseConfigurationReference = C8C1EE479BEDB55FAD68B46F /* Pods-VitalitiAir.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = VitalitiAirApp/VitalitiAirApp.entitlements;
+				CODE_SIGN_ENTITLEMENTS = VitalitiAir/VitalitiAir.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2726NBK599;
 				ENABLE_BITCODE = NO;
@@ -387,7 +387,7 @@
 					"$(inherited)",
 					"FB_SONARKIT_ENABLED=1",
 				);
-				INFOPLIST_FILE = VitalitiAirApp/Info.plist;
+				INFOPLIST_FILE = VitalitiAir/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -401,8 +401,8 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.sophiafay24.VitalitiAirApp;
-				PRODUCT_NAME = VitalitiAirApp;
-				SWIFT_OBJC_BRIDGING_HEADER = "VitalitiAirApp/VitalitiAirApp-Bridging-Header.h";
+				PRODUCT_NAME = VitalitiAir;
+				SWIFT_OBJC_BRIDGING_HEADER = "VitalitiAir/VitalitiAir-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -412,14 +412,14 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = DAFCA1C5F9402B2BFC397E73 /* Pods-VitalitiAirApp.release.xcconfig */;
+			baseConfigurationReference = 21A9D28A34C06A882E953DCD /* Pods-VitalitiAir.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = VitalitiAirApp/VitalitiAirApp.entitlements;
+				CODE_SIGN_ENTITLEMENTS = VitalitiAir/VitalitiAir.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2726NBK599;
-				INFOPLIST_FILE = VitalitiAirApp/Info.plist;
+				INFOPLIST_FILE = VitalitiAir/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -433,8 +433,8 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.sophiafay24.VitalitiAirApp;
-				PRODUCT_NAME = VitalitiAirApp;
-				SWIFT_OBJC_BRIDGING_HEADER = "VitalitiAirApp/VitalitiAirApp-Bridging-Header.h";
+				PRODUCT_NAME = VitalitiAir;
+				SWIFT_OBJC_BRIDGING_HEADER = "VitalitiAir/VitalitiAir-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
@@ -568,7 +568,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "VitalitiAirApp" */ = {
+		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "VitalitiAir" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				13B07F941A680F5B00A75B9A /* Debug */,
@@ -577,7 +577,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "VitalitiAirApp" */ = {
+		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "VitalitiAir" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
