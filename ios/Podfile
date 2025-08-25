@@ -54,6 +54,14 @@ target 'VitalitiAirApp' do
     puts "Adding native modules to Xcode project..."
     system("ruby #{File.join(__dir__, 'add_native_modules.rb')}")
 
+    # Fix DEFINES_MODULE conflicts for expo-dev-menu
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        # Ensure consistent DEFINES_MODULE setting
+        config.build_settings['DEFINES_MODULE'] = 'YES'
+      end
+    end
+
     # This is necessary for Xcode 14, because it signs resource bundles by default
     # when building for devices.
     installer.target_installation_results.pod_target_installation_results
