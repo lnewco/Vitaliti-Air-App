@@ -60,14 +60,16 @@
     <string>This app uses Bluetooth to connect to your pulse oximeter device for monitoring SpO2 and heart rate.</string>
     <key>NSBluetoothPeripheralUsageDescription</key>
     <string>This app uses Bluetooth to connect to your pulse oximeter device for monitoring SpO2 and heart rate.</string>
+    <key>NSHealthShareUsageDescription</key>
+    <string>This app uses HealthKit to track your breathing exercises and maintain background operation during IHHT sessions.</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>This app saves your IHHT breathing sessions to the Health app to track your wellness progress.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to save photos</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your photos</string>
-    <key>NSSupportsLiveActivities</key>
-    <true/>
     <key>UIAppFonts</key>
     <array>
       <string>MaterialIcons.ttf</string>

@@ -53,6 +53,14 @@ export const BluetoothProvider = ({ children }) => {
   const [isPulseOxConnected, setIsPulseOxConnected] = useState(false);
   const [discoveredDevices, setDiscoveredDevices] = useState([]);
   const [connectedPulseOxDevice, setConnectedPulseOxDevice] = useState(null);
+  
+  // Import EnhancedSessionManager for BLE device tracking
+  const sessionManagerRef = useRef(null);
+  useEffect(() => {
+    import('../services/EnhancedSessionManager').then(module => {
+      sessionManagerRef.current = module.default;
+    });
+  }, []);
 
   // ===== DATA STREAMS (high frequency, use refs to avoid re-renders) =====
   const pulseOximeterDataRef = useRef({
@@ -157,6 +165,12 @@ export const BluetoothProvider = ({ children }) => {
       setConnectedPulseOxDevice(device);
       log.info('✅ Pulse oximeter connected');
       
+      // Notify EnhancedSessionManager of connected device for background execution
+      if (sessionManagerRef.current) {
+        sessionManagerRef.current.setConnectedDevice(device.id);
+        log.info('📱 Notified SessionManager of BLE device:', device.id);
+      }
+      
       // Stop scanning after successful connection
       if (isScanning) {
         await stopScan();
@@ -188,6 +202,12 @@ export const BluetoothProvider = ({ children }) => {
       };
       throttledUIUpdate();
       
+      // Notify EnhancedSessionManager of disconnection
+      if (sessionManagerRef.current) {
+        sessionManagerRef.current.clearConnectedDevice();
+        log.info('📱 Notified SessionManager of BLE disconnection');
+      }
+      
       log.info('✅ Pulse oximeter disconnected');
     } catch (error) {
       log.error('❌ Context: Disconnect failed:', error);
@@ -195,6 +215,12 @@ export const BluetoothProvider = ({ children }) => {
       // Force cleanup even on error
       setIsPulseOxConnected(false);
       setConnectedPulseOxDevice(null);
+      
+      // Still notify SessionManager even on error
+      if (sessionManagerRef.current) {
+        sessionManagerRef.current.clearConnectedDevice();
+      }
+      
       pulseOximeterDataRef.current = {
         spo2: null,
         heartRate: null,

@@ -16,6 +16,7 @@ import SupabaseService from './SupabaseService';
 import serviceFactory from './ServiceFactory';
 import runtimeEnvironment from '../utils/RuntimeEnvironment';
 import AggressiveBackgroundService from './AggressiveBackgroundService';
+import HKWorkoutService from './native/HKWorkoutService';
 
 // Configure notification handling
 Notifications.setNotificationHandler({
@@ -80,11 +81,18 @@ class EnhancedSessionManager {
     // Track initialization
     this.initialized = false;
     
+    // HKWorkout integration for iOS background execution
+    this.connectedDeviceId = null;
+    this.isUsingHKWorkout = false;
+    
     // Setup app state handling
     this.setupAppStateHandling();
     
     // Initialize services
     this.initializeServices();
+    
+    // Setup HKWorkout event listeners if available
+    this.setupHKWorkoutListeners();
   }
 
   async initializeServices() {
@@ -361,6 +369,18 @@ class EnhancedSessionManager {
 
       // Schedule phase notifications
       await this.schedulePhaseNotifications();
+
+      // Start HKWorkout for iOS background execution with BLE
+      if (HKWorkoutService.isAvailable && this.connectedDeviceId) {
+        console.log('🏃 Starting HKWorkout with BLE device:', this.connectedDeviceId);
+        const workoutResult = await HKWorkoutService.startWorkout(this.connectedDeviceId);
+        if (workoutResult.success) {
+          this.isUsingHKWorkout = true;
+          console.log('✅ HKWorkout started for unlimited background execution');
+        } else {
+          console.warn('⚠️ HKWorkout failed to start:', workoutResult.error);
+        }
+      }
 
       // Start AGGRESSIVE background monitoring for maximum persistence
       if (this.aggressiveBackgroundService) {
@@ -944,6 +964,16 @@ class EnhancedSessionManager {
     this.phaseStartTime = null;
     this.readingBuffer = [];
     this.hasActiveLiveActivity = false;
+    
+    // Stop HKWorkout if running
+    if (this.isUsingHKWorkout) {
+      HKWorkoutService.stopWorkout().then(result => {
+        console.log('🛑 HKWorkout stopped:', result);
+      }).catch(error => {
+        console.error('❌ Failed to stop HKWorkout:', error);
+      });
+      this.isUsingHKWorkout = false;
+    }
   }
 
   async addReading(reading) {
@@ -1343,6 +1373,63 @@ class EnhancedSessionManager {
     } catch (error) {
       console.error('❌ Failed to reconnect Bluetooth devices:', error);
     }
+  }
+
+  // Set the connected BLE device for background execution
+  setConnectedDevice(deviceId) {
+    this.connectedDeviceId = deviceId;
+    console.log('📱 EnhancedSessionManager: BLE device set:', deviceId);
+    
+    // If session is active and HKWorkout available, notify native module
+    if (this.isActive && HKWorkoutService.isAvailable) {
+      HKWorkoutService.setBluetoothDevice(deviceId);
+      HKWorkoutService.notifyBluetoothConnected();
+    }
+  }
+
+  // Clear connected device
+  clearConnectedDevice() {
+    this.connectedDeviceId = null;
+    console.log('📱 EnhancedSessionManager: BLE device cleared');
+    
+    // Notify native module if session is active
+    if (this.isActive && HKWorkoutService.isAvailable) {
+      HKWorkoutService.notifyBluetoothDisconnected();
+    }
+  }
+
+  // Setup HKWorkout event listeners
+  setupHKWorkoutListeners() {
+    if (!HKWorkoutService.isAvailable) return;
+
+    // Listen for timer ticks from native module
+    HKWorkoutService.onTick((data) => {
+      if (!this.isActive || this.isPaused) return;
+      
+      // Update phase time remaining based on native timer
+      const now = Date.now();
+      const phaseElapsed = Math.floor((now - this.phaseStartTime) / 1000);
+      const expectedRemaining = this.currentPhase === 'HYPOXIC' 
+        ? this.protocolConfig.hypoxicDuration - phaseElapsed
+        : this.protocolConfig.hyperoxicDuration - phaseElapsed;
+      
+      // Only update if there's a significant difference (> 2 seconds)
+      if (Math.abs(this.phaseTimeRemaining - expectedRemaining) > 2) {
+        console.log('⏱️ Syncing timer with native module:', expectedRemaining);
+        this.phaseTimeRemaining = Math.max(0, expectedRemaining);
+      }
+    });
+
+    // Listen for app state changes
+    HKWorkoutService.onAppStateChange((data) => {
+      console.log('📱 HKWorkout app state:', data.state);
+    });
+
+    // Listen for Bluetooth reconnection requests
+    HKWorkoutService.onBluetoothReconnect(async (deviceId) => {
+      console.log('🔄 HKWorkout requesting BLE reconnection:', deviceId);
+      // This would trigger reconnection logic if needed
+    });
   }
 }
 

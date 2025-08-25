@@ -8,5 +8,9 @@
     <array>
       <string>group.com.sophiafay24.VitalitiAirApp</string>
     </array>
+    <key>com.apple.developer.healthkit</key>
+    <true/>
+    <key>com.apple.developer.healthkit.background-delivery</key>
+    <true/>
   </dict>
 </plist>

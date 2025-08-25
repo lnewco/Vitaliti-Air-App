@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import { Container } from '../components/base';
 import { Card } from '../components/base';
@@ -55,6 +55,8 @@ const DashboardScreen = ({ navigation }) => {
     },
   });
 
+  // Show HKWorkout test interface if enabled
+
   return (
     <Container safe scroll backgroundColor={colors.surface.background}>
       {/* Compact Header */}
@@ -89,6 +91,7 @@ const DashboardScreen = ({ navigation }) => {
             </Card.Footer>
           </Card>
         </TouchableOpacity>
+
       </View>
 
       <View style={styles.bottomSpacer} />
