@@ -30,6 +30,7 @@ import {
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import WearablesDataService from '../services/WearablesDataService';
 import WearablesMetricsCard from '../components/WearablesMetricsCard';
+import SpO2Display from '../components/SpO2Display';
 import { useAuth } from '../auth/AuthContext';
 import { supabase } from '../config/supabase';
 
@@ -501,6 +502,34 @@ const PremiumDashboard = ({ navigation }) => {
         >
           <View style={styles.headerSpacer} />
           {renderMetrics()}
+          
+          {/* SPO2 Display Section */}
+          <View style={styles.metricsSection}>
+            <PremiumCard>
+              <View style={styles.spo2Container}>
+                <Text style={styles.cardTitle}>Pulse Oximetry</Text>
+                <SpO2Display />
+              </View>
+            </PremiumCard>
+          </View>
+          
+          {/* Adaptive Training Button */}
+          <View style={styles.metricsSection}>
+            <TouchableOpacity onPress={() => navigation.navigate('IHHTTraining')}>
+              <PremiumCard>
+                <View style={styles.trainingButtonContainer}>
+                  <Text style={styles.cardTitle}>Adaptive Training</Text>
+                  <Text style={styles.cardSubtitle}>Start AI-guided IHHT session with real-time adjustments</Text>
+                  <PremiumButton 
+                    title="Begin Session" 
+                    onPress={() => navigation.navigate('IHHTTraining')}
+                    variant="primary"
+                  />
+                </View>
+              </PremiumCard>
+            </TouchableOpacity>
+          </View>
+          
           {renderNotesCard()}
           
           <View style={styles.bottomSpacing} />
@@ -710,6 +739,18 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: spacing.xxl,
+  },
+  spo2Container: {
+    padding: spacing.md,
+  },
+  trainingButtonContainer: {
+    padding: spacing.md,
+  },
+  cardSubtitle: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
   },
   dateNavigation: {
     position: 'absolute',

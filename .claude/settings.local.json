@@ -52,7 +52,8 @@
       "Read(//var/folders/sf/czh6d2nx15q1cgq20fjxm9m00000gn/T/TemporaryItems/NSIRD_screencaptureui_smfV4W/**)",
       "Read(//Users/danyalpanjwani/Downloads/**)",
       "Bash(npm uninstall:*)",
-      "Read(//Users/danyalpanjwani/Downloads/**)"
+      "Read(//Users/danyalpanjwani/Downloads/**)",
+      "Bash(git tag:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

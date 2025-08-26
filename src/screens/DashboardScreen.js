@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import WearablesDataService from '../services/WearablesDataService';
 import WearablesMetricsCard from '../components/WearablesMetricsCard';
+import SpO2Display from '../components/SpO2Display';
 import { Container } from '../components/base';
 import { Card } from '../components/base';
 import { H2, Body, BodySmall, Caption } from '../components/base/Typography';
@@ -145,6 +146,11 @@ const DashboardScreen = ({ navigation }) => {
           />
         </View>
       )}
+
+      {/* SPO2 Display */}
+      <View style={styles.metricsSection}>
+        <SpO2Display />
+      </View>
 
       {/* Session Cards */}
       <View style={styles.sessionCards}>

@@ -20,10 +20,13 @@ import { useAppTheme } from '../theme';
 // No longer need custom slider - using native component
 
 const PHASE_TYPES = {
-  HYPOXIC: 'HYPOXIC',
-  HYPEROXIC: 'HYPEROXIC',
+  ALTITUDE: 'ALTITUDE',
+  RECOVERY: 'RECOVERY', 
   TRANSITION: 'TRANSITION',
   COMPLETED: 'COMPLETED',
+  // Legacy support
+  HYPOXIC: 'ALTITUDE',
+  HYPEROXIC: 'RECOVERY',
   PAUSED: 'PAUSED',
   TERMINATED: 'TERMINATED'
 };
@@ -59,6 +62,26 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const [forceUpdate, setForceUpdate] = useState({});
   const [altitudeLevel, setAltitudeLevel] = useState(protocolConfig.defaultAltitudeLevel || 6); // Initialize from protocol config
   
+  // Adaptive instruction state
+  const [adaptiveInstruction, setAdaptiveInstruction] = useState(null);
+  const [showAdaptiveInstruction, setShowAdaptiveInstruction] = useState(false);
+  
+  // Adaptive instruction callback
+  const handleAdaptiveInstruction = (instruction) => {
+    console.log('🎯 Received adaptive instruction:', instruction);
+    setAdaptiveInstruction(instruction);
+    setShowAdaptiveInstruction(true);
+    
+    // Vibrate to get user attention
+    Vibration.vibrate([0, 300, 100, 300]);
+    
+    // Auto-dismiss after 5 seconds for mask lift, 10 seconds for altitude adjustment
+    const dismissTime = instruction.type === 'mask_lift' ? 5000 : 10000;
+    setTimeout(() => {
+      setShowAdaptiveInstruction(false);
+    }, dismissTime);
+  };
+  
   // Monitor session info changes and update local state
   useEffect(() => {
     if (!sessionStarted) return;
@@ -89,6 +112,9 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       // Generate a proper session ID
       const sessionId = SessionIdGenerator.generate('IHHT');
       console.log('📝 Generated session ID:', sessionId);
+      
+      // Set up adaptive instruction callback before starting session
+      EnhancedSessionManager.setAdaptiveInstructionCallback(handleAdaptiveInstruction);
       
       // Start the session with proper protocol configuration
       const createdSession = await EnhancedSessionManager.startSession(sessionId, {
@@ -305,6 +331,9 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
             hyperoxic: protocolConfig.hyperoxicDuration,
             altitudeLevel: protocolConfig.defaultAltitudeLevel || 6
           });
+          
+          // Set up adaptive instruction callback before starting session
+          EnhancedSessionManager.setAdaptiveInstructionCallback(handleAdaptiveInstruction);
           
           // Start the session with the passed session ID
           const createdSession = await EnhancedSessionManager.startSession(sessionId, {
@@ -554,11 +583,11 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
             <Text style={styles.protocolValue}>{protocolConfig.totalCycles}</Text>
           </View>
           <View style={styles.protocolRow}>
-            <Text style={styles.protocolLabel}>Hypoxic Phase:</Text>
+            <Text style={styles.protocolLabel}>Altitude Phase:</Text>
             <Text style={styles.protocolValue}>{protocolConfig.hypoxicDuration} minutes</Text>
           </View>
           <View style={styles.protocolRow}>
-            <Text style={styles.protocolLabel}>Hyperoxic Phase:</Text>
+            <Text style={styles.protocolLabel}>Recovery Phase:</Text>
             <Text style={styles.protocolValue}>{protocolConfig.hyperoxicDuration} minutes</Text>
           </View>
           <View style={styles.protocolRow}>
@@ -598,8 +627,8 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   }
 
   // Determine phase colors
-  const isHypoxic = sessionInfo.currentPhase === 'HYPOXIC';
-  const phaseColors = isHypoxic 
+  const isAltitude = sessionInfo.currentPhase === 'ALTITUDE' || sessionInfo.currentPhase === 'HYPOXIC';
+  const phaseColors = isAltitude 
     ? { 
         primary: colors.primary[500], 
         light: theme === 'dark' ? colors.primary[900] : colors.primary[100] 
@@ -918,6 +947,96 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       color: colors.text.secondary,
       marginLeft: 8,
     },
+    
+    // Adaptive Instruction Styles
+    adaptiveOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 1000,
+    },
+    adaptiveCard: {
+      backgroundColor: colors.surface.card,
+      borderRadius: 16,
+      padding: 24,
+      marginHorizontal: 20,
+      maxWidth: 350,
+      alignItems: 'center',
+      shadowColor: theme === 'dark' ? '#000' : '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: theme === 'dark' ? 0.4 : 0.2,
+      shadowRadius: 8,
+      elevation: 6,
+    },
+    maskLiftCard: {
+      borderLeftWidth: 4,
+      borderLeftColor: colors.warning[500],
+    },
+    altitudeCard: {
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary[500],
+    },
+    adaptiveTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: colors.text.primary,
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    adaptiveMessage: {
+      fontSize: 16,
+      color: colors.text.primary,
+      textAlign: 'center',
+      marginBottom: 16,
+      lineHeight: 22,
+    },
+    altitudeDetails: {
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    altitudeDetailText: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.text.primary,
+      marginBottom: 8,
+    },
+    increaseText: {
+      fontSize: 16,
+      color: colors.warning[600],
+      fontWeight: '500',
+    },
+    decreaseText: {
+      fontSize: 16,
+      color: colors.success[600],
+      fontWeight: '500',
+    },
+    maskLiftDetails: {
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    spO2Text: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      textAlign: 'center',
+    },
+    dismissButton: {
+      backgroundColor: colors.primary[500],
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 8,
+      minWidth: 100,
+    },
+    dismissButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
   });
 
   return (
@@ -928,9 +1047,9 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       <View style={[styles.header, { 
         backgroundColor: sessionInfo.currentPhase === 'TRANSITION' 
           ? colors.neutral[theme === 'dark' ? 700 : 400]  // Subtle neutral for transition
-          : sessionInfo.currentPhase === 'HYPOXIC' 
-            ? colors.primary[theme === 'dark' ? 600 : 500]  // Blue for hypoxic
-            : colors.success[theme === 'dark' ? 600 : 500]  // Green for hyperoxic
+          : (sessionInfo.currentPhase === 'ALTITUDE' || sessionInfo.currentPhase === 'HYPOXIC')
+            ? colors.primary[theme === 'dark' ? 600 : 500]  // Blue for altitude
+            : colors.success[theme === 'dark' ? 600 : 500]  // Green for recovery
       }]}>
         <TouchableOpacity 
           style={[styles.backButton, (!sessionStarted || !sessionInfo.isActive) && styles.backButtonDisabled]} 
@@ -982,7 +1101,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
                 fontWeight: '500',
                 color: theme === 'dark' ? colors.text.primary : colors.text.secondary 
               }]}>
-                {sessionInfo.nextPhaseAfterTransition === 'HYPOXIC' 
+                {(sessionInfo.nextPhaseAfterTransition === 'ALTITUDE' || sessionInfo.nextPhaseAfterTransition === 'HYPOXIC')
                   ? 'Please put on your mask' 
                   : 'Please remove your mask'}
               </Text>
@@ -999,10 +1118,10 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
             <View style={[styles.phaseCard, { backgroundColor: phaseColors.light }]}>
 
               <Text style={styles.phaseTitle}>
-                {sessionInfo.currentPhase === 'HYPOXIC' ? 'Hypoxic Phase' : 'Hyperoxic Phase'}
+                {(sessionInfo.currentPhase === 'ALTITUDE' || sessionInfo.currentPhase === 'HYPOXIC') ? 'Altitude Phase' : 'Recovery Phase'}
               </Text>
               <Text style={styles.phaseMessage}>
-                {sessionInfo.currentPhase === 'HYPOXIC' ? 'Reduced oxygen exposure' : 'Recovery with normal oxygen'}
+                {(sessionInfo.currentPhase === 'ALTITUDE' || sessionInfo.currentPhase === 'HYPOXIC') ? 'Reduced oxygen exposure' : 'Recovery with normal oxygen'}
               </Text>
               <Text style={styles.phaseTimer}>{formatTime(sessionInfo.phaseTimeRemaining)} remaining</Text>
               
@@ -1123,6 +1242,52 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
               onPress={confirmEndSession}
             >
               <Text style={styles.endButtonText}>End Session</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Adaptive Instruction Overlay */}
+      {showAdaptiveInstruction && adaptiveInstruction && (
+        <View style={styles.adaptiveOverlay}>
+          <View style={[
+            styles.adaptiveCard,
+            adaptiveInstruction.type === 'mask_lift' ? styles.maskLiftCard : styles.altitudeCard
+          ]}>
+            <Text style={styles.adaptiveTitle}>
+              {adaptiveInstruction.type === 'mask_lift' ? '🫁 Mask Lift' : '⛰️ Altitude Adjustment'}
+            </Text>
+            
+            <Text style={styles.adaptiveMessage}>
+              {adaptiveInstruction.message || adaptiveInstruction.reason}
+            </Text>
+            
+            {adaptiveInstruction.type === 'altitude_adjustment' && (
+              <View style={styles.altitudeDetails}>
+                <Text style={styles.altitudeDetailText}>
+                  Adjust dial to level: {adaptiveInstruction.newLevel}
+                </Text>
+                {adaptiveInstruction.adjustment > 0 ? (
+                  <Text style={styles.increaseText}>↗️ Increase altitude</Text>
+                ) : (
+                  <Text style={styles.decreaseText}>↘️ Decrease altitude</Text>
+                )}
+              </View>
+            )}
+            
+            {adaptiveInstruction.type === 'mask_lift' && (
+              <View style={styles.maskLiftDetails}>
+                <Text style={styles.spO2Text}>
+                  SpO2: {adaptiveInstruction.spo2Value}% (Target: ≥{adaptiveInstruction.threshold + 2}%)
+                </Text>
+              </View>
+            )}
+            
+            <TouchableOpacity
+              style={styles.dismissButton}
+              onPress={() => setShowAdaptiveInstruction(false)}
+            >
+              <Text style={styles.dismissButtonText}>Got it</Text>
             </TouchableOpacity>
           </View>
         </View>
