@@ -152,17 +152,16 @@ class IntegrationManager {
       // Mark connection as pending
       await AsyncStorage.setItem('pendingWhoopConnection', 'true');
       
-      // Use the enhanced auth service for better flow
-      const result = await WhoopAuthService.authenticate(userId);
+      // Use simple URL opening approach for EAS builds (same as Oura)
+      const authUrl = WhoopService.getAuthUrl(userId);
+      console.log('Opening Whoop auth URL:', authUrl);
       
-      if (result.success) {
-        // Clear pending state since auth completed immediately
-        await AsyncStorage.removeItem('pendingWhoopConnection');
-        // Start data sync
-        await this.syncWhoopData(userId);
-        return { success: true, message: 'Whoop connected successfully!' };
+      const supported = await Linking.canOpenURL(authUrl);
+      if (supported) {
+        await Linking.openURL(authUrl);
+        return { success: true, message: 'Redirecting to Whoop for authorization...' };
       } else {
-        throw new Error(result.error);
+        throw new Error('Cannot open Whoop authorization URL');
       }
     } catch (error) {
       console.error('Whoop auth start error:', error);
