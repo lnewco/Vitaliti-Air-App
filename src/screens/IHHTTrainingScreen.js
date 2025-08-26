@@ -14,6 +14,7 @@ import { Slider } from '@miblanchard/react-native-slider';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useBluetooth } from '../context/BluetoothContext';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
+import AdaptiveInstructionEngine from '../services/AdaptiveInstructionEngine';
 import SessionIdGenerator from '../utils/sessionIdGenerator';
 import { useAppTheme } from '../theme';
 
@@ -33,6 +34,7 @@ const PHASE_TYPES = {
 
 const IHHTTrainingScreen = ({ navigation, route }) => {
   const { colors, theme } = useAppTheme();
+  const adaptiveEngineRef = useRef(null);
   
   // Extract protocol configuration from navigation params or use defaults
   const protocolConfig = route?.params?.protocolConfig || {
@@ -42,13 +44,16 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     defaultAltitudeLevel: 6  // Default altitude level
   };
   
-  // Log route params only once on mount
+  // Initialize adaptive engine on mount
   React.useEffect(() => {
     console.log('🔍 IHHTTrainingScreen initialized with:', {
       sessionId: route?.params?.sessionId,
       totalCycles: protocolConfig.totalCycles,
       usingDefaultConfig: !route?.params?.protocolConfig
     });
+    
+    // Initialize adaptive engine
+    adaptiveEngineRef.current = new AdaptiveInstructionEngine();
   }, []);
 
   const { 
