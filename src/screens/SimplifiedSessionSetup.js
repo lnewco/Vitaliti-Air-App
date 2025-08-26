@@ -7,8 +7,26 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  StatusBar,
+  ActivityIndicator,
 } from 'react-native';
-import { useAppTheme } from '../theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withSequence,
+} from 'react-native-reanimated';
+import {
+  colors,
+  typography,
+  spacing,
+  PremiumCard,
+  PremiumButton,
+  MetricRing,
+} from '../design-system';
 import { useBluetoothConnection } from '../context/BluetoothContext';
 import OptimizedConnectionManager from '../components/OptimizedConnectionManager';
 import SessionIdGenerator from '../utils/sessionIdGenerator';
@@ -16,9 +34,9 @@ import DatabaseService from '../services/DatabaseService';
 import SupabaseService from '../services/SupabaseService';
 
 const SimplifiedSessionSetup = ({ navigation }) => {
-  const { colors, spacing } = useAppTheme();
   const { isPulseOxConnected, isAnyDeviceConnected } = useBluetoothConnection();
   const [isStartingSession, setIsStartingSession] = useState(false);
+  const scale = useSharedValue(1);
 
   // Hardcoded protocol configuration
   const protocolConfig = {
@@ -90,193 +108,358 @@ const SimplifiedSessionSetup = ({ navigation }) => {
 
   const totalSessionTime = protocolConfig.totalCycles * (protocolConfig.hypoxicDuration + protocolConfig.hyperoxicDuration);
 
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.surface.background,
-    },
-    content: {
-      flex: 1,
-      padding: spacing.md,
-    },
-    header: {
-      marginBottom: spacing.md,
-      alignItems: 'center',
-    },
-    title: {
-      fontSize: 22,
-      fontWeight: 'bold',
-      color: colors.text.primary,
-      marginBottom: spacing.xs,
-      textAlign: 'center',
-    },
-    subtitle: {
-      fontSize: 14,
-      color: colors.text.secondary,
-      textAlign: 'center',
-      lineHeight: 20,
-    },
-    connectionSection: {
-      flex: 1,
-      marginBottom: spacing.sm,
-    },
-    sessionInfo: {
-      backgroundColor: colors.surface.card,
-      borderRadius: 10,
-      padding: spacing.md,
-      marginBottom: spacing.md,
-      borderWidth: 1,
-      borderColor: colors.border.light,
-    },
-    sessionInfoTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.text.primary,
-      marginBottom: spacing.sm,
-    },
-    sessionInfoRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      marginBottom: spacing.xs,
-    },
-    sessionInfoLabel: {
-      fontSize: 13,
-      color: colors.text.secondary,
-    },
-    sessionInfoValue: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: colors.text.primary,
-    },
-    sessionInfoDivider: {
-      height: 1,
-      backgroundColor: colors.border.light,
-      marginVertical: spacing.xs,
-    },
-    sessionInfoNote: {
-      fontSize: 11,
-      color: colors.text.tertiary,
-      fontStyle: 'italic',
-      marginTop: spacing.xs,
-    },
-    startButton: {
-      backgroundColor: isPulseOxConnected ? colors.primary[500] : colors.neutral[400],
-      paddingVertical: 14,
-      paddingHorizontal: spacing.lg,
-      borderRadius: 10,
-      alignItems: 'center',
-      marginBottom: spacing.sm,
-    },
-    startButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.white,
-    },
-    backButton: {
-      paddingVertical: 14,
-      paddingHorizontal: spacing.lg,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.border.medium,
-      backgroundColor: colors.surface.background,
-      alignItems: 'center',
-    },
-    backButtonText: {
-      fontSize: 15,
-      color: colors.text.primary,
-      fontWeight: '500',
-    },
-    connectionStatus: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: spacing.sm,
-      padding: spacing.sm,
-      backgroundColor: isPulseOxConnected ? colors.success[50] : colors.warning[50],
-      borderRadius: 8,
-    },
-    connectionStatusText: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: isPulseOxConnected ? colors.success[700] : colors.warning[700],
-      marginLeft: spacing.xs,
-    },
-  });
+  // Protocol metrics data
+  const protocolMetrics = [
+    { label: 'CYCLES', value: protocolConfig.totalCycles, unit: '' },
+    { label: 'HYPOXIC', value: protocolConfig.hypoxicDuration, unit: 'min' },
+    { label: 'RECOVERY', value: protocolConfig.hyperoxicDuration, unit: 'min' },
+  ];
+
+  const animatedButtonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Session Setup</Text>
-          <Text style={styles.subtitle}>
-            Connect pulse oximeter to begin
-          </Text>
-        </View>
-
-        {/* Session Configuration Info */}
-        <View style={styles.sessionInfo}>
-          <Text style={styles.sessionInfoTitle}>Protocol</Text>
-          
-          <View style={styles.sessionInfoRow}>
-            <Text style={styles.sessionInfoLabel}>Cycles:</Text>
-            <Text style={styles.sessionInfoValue}>{protocolConfig.totalCycles}</Text>
-          </View>
-          
-          <View style={styles.sessionInfoRow}>
-            <Text style={styles.sessionInfoLabel}>Hypoxic:</Text>
-            <Text style={styles.sessionInfoValue}>{protocolConfig.hypoxicDuration} min</Text>
-          </View>
-          
-          <View style={styles.sessionInfoRow}>
-            <Text style={styles.sessionInfoLabel}>Recovery:</Text>
-            <Text style={styles.sessionInfoValue}>{protocolConfig.hyperoxicDuration} min</Text>
-          </View>
-          
-          <View style={styles.sessionInfoRow}>
-            <Text style={styles.sessionInfoLabel}>Total:</Text>
-            <Text style={styles.sessionInfoValue}>{totalSessionTime} min</Text>
-          </View>
-          
-          <View style={styles.sessionInfoRow}>
-            <Text style={styles.sessionInfoLabel}>Altitude:</Text>
-            <Text style={styles.sessionInfoValue}>Level {protocolConfig.defaultAltitudeLevel}</Text>
-          </View>
-        </View>
-
-        {/* Connection Status */}
-        <View style={styles.connectionStatus}>
-          <Text style={styles.connectionStatusText}>
-            {isPulseOxConnected ? '✓ Pulse Oximeter Connected' : '⚠️ Pulse Oximeter Not Connected'}
-          </Text>
-        </View>
-
-        {/* Bluetooth Connection Manager */}
-        <View style={styles.connectionSection}>
-          <OptimizedConnectionManager hideDataDisplay />
-        </View>
-      </ScrollView>
-
-      {/* Action Buttons */}
-      <View style={{ padding: spacing.md }}>
-        <TouchableOpacity 
-          style={styles.startButton}
-          onPress={handleStartSession}
-          disabled={!isPulseOxConnected || isStartingSession}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.background.primary} />
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView 
+          style={styles.content} 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
         >
-          <Text style={styles.startButtonText}>
-            {isStartingSession ? 'Starting...' : isPulseOxConnected ? 'Start Training' : 'Connect Device First'}
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          {/* Header */}
+          <Animated.View 
+            entering={FadeInDown.duration(600).delay(100)}
+            style={styles.header}
+          >
+            <Text style={styles.title}>Training Protocol</Text>
+            <Text style={styles.subtitle}>
+              Prepare your body for optimal performance
+            </Text>
+          </Animated.View>
+
+          {/* Protocol Overview Card */}
+          <Animated.View entering={FadeInDown.duration(600).delay(200)}>
+            <PremiumCard style={styles.protocolCard}>
+              <View style={styles.protocolHeader}>
+                <Text style={styles.protocolTitle}>IHHT Protocol</Text>
+                <View style={styles.totalTimeBadge}>
+                  <Text style={styles.totalTimeText}>{totalSessionTime} MIN</Text>
+                </View>
+              </View>
+
+              {/* Protocol Metrics */}
+              <View style={styles.protocolMetrics}>
+                {protocolMetrics.map((metric, index) => (
+                  <View key={index} style={styles.protocolMetricCard}>
+                    <Text style={styles.protocolMetricLabel}>{metric.label}</Text>
+                    <Text style={styles.protocolMetricValue}>
+                      {metric.value}
+                      {metric.unit && <Text style={styles.protocolMetricUnit}> {metric.unit}</Text>}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Altitude Level */}
+              <View style={styles.altitudeSection}>
+                <View style={styles.altitudeHeader}>
+                  <Text style={styles.altitudeLabel}>ALTITUDE SIMULATION</Text>
+                  <Text style={styles.altitudeValue}>Level {protocolConfig.defaultAltitudeLevel}</Text>
+                </View>
+                <View style={styles.altitudeBar}>
+                  <LinearGradient
+                    colors={[colors.metrics.recovery, colors.metrics.strain]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[
+                      styles.altitudeFill,
+                      { width: `${(protocolConfig.defaultAltitudeLevel / 11) * 100}%` }
+                    ]}
+                  />
+                </View>
+              </View>
+            </PremiumCard>
+          </Animated.View>
+
+          {/* Connection Status Card */}
+          <Animated.View entering={FadeInDown.duration(600).delay(300)}>
+            <PremiumCard style={styles.connectionCard}>
+              <View style={styles.connectionHeader}>
+                <Text style={styles.connectionTitle}>Device Status</Text>
+                <View style={[
+                  styles.connectionBadge,
+                  { backgroundColor: isPulseOxConnected ? colors.metrics.breath + '20' : colors.semantic.error + '20' }
+                ]}>
+                  <View style={[
+                    styles.connectionDot,
+                    { backgroundColor: isPulseOxConnected ? colors.metrics.breath : colors.semantic.error }
+                  ]} />
+                  <Text style={[
+                    styles.connectionStatus,
+                    { color: isPulseOxConnected ? colors.metrics.breath : colors.semantic.error }
+                  ]}>
+                    {isPulseOxConnected ? 'Connected' : 'Disconnected'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Device Info */}
+              <View style={styles.deviceInfo}>
+                <View style={styles.deviceRow}>
+                  <Text style={styles.deviceLabel}>Pulse Oximeter</Text>
+                  <Text style={[
+                    styles.deviceValue,
+                    { color: isPulseOxConnected ? colors.text.primary : colors.text.tertiary }
+                  ]}>
+                    {isPulseOxConnected ? 'Ready' : 'Not Connected'}
+                  </Text>
+                </View>
+              </View>
+
+              {!isPulseOxConnected && (
+                <View style={styles.connectionNote}>
+                  <Text style={styles.connectionNoteText}>
+                    Connect your pulse oximeter to begin training
+                  </Text>
+                </View>
+              )}
+            </PremiumCard>
+          </Animated.View>
+
+          {/* Bluetooth Connection Manager - Hidden but functional */}
+          <View style={styles.hiddenConnectionManager}>
+            <OptimizedConnectionManager hideDataDisplay />
+          </View>
+        </ScrollView>
+
+        {/* Action Buttons */}
+        <Animated.View 
+          entering={FadeIn.duration(600).delay(400)}
+          style={styles.actionContainer}
         >
-          <Text style={styles.backButtonText}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+          <Animated.View style={animatedButtonStyle}>
+            <PremiumButton
+              title={isStartingSession ? 'Starting...' : 'Begin Training'}
+              onPress={handleStartSession}
+              disabled={!isPulseOxConnected || isStartingSession}
+              loading={isStartingSession}
+              size="large"
+              fullWidth
+            />
+          </Animated.View>
+          
+          <TouchableOpacity 
+            style={styles.cancelButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </SafeAreaView>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: spacing.screenPadding,
+    paddingBottom: 150, // Space for buttons
+  },
+  header: {
+    marginBottom: spacing.xl,
+    alignItems: 'center',
+  },
+  title: {
+    ...typography.h1,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+  },
+  subtitle: {
+    ...typography.bodyMedium,
+    color: colors.text.tertiary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  protocolCard: {
+    marginBottom: spacing.md,
+  },
+  protocolHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  protocolTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+  },
+  totalTimeBadge: {
+    backgroundColor: colors.brand.accent,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: spacing.radius.sm,
+  },
+  totalTimeText: {
+    ...typography.labelSmall,
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  protocolMetrics: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  protocolMetricCard: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+    borderRadius: spacing.radius.md,
+    padding: spacing.sm,
+    alignItems: 'center',
+  },
+  protocolMetricLabel: {
+    ...typography.micro,
+    color: colors.text.tertiary,
+    letterSpacing: 0.5,
+    marginBottom: spacing.xxs,
+  },
+  protocolMetricValue: {
+    ...typography.h2,
+    color: colors.text.primary,
+    fontWeight: '600',
+  },
+  protocolMetricUnit: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    fontWeight: '400',
+  },
+  altitudeSection: {
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.default,
+  },
+  altitudeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  altitudeLabel: {
+    ...typography.caption,
+    color: colors.text.tertiary,
+    letterSpacing: 0.5,
+  },
+  altitudeValue: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    fontWeight: '600',
+  },
+  altitudeBar: {
+    height: 6,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  altitudeFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  connectionCard: {
+    marginBottom: spacing.md,
+  },
+  connectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  connectionTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+  },
+  connectionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: spacing.radius.full,
+  },
+  connectionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: spacing.xs,
+  },
+  connectionStatus: {
+    ...typography.caption,
+    fontWeight: '600',
+  },
+  deviceInfo: {
+    gap: spacing.xs,
+  },
+  deviceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  deviceLabel: {
+    ...typography.bodyMedium,
+    color: colors.text.secondary,
+  },
+  deviceValue: {
+    ...typography.bodyMedium,
+    fontWeight: '600',
+  },
+  connectionNote: {
+    marginTop: spacing.md,
+    padding: spacing.sm,
+    backgroundColor: colors.background.secondary,
+    borderRadius: spacing.radius.md,
+  },
+  connectionNoteText: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    textAlign: 'center',
+  },
+  hiddenConnectionManager: {
+    position: 'absolute',
+    top: -1000, // Hide off screen but keep functional
+    left: 0,
+    right: 0,
+  },
+  actionContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: spacing.screenPadding,
+    paddingBottom: spacing.xl,
+    backgroundColor: colors.background.primary,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.default,
+  },
+  cancelButton: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    ...typography.bodyMedium,
+    color: colors.text.tertiary,
+    fontWeight: '500',
+  },
+});
 
 export default SimplifiedSessionSetup;

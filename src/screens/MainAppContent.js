@@ -7,14 +7,16 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import { useAppTheme } from '../theme';
 import DashboardScreen from './DashboardScreen';
+import PremiumDashboard from './PremiumDashboard';
 import SessionHistoryScreen from './SessionHistoryScreen';
 import SimplifiedSessionSetup from './SimplifiedSessionSetup';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
-import ProfileScreen from './ProfileScreen';
+import PremiumProfileScreen from './PremiumProfileScreen';
 import IntegrationsScreen from './IntegrationsScreen';
 import SessionRecoveryManager from '../components/SessionRecoveryManager';
 import SafeIcon from '../components/base/SafeIcon';
+import FloatingTabBar from '../design-system/components/FloatingTabBar';
 
 
 const Tab = createBottomTabNavigator();
@@ -28,20 +30,12 @@ function TabNavigator() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: colors.surface.card,
-          borderTopWidth: 1,
-          borderTopColor: colors.border.light,
-          paddingBottom: 10,
-          paddingTop: 5,
-        },
-        tabBarActiveTintColor: colors.primary[500],
-        tabBarInactiveTintColor: colors.text.secondary,
       }}
+      tabBar={props => <FloatingTabBar {...props} />}
     >
       <Tab.Screen 
         name="Dashboard" 
-        component={DashboardScreen}
+        component={PremiumDashboard}
         options={{
           tabBarLabel: 'Monitor',
           tabBarIcon: ({ color, size }) => (
@@ -54,10 +48,10 @@ function TabNavigator() {
         }}
       />
       <Tab.Screen 
-        name="History" 
+        name="Sessions" 
         component={SessionHistoryScreen}
         options={{
-          tabBarLabel: 'History',
+          tabBarLabel: 'Train',
           tabBarIcon: ({ color, size }) => (
             <SafeIcon name="history" size="sm" color={color} />
           ),
@@ -68,8 +62,22 @@ function TabNavigator() {
         }}
       />
       <Tab.Screen 
+        name="History" 
+        component={SessionHistoryScreen}
+        options={{
+          tabBarLabel: 'Data',
+          tabBarIcon: ({ color, size }) => (
+            <SafeIcon name="chart" size="sm" color={color} />
+          ),
+          tabBarLabelStyle: {
+            fontSize: 14,
+            fontWeight: '600',
+          },
+        }}
+      />
+      <Tab.Screen 
         name="Profile" 
-        component={ProfileScreen}
+        component={PremiumProfileScreen}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color, size }) => (

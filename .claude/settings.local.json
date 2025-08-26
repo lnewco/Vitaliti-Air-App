@@ -43,7 +43,16 @@
       "Bash(git for-each-ref:*)",
       "Bash(git cherry-pick:*)",
       "Bash(npm run:*)",
-      "Bash(eas build:*)"
+      "Bash(eas build:*)",
+      "Bash(npx expo:*)",
+      "Bash(curl:*)",
+      "Bash(npx:*)",
+      "Read(//var/folders/sf/czh6d2nx15q1cgq20fjxm9m00000gn/T/TemporaryItems/NSIRD_screencaptureui_QBmcU9/**)",
+      "Bash(open:*)",
+      "Read(//var/folders/sf/czh6d2nx15q1cgq20fjxm9m00000gn/T/TemporaryItems/NSIRD_screencaptureui_smfV4W/**)",
+      "Read(//Users/danyalpanjwani/Downloads/**)",
+      "Bash(npm uninstall:*)",
+      "Read(//Users/danyalpanjwani/Downloads/**)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

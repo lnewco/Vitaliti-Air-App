@@ -246,27 +246,6 @@ const ProfileScreen = ({ navigation }) => {
         </Card.Body>
       </Card>
 
-      {/* Appearance Settings */}
-      <Card style={styles.section}>
-        <Card.Header title="Appearance" />
-        <Card.Body>
-          <View style={styles.themeRow}>
-            <View style={styles.themeOption}>
-              <VectorIcon name={theme === 'dark' ? 'moon' : 'sun'} size={20} color={colors.text.primary} style={styles.themeIcon} />
-              <Body>Dark Mode</Body>
-            </View>
-            <Switch
-              value={theme === 'dark'}
-              onValueChange={toggleTheme}
-              trackColor={{ false: colors.border.light, true: colors.primary[500] }}
-              thumbColor={colors.white}
-            />
-          </View>
-          <Caption color="secondary" style={{ marginTop: spacing.xs }}>
-            {themePreference === 'system' ? 'Following system preference' : `Using ${theme} theme`}
-          </Caption>
-        </Card.Body>
-      </Card>
 
       {/* Integrations Section */}
       <View style={styles.section}>

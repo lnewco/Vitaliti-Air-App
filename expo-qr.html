@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expo QR Code</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .url {
+            color: #666;
+            font-size: 18px;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+        }
+        #qrcode {
+            margin: 20px auto;
+        }
+        .instructions {
+            color: #666;
+            margin-top: 30px;
+            line-height: 1.6;
+        }
+        .instructions h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .step {
+            margin: 10px 0;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 Vitaliti Air App - Expo QR Code</h1>
+        <div class="url">exp://192.168.14.137:8081</div>
+        <div id="qrcode"></div>
+        <div class="instructions">
+            <h3>How to use:</h3>
+            <div class="step">1. Open Expo Go app on your phone</div>
+            <div class="step">2. Make sure your phone is on the same WiFi network</div>
+            <div class="step">3. Scan this QR code with Expo Go</div>
+            <div class="step">4. Your app will load automatically</div>
+        </div>
+    </div>
+
+    <script>
+        // Generate QR code
+        QRCode.toCanvas(document.createElement('canvas'), 'exp://192.168.14.137:8081', {
+            width: 256,
+            margin: 2,
+            color: {
+                dark: '#000000',
+                light: '#FFFFFF'
+            }
+        }, function (error, canvas) {
+            if (error) console.error(error);
+            document.getElementById('qrcode').appendChild(canvas);
+        });
+    </script>
+</body>
+</html>

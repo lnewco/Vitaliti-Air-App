@@ -1,20 +1,20 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useAppTheme } from '../theme';
+import { colors } from '../design-system';
 import LoginScreen from '../auth/screens/LoginScreen';
-import PhoneVerificationScreen from '../components/PhoneVerificationScreen';
+import PremiumOTPScreen from '../auth/screens/PremiumOTPScreen';
 
 const Stack = createStackNavigator();
 
 const AuthNavigator = () => {
-  const { colors } = useAppTheme();
   
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
         cardStyle: {
-          backgroundColor: colors.surface.background,
+          backgroundColor: colors.background.primary,
         },
         gestureEnabled: true,
         cardStyleInterpolator: ({ current, layouts }) => {
@@ -41,12 +41,11 @@ const AuthNavigator = () => {
         }}
       />
       <Stack.Screen 
-        name="OTPScreen" 
-        component={PhoneVerificationScreen}
+        name="PremiumOTPScreen" 
+        component={PremiumOTPScreen}
         options={{
           title: 'Verify Phone',
         }}
-        initialParams={{ isOnboarding: false }}
       />
     </Stack.Navigator>
   );
