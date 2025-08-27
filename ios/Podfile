@@ -50,6 +50,24 @@ target 'VitalitiAirApp' do
       :ccache_enabled => podfile_properties['apple.ccacheEnabled'] == 'true',
     )
 
+    # Fix for SQLite naming conflicts between expo-sqlite and system SQLite
+    installer.pods_project.build_configurations.each do |config|
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+      # Prefix all expo-sqlite symbols to avoid conflicts
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'SQLITE_NAMESPACE=exsqlite3'
+    end
+    
+    # Ensure proper module maps for SQLite libraries
+    installer.pods_project.targets.each do |target|
+      if target.name == 'ExpoSQLite' || target.name == 'SQLite.swift'
+        target.build_configurations.each do |config|
+          # Use modular headers to prevent symbol collisions
+          config.build_settings['DEFINES_MODULE'] = 'YES'
+          config.build_settings['SWIFT_VERSION'] = '5.0' if target.name == 'SQLite.swift'
+        end
+      end
+    end
+
     # This is necessary for Xcode 14, because it signs resource bundles by default
     # when building for devices.
     installer.target_installation_results.pod_target_installation_results

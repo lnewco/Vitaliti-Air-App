@@ -53,7 +53,13 @@
       "Read(//Users/danyalpanjwani/Downloads/**)",
       "Bash(npm uninstall:*)",
       "Read(//Users/danyalpanjwani/Downloads/**)",
-      "Bash(git tag:*)"
+      "Bash(git tag:*)",
+      "mcp__linear-server__create_issue",
+      "mcp__linear-server__list_my_issues",
+      "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/ai-agent-service/**)",
+      "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/ai-agent-service/agent/**)",
+      "Bash(cd:*)",
+      "Bash(pod install:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
