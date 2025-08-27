@@ -270,76 +270,19 @@ const PremiumDashboard = ({ navigation }) => {
   );
 
   const renderMetrics = () => {
-    // If we have wearables data, show it in a better format
-    if (wearableMetrics || isLoadingMetrics || availableVendors.length > 0) {
-      return (
-        <View style={styles.metricsSection}>
-          <WearablesMetricsCard
-            metrics={wearableMetrics}
-            isLoading={isLoadingMetrics}
-            vendor={selectedVendor}
-            onVendorToggle={handleVendorToggle}
-            availableVendors={availableVendors}
-            sessionInfo={sessionInfo}
-            onStartTraining={() => navigation.navigate('SessionSetup')}
-          />
-        </View>
-      );
-    }
-    
-    // Otherwise show the original mock SpO2 metrics with reordered layout
+    // Always show the WearablesMetricsCard component
+    // It will handle loading, no data, and data states internally
     return (
       <View style={styles.metricsSection}>
-        <View style={styles.mainMetrics}>
-          <View style={styles.primaryMetric}>
-            <MetricRing
-              value={78}
-              maxValue={100}
-              size={160}
-              strokeWidth={14}
-              color={colors.metrics.sleep}
-              label="Sleep"
-              unit="%"
-              gradientColors={[colors.metrics.sleep, colors.metrics.recovery]}
-            />
-          </View>
-          
-          <View style={styles.secondaryMetrics}>
-            <View style={styles.metricRow}>
-              <MetricRing
-                value={66}
-                maxValue={100}
-                size={80}
-                strokeWidth={8}
-                color={colors.metrics.recovery}
-                label="Recovery"
-                unit="%"
-              />
-              <MetricRing
-                value={5.1}
-                maxValue={21}
-                size={80}
-                strokeWidth={8}
-                color={colors.metrics.strain}
-                label="Strain"
-                unit=""
-              />
-            </View>
-            
-            <View style={styles.recoveryBar}>
-              <Text style={styles.recoveryLabel}>RECOVERY</Text>
-              <View style={styles.recoveryProgress}>
-                <LinearGradient
-                  colors={[colors.metrics.recovery, colors.metrics.spo2]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[styles.recoveryFill, { width: '87%' }]}
-                />
-              </View>
-              <Text style={styles.recoveryValue}>87%</Text>
-            </View>
-          </View>
-        </View>
+        <WearablesMetricsCard
+          metrics={wearableMetrics}
+          isLoading={isLoadingMetrics}
+          vendor={selectedVendor || 'whoop'}
+          onVendorToggle={handleVendorToggle}
+          availableVendors={availableVendors}
+          sessionInfo={sessionInfo}
+          onStartTraining={() => navigation.navigate('SessionSetup')}
+        />
       </View>
     );
   };

@@ -20,11 +20,24 @@ const WearablesMetricsCard = ({
   onStartTraining,
   style
 }) => {
+  // Use mock data as fallback when no real data is available
+  const displayMetrics = metrics || {
+    sleepScore: 78,
+    recovery: 66,
+    readiness: 66,
+    strain: 5.1,
+    activity: 5.1,
+    restingHR: 51,
+    hrv: 96,
+    respRate: 17.8,
+    vendor: vendor || 'whoop',
+    date: new Date().toISOString().split('T')[0]
+  };
+  
   // Determine training recommendation based on recovery score
   const getTrainingRecommendation = () => {
-    if (!metrics?.recovery) return { text: 'REST', color: '#FF6B6B' };
+    const recovery = displayMetrics?.recovery || displayMetrics?.readiness || 50;
     
-    const recovery = metrics.recovery;
     if (recovery >= 67) {
       return { text: 'PUSH', color: '#4ECDC4' }; // Encouraging green
     } else if (recovery >= 34) {
@@ -53,17 +66,6 @@ const WearablesMetricsCard = ({
       <View style={[styles.container, styles.loadingContainer, style]}>
         <ActivityIndicator size="large" color={colors.brand.accent} />
         <Text style={styles.loadingText}>Loading metrics...</Text>
-      </View>
-    );
-  }
-
-  if (!metrics) {
-    return (
-      <View style={[styles.container, styles.emptyContainer, style]}>
-        <Text style={styles.emptyTitle}>No Data Available</Text>
-        <Text style={styles.emptyText}>
-          Connect your {vendor === 'whoop' ? 'WHOOP' : 'Oura'} device to see metrics
-        </Text>
       </View>
     );
   }
@@ -105,7 +107,7 @@ const WearablesMetricsCard = ({
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.title}>Your Plan</Text>
-          <Text style={styles.date}>{formatDate(metrics.date)}</Text>
+          <Text style={styles.date}>{formatDate(displayMetrics.date)}</Text>
         </View>
         
         {/* Training recommendation badge - text only, no background */}
@@ -148,7 +150,7 @@ const WearablesMetricsCard = ({
               <Text style={styles.metricLabel}>SLEEP</Text>
             </View>
             <MetricRing
-              value={metrics.sleepScore || 0}
+              value={displayMetrics.sleepScore || 0}
               maxValue={100}
               size={90}
               strokeWidth={8}
@@ -158,7 +160,7 @@ const WearablesMetricsCard = ({
               showLabel={false}
             />
             <Text style={styles.metricValue}>
-              {metrics.sleepScore ? `${metrics.sleepScore}%` : '--'}
+              {displayMetrics.sleepScore ? `${displayMetrics.sleepScore}%` : '--'}
             </Text>
           </View>
 
@@ -168,7 +170,7 @@ const WearablesMetricsCard = ({
               <Text style={styles.metricLabel}>{getRecoveryLabel().toUpperCase()}</Text>
             </View>
             <MetricRing
-              value={metrics.recovery || 0}
+              value={displayMetrics.recovery || displayMetrics.readiness || 0}
               maxValue={100}
               size={90}
               strokeWidth={8}
@@ -178,7 +180,7 @@ const WearablesMetricsCard = ({
               showLabel={false}
             />
             <Text style={styles.metricValue}>
-              {metrics.recovery ? `${metrics.recovery}%` : '--'}
+              {displayMetrics.recovery || displayMetrics.readiness ? `${displayMetrics.recovery || displayMetrics.readiness}%` : '--'}
             </Text>
           </View>
 
@@ -189,7 +191,7 @@ const WearablesMetricsCard = ({
             </View>
             <View style={styles.strainContainer}>
               <Text style={[styles.largeMetricValue, { color: metricColors.strain }]}>
-                {metrics.strain || '--'}
+                {displayMetrics.strain || displayMetrics.activity || '--'}
               </Text>
               {vendor === 'whoop' && (
                 <View style={[styles.strainBar, { backgroundColor: metricColors.strain + '20' }]}>
@@ -197,7 +199,7 @@ const WearablesMetricsCard = ({
                     style={[
                       styles.strainFill, 
                       { 
-                        width: `${Math.min((metrics.strain || 0) / 21 * 100, 100)}%`,
+                        width: `${Math.min((displayMetrics.strain || 0) / 21 * 100, 100)}%`,
                         backgroundColor: metricColors.strain 
                       }
                     ]} 
@@ -214,7 +216,7 @@ const WearablesMetricsCard = ({
           <View style={styles.vitalCard}>
             <Text style={styles.vitalLabel}>Resting HR</Text>
             <Text style={[styles.vitalValue, { color: metricColors.hr }]}>
-              {metrics.restingHR || '--'}
+              {displayMetrics.restingHR || '--'}
             </Text>
             <Text style={styles.vitalUnit}>bpm</Text>
           </View>
@@ -223,7 +225,7 @@ const WearablesMetricsCard = ({
           <View style={styles.vitalCard}>
             <Text style={styles.vitalLabel}>HRV</Text>
             <Text style={[styles.vitalValue, { color: metricColors.hrv }]}>
-              {metrics.hrv || '--'}
+              {displayMetrics.hrv || '--'}
             </Text>
             <Text style={styles.vitalUnit}>ms</Text>
           </View>
@@ -232,7 +234,7 @@ const WearablesMetricsCard = ({
           <View style={styles.vitalCard}>
             <Text style={styles.vitalLabel}>Resp Rate</Text>
             <Text style={[styles.vitalValue, { color: metricColors.respRate }]}>
-              {metrics.respRate || '--'}
+              {displayMetrics.respRate || '--'}
             </Text>
             <Text style={styles.vitalUnit}>rpm</Text>
           </View>
@@ -242,9 +244,9 @@ const WearablesMetricsCard = ({
       {/* Data source indicator */}
       <View style={styles.footer}>
         <View style={styles.sourceIndicator}>
-          <View style={[styles.sourceDot, { backgroundColor: colors.metrics.breath }]} />
+          <View style={[styles.sourceDot, { backgroundColor: metrics ? colors.metrics.breath : colors.text.tertiary }]} />
           <Text style={styles.sourceText}>
-            Live from {vendor === 'whoop' ? 'WHOOP' : 'Oura Ring'}
+            {metrics ? `Live from ${vendor === 'whoop' ? 'WHOOP' : 'Oura Ring'}` : 'Sample data'}
           </Text>
         </View>
       </View>
