@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-const SpO2Display = ({ data, isConnected }) => {
+const SpO2Display = ({ data = {}, isConnected }) => {
   const getStatusColor = (spo2) => {
     if (!spo2) return '#9CA3AF';
     if (spo2 >= 95) return '#10B981'; // Green
@@ -35,11 +35,11 @@ const SpO2Display = ({ data, isConnected }) => {
       </View>
       
       <View style={styles.valueContainer}>
-        <Text style={[styles.value, { color: getStatusColor(data.spo2) }]}>
-          {data.spo2 ? `${data.spo2}%` : '--'}
+        <Text style={[styles.value, { color: getStatusColor(data?.spo2) }]}>
+          {data?.spo2 ? `${data.spo2}%` : '--'}
         </Text>
-        <Text style={[styles.status, { color: getStatusColor(data.spo2) }]}>
-          {getStatusText(data.spo2)}
+        <Text style={[styles.status, { color: getStatusColor(data?.spo2) }]}>
+          {getStatusText(data?.spo2)}
         </Text>
       </View>
 
@@ -48,20 +48,20 @@ const SpO2Display = ({ data, isConnected }) => {
         <View style={styles.statusRow}>
           <Text style={styles.statusLabel}>Finger:</Text>
           <Text style={[styles.statusValue, { 
-            color: data.isFingerDetected ? '#10B981' : '#EF4444' 
+            color: data?.isFingerDetected ? '#10B981' : '#EF4444' 
           }]}>
-            {data.isFingerDetected ? 'Detected' : 'Not Detected'}
+            {data?.isFingerDetected ? 'Detected' : 'Not Detected'}
           </Text>
         </View>
         
         <View style={styles.statusRow}>
           <Text style={styles.statusLabel}>Signal:</Text>
           <Text style={styles.statusValue}>
-            {getSignalStrengthText(data.signalStrength)}
+            {getSignalStrengthText(data?.signalStrength)}
           </Text>
         </View>
 
-        {data.perfusionIndex !== null && data.perfusionIndex !== undefined && (
+        {data?.perfusionIndex !== null && data?.perfusionIndex !== undefined && (
           <View style={styles.statusRow}>
             <Text style={styles.statusLabel}>Perfusion Index:</Text>
             <Text style={[styles.statusValue, {
@@ -73,7 +73,7 @@ const SpO2Display = ({ data, isConnected }) => {
           </View>
         )}
 
-        {data.isSearchingForPulse && (
+        {data?.isSearchingForPulse && (
           <View style={styles.statusRow}>
             <Text style={[styles.statusValue, { color: '#F59E0B' }]}>
               Searching for pulse...
@@ -81,7 +81,7 @@ const SpO2Display = ({ data, isConnected }) => {
           </View>
         )}
 
-        {data.isMotionDetected && (
+        {data?.isMotionDetected && (
           <View style={styles.statusRow}>
             <Text style={[styles.statusValue, { color: '#F59E0B' }]}>
               Motion detected - Please hold still
@@ -89,7 +89,7 @@ const SpO2Display = ({ data, isConnected }) => {
           </View>
         )}
 
-        {data.isLowPerfusion && (
+        {data?.isLowPerfusion && (
           <View style={styles.statusRow}>
             <Text style={[styles.statusValue, { color: '#EF4444' }]}>
               Low perfusion - Adjust finger position
@@ -98,7 +98,7 @@ const SpO2Display = ({ data, isConnected }) => {
         )}
       </View>
       
-      {data.timestamp && (
+      {data?.timestamp && (
         <Text style={styles.timestamp}>
           Last updated: {new Date(data.timestamp).toLocaleTimeString()}
         </Text>

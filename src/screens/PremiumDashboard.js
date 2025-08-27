@@ -36,129 +36,8 @@ import { supabase } from '../config/supabase';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-// Mock historical data for two weeks
-const mockHistoricalData = {
-  '2025-08-12': {
-    sleepScore: 82,
-    recovery: 71,
-    strain: 8.3,
-    restingHR: 52,
-    hrv: 89,
-    respRate: 16.2
-  },
-  '2025-08-13': {
-    sleepScore: 75,
-    recovery: 65,
-    strain: 12.1,
-    restingHR: 54,
-    hrv: 85,
-    respRate: 16.8
-  },
-  '2025-08-14': {
-    sleepScore: 91,
-    recovery: 88,
-    strain: 6.7,
-    restingHR: 49,
-    hrv: 102,
-    respRate: 15.9
-  },
-  '2025-08-15': {
-    sleepScore: 68,
-    recovery: 52,
-    strain: 14.5,
-    restingHR: 56,
-    hrv: 76,
-    respRate: 17.1
-  },
-  '2025-08-16': {
-    sleepScore: 85,
-    recovery: 79,
-    strain: 9.2,
-    restingHR: 51,
-    hrv: 94,
-    respRate: 16.4
-  },
-  '2025-08-17': {
-    sleepScore: 73,
-    recovery: 61,
-    strain: 15.8,
-    restingHR: 55,
-    hrv: 81,
-    respRate: 16.9
-  },
-  '2025-08-18': {
-    sleepScore: 88,
-    recovery: 84,
-    strain: 4.3,
-    restingHR: 50,
-    hrv: 98,
-    respRate: 16.0
-  },
-  '2025-08-19': {
-    sleepScore: 79,
-    recovery: 72,
-    strain: 10.6,
-    restingHR: 53,
-    hrv: 91,
-    respRate: 16.5
-  },
-  '2025-08-20': {
-    sleepScore: 71,
-    recovery: 58,
-    strain: 13.9,
-    restingHR: 57,
-    hrv: 78,
-    respRate: 17.3
-  },
-  '2025-08-21': {
-    sleepScore: 86,
-    recovery: 81,
-    strain: 7.4,
-    restingHR: 50,
-    hrv: 95,
-    respRate: 16.1
-  },
-  '2025-08-22': {
-    sleepScore: 92,
-    recovery: 90,
-    strain: 5.2,
-    restingHR: 48,
-    hrv: 105,
-    respRate: 15.7
-  },
-  '2025-08-23': {
-    sleepScore: 64,
-    recovery: 45,
-    strain: 16.7,
-    restingHR: 58,
-    hrv: 72,
-    respRate: 17.5
-  },
-  '2025-08-24': {
-    sleepScore: 77,
-    recovery: 68,
-    strain: 11.3,
-    restingHR: 53,
-    hrv: 87,
-    respRate: 16.7
-  },
-  '2025-08-25': {
-    sleepScore: 83,
-    recovery: 75,
-    strain: 8.9,
-    restingHR: 52,
-    hrv: 92,
-    respRate: 16.3
-  },
-  '2025-08-26': {
-    sleepScore: 78,
-    recovery: 66,
-    strain: 5.1,
-    restingHR: 51,
-    hrv: 96,
-    respRate: 17.8
-  }
-};
+// Mock historical data - NO LONGER USED (using real data from whoop_data/oura_data tables)
+// Entire mock data object removed - now fetching real data from Supabase
 
 const PremiumDashboard = ({ navigation }) => {
   const [sessionInfo, setSessionInfo] = useState(EnhancedSessionManager.getSessionInfo());
@@ -229,40 +108,39 @@ const PremiumDashboard = ({ navigation }) => {
       const day = String(selectedDate.getDate()).padStart(2, '0');
       const dateKey = `${year}-${month}-${day}`;
       
-      console.log('Loading metrics for date:', dateKey); // Debug log
+      console.log('Loading real metrics for date:', dateKey); // Debug log
       
-      // Check if we have mock data for this date
-      if (mockHistoricalData[dateKey]) {
-        const mockData = mockHistoricalData[dateKey];
-        console.log('Found mock data:', mockData); // Debug log
+      // Try to get real data first
+      const metrics = await WearablesDataService.getCombinedMetrics(user?.id, dateKey);
+      
+      if (metrics) {
+        console.log('Found real data:', metrics); // Debug log
         
-        // Force a complete update of the metrics
+        // Use the real data
         setWearableMetrics({
-          sleepScore: mockData.sleepScore,
-          recovery: mockData.recovery,
-          strain: mockData.strain,
-          restingHR: mockData.restingHR,
-          hrv: mockData.hrv,
-          respRate: mockData.respRate,
-          vendor: selectedVendor || 'whoop',
+          sleepScore: metrics.sleep_score,
+          recovery: metrics.recovery,
+          readiness: metrics.readiness,
+          strain: metrics.strain,
+          activity: metrics.activity,
+          restingHR: metrics.resting_hr,
+          hrv: metrics.hrv,
+          respRate: metrics.resp_rate,
+          vendor: metrics.vendor || selectedVendor || 'whoop',
           date: dateKey
         });
         
-        if (!selectedVendor) {
-          setSelectedVendor('whoop');
+        if (!selectedVendor && metrics.vendor) {
+          setSelectedVendor(metrics.vendor === 'both' ? 'whoop' : metrics.vendor);
         }
       } else {
-        console.log('No mock data for date:', dateKey); // Debug log
-        // Fall back to real data for dates not in mock
-        const metrics = await WearablesDataService.getLatestMetrics(user?.id, selectedVendor);
-        setWearableMetrics(metrics);
-        
-        if (metrics && !selectedVendor) {
-          setSelectedVendor(metrics.vendor);
-        }
+        console.log('No real data found for date:', dateKey); // Debug log
+        // No real data available, clear the metrics
+        setWearableMetrics(null);
       }
     } catch (error) {
       console.error('Error loading wearable metrics:', error);
+      setWearableMetrics(null);
     } finally {
       setIsLoadingMetrics(false);
     }
@@ -513,22 +391,6 @@ const PremiumDashboard = ({ navigation }) => {
             </PremiumCard>
           </View>
           
-          {/* Adaptive Training Button */}
-          <View style={styles.metricsSection}>
-            <TouchableOpacity onPress={() => navigation.navigate('IHHTTraining')}>
-              <PremiumCard>
-                <View style={styles.trainingButtonContainer}>
-                  <Text style={styles.cardTitle}>Adaptive Training</Text>
-                  <Text style={styles.cardSubtitle}>Start AI-guided IHHT session with real-time adjustments</Text>
-                  <PremiumButton 
-                    title="Begin Session" 
-                    onPress={() => navigation.navigate('IHHTTraining')}
-                    variant="primary"
-                  />
-                </View>
-              </PremiumCard>
-            </TouchableOpacity>
-          </View>
           
           {renderNotesCard()}
           

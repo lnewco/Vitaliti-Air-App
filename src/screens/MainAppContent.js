@@ -13,7 +13,6 @@ import SimplifiedSessionSetup from './SimplifiedSessionSetup';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import PremiumProfileScreen from './PremiumProfileScreen';
-import IntegrationsScreen from './IntegrationsScreen';
 import SessionRecoveryManager from '../components/SessionRecoveryManager';
 import SafeIcon from '../components/base/SafeIcon';
 import FloatingTabBar from '../design-system/components/FloatingTabBar';
@@ -152,14 +151,6 @@ const MainStack = ({ onNavigateToSession }) => {
         }}
       />
       
-      <Stack.Screen 
-        name="Integrations" 
-        component={IntegrationsScreen}
-        options={{
-          presentation: 'card',
-          title: 'Integrations',
-        }}
-      />
     </Stack.Navigator>
   );
 };

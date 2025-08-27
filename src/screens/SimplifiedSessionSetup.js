@@ -32,6 +32,12 @@ import OptimizedConnectionManager from '../components/OptimizedConnectionManager
 import SessionIdGenerator from '../utils/sessionIdGenerator';
 import DatabaseService from '../services/DatabaseService';
 import SupabaseService from '../services/SupabaseService';
+import Constants from 'expo-constants';
+
+// PRODUCTION NOTE: This flag disables Bluetooth requirement for Expo Go testing
+// TODO: Set to false before production build or when testing with development builds
+// When false, the app will require Bluetooth connection to start training
+const ALLOW_DEMO_MODE = __DEV__ && Constants.appOwnership === 'expo';
 
 const SimplifiedSessionSetup = ({ navigation }) => {
   const { isPulseOxConnected, isAnyDeviceConnected } = useBluetoothConnection();
@@ -47,14 +53,20 @@ const SimplifiedSessionSetup = ({ navigation }) => {
   };
 
   const handleStartSession = async () => {
-    // Check if pulse oximeter is connected
-    if (!isPulseOxConnected) {
+    // PRODUCTION NOTE: Bluetooth check is bypassed in Expo Go for testing
+    // This check MUST be enabled for production builds
+    if (!ALLOW_DEMO_MODE && !isPulseOxConnected) {
       Alert.alert(
         'Pulse Oximeter Required',
         'Please connect a pulse oximeter before starting the session.',
         [{ text: 'OK' }]
       );
       return;
+    }
+    
+    // Log warning if starting without device in demo mode
+    if (ALLOW_DEMO_MODE && !isPulseOxConnected) {
+      console.warn('[DEMO MODE] Starting session without pulse oximeter - for testing only');
     }
 
     setIsStartingSession(true);
@@ -133,9 +145,9 @@ const SimplifiedSessionSetup = ({ navigation }) => {
             entering={FadeInDown.duration(600).delay(100)}
             style={styles.header}
           >
-            <Text style={styles.title}>Training Protocol</Text>
+            <Text style={styles.title}>Adaptive Training Protocol</Text>
             <Text style={styles.subtitle}>
-              Prepare your body for optimal performance
+              AI-guided session with real-time adjustments for optimal performance
             </Text>
           </Animated.View>
 
@@ -143,7 +155,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
           <Animated.View entering={FadeInDown.duration(600).delay(200)}>
             <PremiumCard style={styles.protocolCard}>
               <View style={styles.protocolHeader}>
-                <Text style={styles.protocolTitle}>IHHT Protocol</Text>
+                <Text style={styles.protocolTitle}>Adaptive IHHT Protocol</Text>
                 <View style={styles.totalTimeBadge}>
                   <Text style={styles.totalTimeText}>{totalSessionTime} MIN</Text>
                 </View>
@@ -183,8 +195,31 @@ const SimplifiedSessionSetup = ({ navigation }) => {
             </PremiumCard>
           </Animated.View>
 
+          {/* Adaptive Features Card */}
+          <Animated.View entering={FadeInDown.duration(600).delay(250)}>
+            <PremiumCard style={styles.adaptiveCard}>
+              <View style={styles.adaptiveHeader}>
+                <Text style={styles.adaptiveTitle}>Adaptive Intelligence Enabled</Text>
+              </View>
+              <View style={styles.adaptiveFeatures}>
+                <View style={styles.adaptiveFeatureRow}>
+                  <View style={styles.adaptiveBullet} />
+                  <Text style={styles.adaptiveFeatureText}>Real-time SpO2 monitoring and altitude adjustments</Text>
+                </View>
+                <View style={styles.adaptiveFeatureRow}>
+                  <View style={styles.adaptiveBullet} />
+                  <Text style={styles.adaptiveFeatureText}>Automatic mask lift guidance when needed</Text>
+                </View>
+                <View style={styles.adaptiveFeatureRow}>
+                  <View style={styles.adaptiveBullet} />
+                  <Text style={styles.adaptiveFeatureText}>Personalized training based on your performance</Text>
+                </View>
+              </View>
+            </PremiumCard>
+          </Animated.View>
+
           {/* Connection Status Card */}
-          <Animated.View entering={FadeInDown.duration(600).delay(300)}>
+          <Animated.View entering={FadeInDown.duration(600).delay(350)}>
             <PremiumCard style={styles.connectionCard}>
               <View style={styles.connectionHeader}>
                 <Text style={styles.connectionTitle}>Device Status</Text>
@@ -221,7 +256,10 @@ const SimplifiedSessionSetup = ({ navigation }) => {
               {!isPulseOxConnected && (
                 <View style={styles.connectionNote}>
                   <Text style={styles.connectionNoteText}>
-                    Connect your pulse oximeter to begin training
+                    {ALLOW_DEMO_MODE 
+                      ? 'Pulse oximeter not connected - Training in demo mode'
+                      : 'Connect your pulse oximeter to begin training'
+                    }
                   </Text>
                 </View>
               )}
@@ -243,7 +281,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
             <PremiumButton
               title={isStartingSession ? 'Starting...' : 'Begin Training'}
               onPress={handleStartSession}
-              disabled={!isPulseOxConnected || isStartingSession}
+              disabled={!ALLOW_DEMO_MODE && !isPulseOxConnected || isStartingSession}
               loading={isStartingSession}
               size="large"
               fullWidth
@@ -378,6 +416,39 @@ const styles = StyleSheet.create({
   },
   connectionCard: {
     marginBottom: spacing.md,
+  },
+  adaptiveCard: {
+    marginBottom: spacing.md,
+  },
+  adaptiveHeader: {
+    marginBottom: spacing.md,
+  },
+  adaptiveTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    fontWeight: '600',
+  },
+  adaptiveFeatures: {
+    gap: spacing.sm,
+  },
+  adaptiveFeatureRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: spacing.xs,
+  },
+  adaptiveBullet: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.metrics.breath,
+    marginRight: spacing.sm,
+    marginTop: 6,
+  },
+  adaptiveFeatureText: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    flex: 1,
+    lineHeight: 18,
   },
   connectionHeader: {
     flexDirection: 'row',
