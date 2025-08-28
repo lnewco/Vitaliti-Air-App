@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import SessionRecoveryModal from './SessionRecoveryModal';
-import EnhancedSessionManager from '../services/EnhancedSessionManager';
+import EnhancedSessionManager from '../services/EnhancedSessionManagerRefactored';
 
 const SessionRecoveryManager = ({ onNavigateToSession }) => {
   const navigation = useNavigation();

@@ -27,7 +27,7 @@ import {
   PremiumCard,
   PremiumButton,
 } from '../design-system';
-import EnhancedSessionManager from '../services/EnhancedSessionManager';
+import EnhancedSessionManager from '../services/EnhancedSessionManagerRefactored';
 import WearablesDataService from '../services/WearablesDataService';
 import WearablesMetricsCard from '../components/WearablesMetricsCard';
 import { useAuth } from '../auth/AuthContext';

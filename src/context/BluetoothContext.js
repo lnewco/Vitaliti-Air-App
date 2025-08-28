@@ -34,7 +34,7 @@ if (isExpoGo) {
   BluetoothService = createMockBluetoothService();
 } else {
   try {
-    BluetoothService = require('../services/BluetoothService').default;
+    BluetoothService = require('../services/BluetoothServiceRefactored').default;
   } catch (error) {
     console.log('📱 BluetoothService not available - using mock service');
     BluetoothService = createMockBluetoothService();
