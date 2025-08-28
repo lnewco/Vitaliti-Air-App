@@ -34,8 +34,33 @@ const IntegrationsScreen = ({ navigation }) => {
     if (user?.id) {
       checkConnections();
       setupDeepLinkHandler();
+      updateUserTimezone();
     }
   }, [user]);
+
+  // Update user's timezone for proper sync scheduling
+  const updateUserTimezone = async () => {
+    try {
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      console.log('🌎 Updating user timezone:', userTimezone);
+      
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ 
+          timezone: userTimezone,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+      
+      if (error) {
+        console.error('❌ Error updating timezone:', error);
+      } else {
+        console.log('✅ User timezone updated');
+      }
+    } catch (error) {
+      console.error('❌ Failed to update timezone:', error);
+    }
+  };
 
   // Setup deep link handler for OAuth callbacks
   const setupDeepLinkHandler = () => {
@@ -103,12 +128,15 @@ const IntegrationsScreen = ({ navigation }) => {
         // Pass state for validation, handleCallback will extract userId from stored state
         const result = await WhoopService.handleCallback(code, state);
         
-        // Use the current user's ID for initial sync
-        await WhoopService.performInitialSync(user.id);
+        // Initial sync is now handled automatically in handleCallback
+        console.log('✅ Whoop OAuth completed, initial sync done');
         
-        Alert.alert('Success', 'Whoop connected successfully! Fetching your data...');
+        Alert.alert(
+          'Success', 
+          'Whoop connected successfully! We\'ve fetched your last 30 days of data.'
+        );
         await AsyncStorage.removeItem('pending_oauth_vendor');
-        checkConnections();
+        await checkConnections();
       } else if (vendor === 'oura' && code) {
         console.log('💍 Handling Oura callback with state:', state);
         setSyncing(true);
@@ -116,12 +144,15 @@ const IntegrationsScreen = ({ navigation }) => {
         // Pass state for validation, handleCallback will extract userId from stored state
         const result = await OuraService.handleCallback(code, state);
         
-        // Use the current user's ID for initial sync
-        await OuraService.performInitialSync(user.id);
+        // Initial sync is now handled automatically in handleCallback
+        console.log('✅ Oura OAuth completed, initial sync done');
         
-        Alert.alert('Success', 'Oura connected successfully! Fetching your data...');
+        Alert.alert(
+          'Success', 
+          'Oura connected successfully! We\'ve fetched your last 30 days of data.'
+        );
         await AsyncStorage.removeItem('pending_oauth_vendor');
-        checkConnections();
+        await checkConnections();
       }
     } catch (error) {
       console.error('Deep link handling error:', error);
@@ -134,41 +165,62 @@ const IntegrationsScreen = ({ navigation }) => {
   const checkConnections = async () => {
     try {
       setLoading(true);
+      console.log('🔍 Checking connection status for user:', user.id);
       
-      // Check user profile for connection status
-      const { data: profileData } = await supabase
+      // Check user profile for ACTUAL connection status and token validity
+      const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
-        .select('whoop_connected, oura_connected')
+        .select('whoop_connected, oura_connected, whoop_token_expires_at, oura_token_expires_at, whoop_last_sync, oura_last_sync')
         .eq('user_id', user.id)
         .single();
 
-      // Check for recent sync data
-      const { data: whoopData } = await supabase
-        .from('whoop_data')
-        .select('created_at, date')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
+      if (profileError) {
+        console.error('❌ Error fetching profile:', profileError);
+      }
 
-      const { data: ouraData } = await supabase
-        .from('oura_data')
-        .select('created_at, date')
+      // Check sync history for REAL last sync times
+      const { data: syncHistory, error: syncError } = await supabase
+        .from('sync_history')
+        .select('sync_time, vendor, status, records_synced, completed_at')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .in('vendor', ['whoop', 'oura'])
+        .eq('status', 'completed')
+        .order('sync_time', { ascending: false });
+
+      if (syncError) {
+        console.error('❌ Error fetching sync history:', syncError);
+      }
+
+      // Get the most recent successful sync for each vendor
+      const whoopLastSync = syncHistory?.find(s => s.vendor === 'whoop');
+      const ouraLastSync = syncHistory?.find(s => s.vendor === 'oura');
+
+      // Validate token expiry - if expired, mark as disconnected
+      const now = new Date();
+      const whoopTokenValid = profileData?.whoop_token_expires_at ? 
+        new Date(profileData.whoop_token_expires_at) > now : false;
+      const ouraTokenValid = profileData?.oura_token_expires_at ? 
+        new Date(profileData.oura_token_expires_at) > now : false;
+
+      console.log('📁 Connection status:', {
+        whoopConnected: profileData?.whoop_connected && whoopTokenValid,
+        ouraConnected: profileData?.oura_connected && ouraTokenValid,
+        whoopLastSync: whoopLastSync?.sync_time,
+        ouraLastSync: ouraLastSync?.sync_time
+      });
 
       setConnections({
-        whoop: profileData?.whoop_connected || false,
-        oura: profileData?.oura_connected || false,
+        whoop: (profileData?.whoop_connected && whoopTokenValid) || false,
+        oura: (profileData?.oura_connected && ouraTokenValid) || false,
       });
 
       setLastSync({
-        whoop: whoopData?.[0]?.created_at || null,
-        oura: ouraData?.[0]?.created_at || null,
+        whoop: whoopLastSync?.sync_time || profileData?.whoop_last_sync || null,
+        oura: ouraLastSync?.sync_time || profileData?.oura_last_sync || null,
       });
 
     } catch (error) {
-      console.error('Error checking connections:', error);
+      console.error('❌ Error checking connections:', error);
     } finally {
       setLoading(false);
     }
@@ -251,18 +303,34 @@ const IntegrationsScreen = ({ navigation }) => {
   const handleManualSync = async (vendor) => {
     try {
       setSyncing(true);
+      console.log(`🔄 Manual sync requested for ${vendor}`);
       
+      let result;
       if (vendor === 'Whoop') {
-        await WhoopService.performDailySync(user.id);
+        result = await WhoopService.syncNow(user.id);
       } else if (vendor === 'Oura') {
-        await OuraService.performDailySync(user.id);
+        result = await OuraService.syncNow(user.id);
       }
       
-      Alert.alert('Success', `${vendor} data synced successfully`);
-      checkConnections();
+      console.log(`📋 Sync result:`, result);
+      
+      if (result?.success) {
+        const message = result.recordsCount > 0 
+          ? `${vendor} synced successfully! ${result.recordsCount} records updated.`
+          : `${vendor} is already up to date.`;
+        Alert.alert('Success', message);
+      } else {
+        throw new Error(result?.error || 'Unknown sync error');
+      }
+      
+      // Refresh connection status to show new sync time
+      await checkConnections();
     } catch (error) {
-      console.error(`Error syncing ${vendor}:`, error);
-      Alert.alert('Sync Error', `Failed to sync ${vendor} data. Please try again.`);
+      console.error(`❌ Error syncing ${vendor}:`, error);
+      Alert.alert(
+        'Sync Error', 
+        `Failed to sync ${vendor} data: ${error.message}\n\nPlease check your connection and try again.`
+      );
     } finally {
       setSyncing(false);
     }
