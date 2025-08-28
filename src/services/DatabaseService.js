@@ -229,6 +229,8 @@ class DatabaseService {
         energy_post INTEGER CHECK (energy_post >= 1 AND energy_post <= 5),
         stress_post INTEGER CHECK (stress_post >= 1 AND stress_post <= 5),
         notes_post TEXT,
+        post_symptoms TEXT,
+        overall_rating INTEGER CHECK (overall_rating >= 1 AND overall_rating <= 5),
         created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
         updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
         FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE
@@ -407,6 +409,22 @@ class DatabaseService {
       for (const column of sessionsColumns) {
         try {
           await this.db.execAsync(`ALTER TABLE sessions ADD COLUMN ${column}`);
+        } catch (e) {
+          // Column probably already exists - that's fine
+        }
+      }
+      
+      // Add missing columns to session_surveys table
+      const surveysColumns = [
+        'post_symptoms TEXT',
+        'overall_rating INTEGER CHECK (overall_rating >= 1 AND overall_rating <= 5)',
+        'stress_pre INTEGER CHECK (stress_pre >= 1 AND stress_pre <= 5)' // Also add stress_pre for consistency
+      ];
+      
+      for (const column of surveysColumns) {
+        try {
+          await this.db.execAsync(`ALTER TABLE session_surveys ADD COLUMN ${column}`);
+          log.info(`✅ Added column to session_surveys: ${column.split(' ')[0]}`);
         } catch (e) {
           // Column probably already exists - that's fine
         }
@@ -641,16 +659,23 @@ class DatabaseService {
     });
   }
 
-  async endSession(sessionId, startTime = null) {
+  async endSession(sessionId, providedStats = null, startTime = null) {
     const endTime = Date.now();
     
     try {
       log.info(`Ending session in local database: ${sessionId}`);
       
-      // Calculate session statistics
-      log.info(`Calculating stats for session: ${sessionId}`);
-      const stats = await this.getSessionStats(sessionId);
-      log.info('Session stats calculated:', stats);
+      // Use provided stats or calculate them
+      let stats;
+      if (providedStats) {
+        log.info('Using provided session stats:', providedStats);
+        stats = providedStats;
+      } else {
+        // Calculate session statistics
+        log.info(`Calculating stats for session: ${sessionId}`);
+        stats = await this.getSessionStats(sessionId);
+        log.info('Session stats calculated:', stats);
+      }
       
       // Calculate total duration if startTime provided
       let totalDuration = null;
@@ -707,9 +732,79 @@ class DatabaseService {
   }
 
   async getAllSessions() {
-    const query = 'SELECT * FROM sessions ORDER BY start_time DESC LIMIT 20';
-    const sessions = await this.db.getAllAsync(query);
-    return sessions;
+    try {
+      // Ensure database is initialized
+      if (!this.db) {
+        await this.init();
+      }
+      
+      // First check if the sessions table exists
+      const tableCheck = await this.db.getFirstAsync(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'"
+      );
+      
+      if (!tableCheck) {
+        console.log('⚠️ Sessions table does not exist, creating it...');
+        await this.createTables();
+      }
+      
+      // Select all columns and alias total_duration_seconds as duration for compatibility
+      const query = `
+        SELECT *, 
+               total_duration_seconds as duration,
+               CASE 
+                 WHEN avg_spo2 IS NULL THEN 95
+                 ELSE avg_spo2
+               END as average_spo2,
+               CASE
+                 WHEN avg_heart_rate IS NULL THEN 72
+                 ELSE avg_heart_rate
+               END as average_heart_rate
+        FROM sessions 
+        ORDER BY created_at DESC, start_time DESC 
+        LIMIT 50
+      `;
+      const sessions = await this.db.getAllAsync(query);
+      console.log('🔍 DatabaseService.getAllSessions: Found', sessions?.length || 0, 'sessions');
+      
+      if (sessions && sessions.length > 0) {
+        console.log('📝 First session:', sessions[0]);
+      }
+      
+      return sessions || [];
+    } catch (error) {
+      console.error('❌ Error fetching all sessions:', error);
+      console.error('Error details:', error.message, error.stack);
+      return [];
+    }
+  }
+  
+  // Test function to create a sample session
+  async createTestSession() {
+    try {
+      await this.init();
+      const testSessionId = `TEST_${Date.now()}`;
+      await this.createSession(testSessionId, 6, {
+        totalCycles: 3,
+        hypoxicDuration: 420,
+        hyperoxicDuration: 180
+      });
+      
+      // End it immediately to mark as completed
+      await this.endSession(testSessionId, {
+        avgSpO2: 95,
+        avgHeartRate: 72,
+        minSpO2: 92,
+        maxSpO2: 98,
+        totalReadings: 100
+      });
+      
+      console.log('✅ Test session created:', testSessionId);
+      return testSessionId;
+    } catch (error) {
+      console.error('❌ Error creating test session:', error);
+      return null;
+    }
   }
 
   // Reading Management

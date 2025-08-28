@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   StatusBar,
   Dimensions,
   Image,
+  RefreshControl,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -22,14 +24,17 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CommonActions } from '@react-navigation/native';
+import { CommonActions, useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../auth/AuthContext';
 import { colors, typography, spacing, PremiumCard, PremiumButton } from '../design-system';
+import DatabaseService from '../services/DatabaseService';
+import SupabaseService from '../services/SupabaseService';
+import SessionDetailsModal from '../components/SessionDetailsModal';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-const PremiumProfileScreen = ({ navigation }) => {
+const PremiumProfileScreen = ({ navigation, route }) => {
   const { user, signOut } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [userName, setUserName] = useState(null);
@@ -40,11 +45,25 @@ const PremiumProfileScreen = ({ navigation }) => {
     streak: 0,
   });
   const scrollY = useSharedValue(0);
+  
+  // Session history states
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [sessionData, setSessionData] = useState(null);
 
   useEffect(() => {
     fetchUserProfile();
     fetchUserStats();
   }, [user]);
+  
+  // Load sessions on focus
+  useFocusEffect(
+    useCallback(() => {
+      loadSessions();
+    }, [])
+  );
 
   const fetchUserProfile = async () => {
     if (!user?.id) {
@@ -71,12 +90,165 @@ const PremiumProfileScreen = ({ navigation }) => {
   };
 
   const fetchUserStats = async () => {
-    // Mock stats for now
-    setUserStats({
-      sessionsCompleted: 42,
-      totalMinutes: 1260,
-      streak: 7,
-    });
+    try {
+      // Initialize database first
+      await DatabaseService.init();
+      
+      // Get real stats from database
+      const allSessions = await DatabaseService.getAllSessions();
+      const completedSessions = allSessions.filter(s => s.status === 'completed');
+      
+      // Calculate total minutes from completed sessions
+      const totalSeconds = completedSessions.reduce((total, session) => {
+        if (session.duration && typeof session.duration === 'string') {
+          const parts = session.duration.split(':').map(p => parseInt(p, 10));
+          if (parts.length === 3) {
+            return total + (parts[0] * 3600 + parts[1] * 60 + parts[2]);
+          }
+        }
+        return total;
+      }, 0);
+      
+      setUserStats({
+        sessionsCompleted: completedSessions.length,
+        totalMinutes: Math.floor(totalSeconds / 60),
+        streak: calculateStreak(completedSessions),
+      });
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+      // Use default values on error
+      setUserStats({
+        sessionsCompleted: 0,
+        totalMinutes: 0,
+        streak: 0,
+      });
+    }
+  };
+  
+  const calculateStreak = (sessions) => {
+    if (!sessions || sessions.length === 0) return 0;
+    
+    // Sort sessions by date (newest first)
+    const sortedSessions = sessions.sort((a, b) => 
+      new Date(b.start_time) - new Date(a.start_time)
+    );
+    
+    let streak = 0;
+    let currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    
+    for (const session of sortedSessions) {
+      const sessionDate = new Date(session.start_time);
+      sessionDate.setHours(0, 0, 0, 0);
+      
+      const dayDiff = Math.floor((currentDate - sessionDate) / (1000 * 60 * 60 * 24));
+      
+      if (dayDiff <= streak) {
+        streak = Math.max(streak, dayDiff + 1);
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  };
+  
+  const createTestSession = async () => {
+    try {
+      console.log('🧪 Creating test session...');
+      const testId = await DatabaseService.createTestSession();
+      if (testId) {
+        console.log('✅ Test session created successfully');
+        // Reload sessions
+        loadSessions();
+      }
+    } catch (error) {
+      console.error('❌ Failed to create test session:', error);
+    }
+  };
+  
+  const loadSessions = async () => {
+    try {
+      setLoading(true);
+      console.log('🔄 Starting to load sessions...');
+      
+      // Initialize database first
+      await DatabaseService.init();
+      
+      // Try to sync from Supabase but don't fail if it doesn't work
+      try {
+        console.log('🔄 Attempting to sync sessions from Supabase...');
+        const syncResult = await SupabaseService.syncSessionsToLocalDatabase();
+        if (syncResult.success && syncResult.count > 0) {
+          console.log(`✅ Synced ${syncResult.count} sessions from Supabase`);
+        } else if (!syncResult.success) {
+          console.log('⚠️ Sync failed but continuing with local data:', syncResult.error);
+        }
+      } catch (syncError) {
+        console.log('⚠️ Could not sync from Supabase, using local data only:', syncError.message);
+      }
+      
+      // Always try to fetch sessions from local database regardless of sync result
+      const localSessions = await DatabaseService.getAllSessions();
+      console.log('📊 Loaded sessions from database:', localSessions?.length || 0, 'sessions');
+      
+      if (localSessions && localSessions.length > 0) {
+        // Sort by date (newest first) - handle both timestamp formats
+        const sortedSessions = localSessions.sort((a, b) => {
+          // Convert timestamps to milliseconds if needed
+          const getTime = (session) => {
+            const time = session.start_time || session.created_at;
+            // If it's a Unix timestamp in seconds, convert to milliseconds
+            if (time && time < 10000000000) {
+              return time * 1000;
+            }
+            return time || 0;
+          };
+          
+          const dateA = getTime(a);
+          const dateB = getTime(b);
+          return dateB - dateA;
+        });
+        
+        setSessions(sortedSessions);
+        console.log('✅ Sessions set in state:', sortedSessions.length);
+        console.log('📝 First session in list:', sortedSessions[0]);
+      } else {
+        setSessions([]);
+        console.log('ℹ️ No sessions found in database');
+      }
+      
+      // Also update stats when loading sessions
+      fetchUserStats();
+      
+    } catch (error) {
+      console.error('❌ Failed to load sessions:', error);
+      setSessions([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+  
+  const loadSessionDetails = async (sessionId) => {
+    try {
+      setModalVisible(true);
+      const sessionData = await DatabaseService.getSessionWithDetails(sessionId);
+      
+      if (sessionData) {
+        setSessionData(sessionData);
+      } else {
+        if (modalVisible) {
+          setModalVisible(false);
+          Alert.alert('Error', 'Session data not found');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load session details:', error);
+      if (modalVisible) {
+        Alert.alert('Error', 'Failed to load session details');
+      }
+    }
   };
 
   const formatPhoneNumber = (phone) => {
@@ -142,13 +314,7 @@ const PremiumProfileScreen = ({ navigation }) => {
     );
   };
 
-  const profileActions = [
-    { id: 'integrations', title: 'Integrations', icon: '⚡', onPress: () => navigation.navigate('Integrations') },
-    { id: 'history', title: 'Session History', icon: '📊', onPress: () => navigation.navigate('SessionHistory') },
-    { id: 'settings', title: 'Settings', icon: '⚙️', onPress: () => {} },
-    { id: 'support', title: 'Support', icon: '💬', onPress: () => {} },
-    { id: 'about', title: 'About', icon: 'ℹ️', onPress: () => {} },
-  ];
+  // Profile actions moved to Settings screen
 
   const renderHeader = () => (
     <Animated.View style={[styles.header, headerAnimatedStyle]}>
@@ -158,7 +324,10 @@ const PremiumProfileScreen = ({ navigation }) => {
           style={styles.logoImage}
           resizeMode="contain"
         />
-        <TouchableOpacity style={styles.settingsButton}>
+        <TouchableOpacity 
+          style={styles.settingsButton}
+          onPress={() => navigation.navigate('Settings')}
+        >
           <Text style={styles.settingsIcon}>⚙️</Text>
         </TouchableOpacity>
       </View>
@@ -191,7 +360,7 @@ const PremiumProfileScreen = ({ navigation }) => {
           ) : (
             <>
               <Text style={styles.userName}>{userName || 'Vitaliti User'}</Text>
-              <Text style={styles.userPhone}>{getUserIdentifier()}</Text>
+              <Text style={styles.userEmail}>{getUserIdentifier()}</Text>
             </>
           )}
         </View>
@@ -216,43 +385,136 @@ const PremiumProfileScreen = ({ navigation }) => {
     </Animated.View>
   );
 
-  const renderActions = () => (
+  // Actions section removed - moved to Settings screen
+
+  const formatDate = (timestamp) => {
+    if (!timestamp) return 'Unknown Date';
+    
+    // Convert Unix timestamp in seconds to milliseconds if needed
+    let dateValue = timestamp;
+    if (timestamp < 10000000000) {
+      dateValue = timestamp * 1000;
+    }
+    
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) {
+      return 'Invalid Date';
+    }
+    
+    // Format: 8/28/2025 2:16 PM
+    return date.toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric', 
+      year: 'numeric'
+    }) + ' ' + date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const formatDuration = (duration) => {
+    if (!duration && duration !== 0) return '0:00';
+    
+    // Handle different duration formats
+    if (typeof duration === 'number') {
+      // If it's seconds as a number
+      const mins = Math.floor(duration / 60);
+      const secs = duration % 60;
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    } else if (typeof duration === 'string') {
+      // If it's already formatted as string (HH:MM:SS or MM:SS)
+      const parts = duration.split(':');
+      if (parts.length === 3) {
+        // HH:MM:SS format - convert to MM:SS
+        const hours = parseInt(parts[0], 10) || 0;
+        const mins = parseInt(parts[1], 10) || 0;
+        const secs = parseInt(parts[2], 10) || 0;
+        const totalMins = (hours * 60) + mins;
+        return `${totalMins}:${secs.toString().padStart(2, '0')}`;
+      } else if (parts.length === 2) {
+        // Already MM:SS format
+        return duration;
+      }
+      // Try to parse as number if no colons
+      const seconds = parseInt(duration);
+      if (!isNaN(seconds)) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+      }
+    }
+    return '0:00';
+  };
+
+  const renderSessionItem = (session) => (
+    <TouchableOpacity
+      key={session.id}
+      onPress={() => loadSessionDetails(session.id)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.sessionItem}>
+        <View style={styles.sessionHeader}>
+          <Text style={styles.sessionDate}>{formatDate(session.start_time)}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: session.status === 'completed' ? colors.semantic.success : session.status === 'active' ? colors.semantic.warning : colors.semantic.error }]}>
+            <Text style={styles.statusText}>{session.status === 'active' ? 'ACTIVE' : session.status === 'completed' ? 'COMPLETED' : session.status?.toUpperCase() || 'IN PROGRESS'}</Text>
+          </View>
+        </View>
+        <View style={styles.sessionStats}>
+          <View style={styles.sessionStat}>
+            <Text style={styles.sessionStatLabel}>DURATION</Text>
+            <Text style={styles.sessionStatValue}>{formatDuration(session.duration)}</Text>
+          </View>
+          <View style={styles.sessionStat}>
+            <Text style={styles.sessionStatLabel}>AVG SPO2</Text>
+            <Text style={styles.sessionStatValue}>{session.average_spo2 || session.avg_spo2 || '95'}%</Text>
+          </View>
+          <View style={styles.sessionStat}>
+            <Text style={styles.sessionStatLabel}>AVG HR</Text>
+            <Text style={styles.sessionStatValue}>{session.average_heart_rate || session.avg_hr || '72'}</Text>
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderSessionHistory = () => (
     <Animated.View entering={FadeInDown.duration(600).delay(200).springify()}>
-      <View style={styles.actionsSection}>
-        {profileActions.map((action, index) => (
-          <TouchableOpacity
-            key={action.id}
-            onPress={action.onPress}
-            activeOpacity={0.7}
-          >
-            <PremiumCard style={styles.actionCard}>
-              <View style={styles.actionContent}>
-                <View style={styles.actionLeft}>
-                  <Text style={styles.actionIcon}>{action.icon}</Text>
-                  <Text style={styles.actionTitle}>{action.title}</Text>
-                </View>
-                <Text style={styles.actionArrow}>›</Text>
-              </View>
-            </PremiumCard>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.sessionHistorySection}>
+        {loading ? (
+          <ActivityIndicator color={colors.brand.primary} style={styles.loader} />
+        ) : sessions.length > 0 ? (
+          <View>
+            {sessions.slice(0, 5).map(renderSessionItem)}
+            {sessions.length > 5 && (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('History')}
+                style={styles.viewAllButton}
+              >
+                <Text style={styles.viewAllText}>View All Sessions ({sessions.length})</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No sessions yet</Text>
+            <Text style={styles.emptyStateSubtext}>Start your first training session to see your progress here</Text>
+            {/* Debug button to create test session */}
+            {__DEV__ && (
+              <TouchableOpacity
+                onPress={createTestSession}
+                style={[styles.debugButton, { marginTop: 20, padding: 10, backgroundColor: colors.brand.accent, borderRadius: 8 }]}
+              >
+                <Text style={{ color: 'white', textAlign: 'center' }}>Create Test Session (Debug)</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
     </Animated.View>
   );
 
-  const renderLogoutSection = () => (
-    <Animated.View entering={FadeInDown.duration(600).delay(400).springify()}>
-      <View style={styles.logoutSection}>
-        <PremiumButton
-          title="Log Out"
-          onPress={handleLogout}
-          loading={isLoggingOut}
-          variant="secondary"
-          style={styles.logoutButton}
-        />
-      </View>
-    </Animated.View>
-  );
+  // Logout section removed - moved to Settings screen
 
   const renderFooter = () => (
     <View style={styles.footer}>
@@ -270,14 +532,33 @@ const PremiumProfileScreen = ({ navigation }) => {
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadSessions();
+              }}
+              tintColor={colors.brand.primary}
+            />
+          }
         >
           <View style={styles.headerSpacer} />
           {renderUserCard()}
-          {renderActions()}
-          {renderLogoutSection()}
+          {renderSessionHistory()}
           {renderFooter()}
         </Animated.ScrollView>
         {renderHeader()}
+        
+        {/* Session Details Modal */}
+        <SessionDetailsModal
+          visible={modalVisible}
+          sessionData={sessionData}
+          onClose={() => {
+            setModalVisible(false);
+            setSessionData(null);
+          }}
+        />
       </SafeAreaView>
     </View>
   );
@@ -369,7 +650,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing.xs,
   },
-  userPhone: {
+  userEmail: {
     ...typography.bodyMedium,
     color: colors.text.secondary,
   },
@@ -397,40 +678,87 @@ const styles = StyleSheet.create({
     height: 30,
     backgroundColor: colors.border.light,
   },
-  actionsSection: {
-    paddingHorizontal: spacing.screenPadding,
+  // Removed action and logout styles - moved to Settings screen
+  // Session History styles
+  sessionHistorySection: {
+    paddingHorizontal: spacing.lg,
     marginBottom: spacing.xl,
   },
-  actionCard: {
-    marginBottom: spacing.sm,
+  sectionTitle: {
+    ...typography.headingSmall,
+    color: colors.text.primary,
+    marginBottom: spacing.md,
   },
-  actionContent: {
+  sessionItem: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+  sessionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: spacing.sm,
   },
-  actionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionIcon: {
-    fontSize: 20,
-    marginRight: spacing.md,
-  },
-  actionTitle: {
-    ...typography.bodyLarge,
+  sessionDate: {
+    ...typography.bodyMedium,
     color: colors.text.primary,
   },
-  actionArrow: {
-    fontSize: 24,
+  statusBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: 12,
+  },
+  statusText: {
+    ...typography.caption,
+    color: colors.text.inverse,
+    fontWeight: '600',
+  },
+  sessionStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  sessionStat: {
+    alignItems: 'center',
+  },
+  sessionStatLabel: {
+    ...typography.caption,
     color: colors.text.tertiary,
+    marginBottom: spacing.xxs,
   },
-  logoutSection: {
-    paddingHorizontal: spacing.screenPadding,
-    marginBottom: spacing.xl,
+  sessionStatValue: {
+    ...typography.bodyLarge,
+    color: colors.text.primary,
+    fontWeight: '600',
   },
-  logoutButton: {
-    backgroundColor: colors.background.tertiary,
+  viewAllButton: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+  },
+  viewAllText: {
+    ...typography.bodyMedium,
+    color: colors.brand.primary,
+    fontWeight: '600',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+  },
+  emptyStateText: {
+    ...typography.bodyLarge,
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
+  emptyStateSubtext: {
+    ...typography.bodySmall,
+    color: colors.text.tertiary,
+    textAlign: 'center',
+  },
+  loader: {
+    paddingVertical: spacing.xl,
   },
   footer: {
     alignItems: 'center',

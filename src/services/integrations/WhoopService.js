@@ -185,13 +185,39 @@ class WhoopService {
       console.log('🔄 Starting initial data sync after OAuth success...');
       try {
         const syncResult = await this.performInitialSync(userId);
-        console.log('✅ Initial sync completed:', { recordsCount: syncResult?.length || 0 });
+        if (syncResult.success) {
+          console.log('✅ Initial sync completed:', {
+            recordsCount: syncResult.recordsCount,
+            dateRange: `${syncResult.startDate} to ${syncResult.endDate}`
+          });
+          // Show success with data count
+          return {
+            success: true,
+            tokens,
+            userId,
+            initialSyncRecords: syncResult.recordsCount
+          };
+        } else {
+          console.error('⚠️ Initial sync failed:', syncResult.error);
+          // Connection successful but sync failed
+          return {
+            success: true,
+            tokens,
+            userId,
+            syncError: syncResult.error,
+            message: 'Connected successfully. Please use Sync Now to fetch data.'
+          };
+        }
       } catch (syncError) {
-        console.error('⚠️ Initial sync failed (connection still valid):', syncError);
-        // Don't throw - connection is still successful even if initial sync fails
+        console.error('❌ Initial sync exception:', syncError);
+        // Don't fail the whole connection
+        return {
+          success: true,
+          tokens,
+          userId,
+          syncError: syncError.message
+        };
       }
-
-      return { success: true, tokens, userId };
     } catch (error) {
       console.error('❌ Whoop OAuth callback error:', error.message);
       console.error('Stack trace:', error.stack);
@@ -348,30 +374,41 @@ class WhoopService {
   // Fetch data from Whoop API and store in health_metrics
   async fetchAndStoreData(userId, startDate, endDate) {
     try {
+      console.log('📊 fetchAndStoreData called with:', { userId, startDate, endDate });
+      
       const accessToken = await this.getValidAccessToken(userId);
+      console.log('🔐 Got access token:', accessToken ? 'Yes' : 'No');
       
       console.log(`📊 Fetching Whoop data from ${startDate} to ${endDate}`);
 
       // Fetch recovery data
+      console.log(`📡 Fetching recovery from: ${this.apiUrl}/recovery?start=${startDate}&end=${endDate}`);
       const recoveryData = await this.fetchRecoveryData(accessToken, startDate, endDate);
+      console.log(`✅ Recovery data: ${recoveryData.length} records`);
       
       // Fetch sleep data
+      console.log(`📡 Fetching sleep from: ${this.apiUrl}/activity/sleep?start=${startDate}&end=${endDate}`);
       const sleepData = await this.fetchSleepData(accessToken, startDate, endDate);
+      console.log(`✅ Sleep data: ${sleepData.length} records`);
       
       // Fetch cycle data
+      console.log(`📡 Fetching cycles from: ${this.apiUrl}/cycle?start=${startDate}&end=${endDate}`);
       const cycleData = await this.fetchCycleData(accessToken, startDate, endDate);
+      console.log(`✅ Cycle data: ${cycleData.length} records`);
 
       // Store all data in health_metrics table
+      console.log('💾 Preparing to store in health_metrics...');
       const stored = await this.storeInHealthMetrics(userId, {
         recovery: recoveryData,
         sleep: sleepData,
         cycle: cycleData
       });
 
-      console.log(`✅ Stored ${stored.length} Whoop metrics in health_metrics`);
+      console.log(`✅ Successfully stored ${stored.length} records in health_metrics`);
       return stored;
     } catch (error) {
-      console.error('❌ Error fetching Whoop data:', error);
+      console.error('❌ fetchAndStoreData failed:', error);
+      console.error('Stack:', error.stack);
       throw error;
     }
   }
@@ -380,6 +417,7 @@ class WhoopService {
   async fetchRecoveryData(accessToken, startDate, endDate) {
     try {
       const url = `${this.apiUrl}/recovery?start=${startDate}&end=${endDate}`;
+      console.log('🔄 Fetching recovery data from:', url);
       
       const response = await fetch(url, {
         headers: {
@@ -387,14 +425,20 @@ class WhoopService {
         }
       });
 
+      console.log('📨 Recovery response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`Recovery fetch failed: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ Recovery API error:', errorText);
+        throw new Error(`Recovery fetch failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('✅ Recovery data received:', data.records ? data.records.length : 0, 'records');
       return data.records || [];
     } catch (error) {
-      console.error('❌ Error fetching recovery:', error);
+      console.error('❌ Error fetching recovery:', error.message);
+      console.error('Stack:', error.stack);
       return [];
     }
   }
@@ -403,6 +447,7 @@ class WhoopService {
   async fetchSleepData(accessToken, startDate, endDate) {
     try {
       const url = `${this.apiUrl}/activity/sleep?start=${startDate}&end=${endDate}`;
+      console.log('🔄 Fetching sleep data from:', url);
       
       const response = await fetch(url, {
         headers: {
@@ -410,14 +455,20 @@ class WhoopService {
         }
       });
 
+      console.log('📨 Sleep response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`Sleep fetch failed: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ Sleep API error:', errorText);
+        throw new Error(`Sleep fetch failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('✅ Sleep data received:', data.records ? data.records.length : 0, 'records');
       return data.records || [];
     } catch (error) {
-      console.error('❌ Error fetching sleep:', error);
+      console.error('❌ Error fetching sleep:', error.message);
+      console.error('Stack:', error.stack);
       return [];
     }
   }
@@ -426,6 +477,7 @@ class WhoopService {
   async fetchCycleData(accessToken, startDate, endDate) {
     try {
       const url = `${this.apiUrl}/cycle?start=${startDate}&end=${endDate}`;
+      console.log('🔄 Fetching cycle data from:', url);
       
       const response = await fetch(url, {
         headers: {
@@ -433,20 +485,33 @@ class WhoopService {
         }
       });
 
+      console.log('📨 Cycle response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`Cycle fetch failed: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ Cycle API error:', errorText);
+        throw new Error(`Cycle fetch failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('✅ Cycle data received:', data.records ? data.records.length : 0, 'records');
       return data.records || [];
     } catch (error) {
-      console.error('❌ Error fetching cycles:', error);
+      console.error('❌ Error fetching cycles:', error.message);
+      console.error('Stack:', error.stack);
       return [];
     }
   }
 
   // Store data in health_metrics table for Analytics backend to process
   async storeInHealthMetrics(userId, data) {
+    console.log('💾 storeInHealthMetrics called with:', {
+      userId,
+      recoveryCount: data.recovery?.length || 0,
+      sleepCount: data.sleep?.length || 0,
+      cycleCount: data.cycle?.length || 0
+    });
+    
     const records = [];
 
     // Process recovery data
@@ -454,11 +519,11 @@ class WhoopService {
       records.push({
         user_id: userId,
         recorded_at: recovery.created_at || recovery.date,
-        vendor: 'whoop',
+        vendor: 'whoop',  // Must be 'vendor' not 'provider'
         metric_type: 'recovery',
         data: recovery,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date().toISOString()
+        // NO updated_at field - it doesn't exist in the table!
       });
     }
 
@@ -467,11 +532,11 @@ class WhoopService {
       records.push({
         user_id: userId,
         recorded_at: sleep.created_at || sleep.date,
-        vendor: 'whoop',
+        vendor: 'whoop',  // Must be 'vendor' not 'provider'
         metric_type: 'sleep',
         data: sleep,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date().toISOString()
+        // NO updated_at field - it doesn't exist in the table!
       });
     }
 
@@ -480,11 +545,11 @@ class WhoopService {
       records.push({
         user_id: userId,
         recorded_at: cycle.created_at || cycle.start,
-        vendor: 'whoop',
+        vendor: 'whoop',  // Must be 'vendor' not 'provider'
         metric_type: 'cycle',
         data: cycle,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date().toISOString()
+        // NO updated_at field - it doesn't exist in the table!
       });
     }
 
@@ -493,18 +558,26 @@ class WhoopService {
       return [];
     }
 
+    console.log(`💾 About to insert ${records.length} records into health_metrics`);
+    console.log('📝 Sample record structure:', JSON.stringify(records[0], null, 2));
+    
     try {
       const { data: stored, error } = await supabase
         .from('health_metrics')
         .insert(records)
         .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Database insert error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        throw error;
+      }
 
-      console.log(`✅ Stored ${stored.length} records in health_metrics`);
-      return stored;
+      console.log(`✅ Successfully stored ${stored?.length || 0} records in health_metrics`);
+      return stored || [];
     } catch (error) {
-      console.error('❌ Error storing in health_metrics:', error);
+      console.error('❌ Error storing in health_metrics:', error.message);
+      console.error('Full error:', error);
       throw error;
     }
   }

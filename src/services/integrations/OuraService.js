@@ -159,13 +159,39 @@ class OuraService {
       console.log('🔄 Starting initial data sync after OAuth success...');
       try {
         const syncResult = await this.performInitialSync(userId);
-        console.log('✅ Initial sync completed:', { recordsCount: syncResult?.length || 0 });
+        if (syncResult.success) {
+          console.log('✅ Initial sync completed:', {
+            recordsCount: syncResult.recordsCount,
+            dateRange: `${syncResult.startDate} to ${syncResult.endDate}`
+          });
+          // Show success with data count
+          return {
+            success: true,
+            tokens,
+            userId,
+            initialSyncRecords: syncResult.recordsCount
+          };
+        } else {
+          console.error('⚠️ Initial sync failed:', syncResult.error);
+          // Connection successful but sync failed
+          return {
+            success: true,
+            tokens,
+            userId,
+            syncError: syncResult.error,
+            message: 'Connected successfully. Please use Sync Now to fetch data.'
+          };
+        }
       } catch (syncError) {
-        console.error('⚠️ Initial sync failed (connection still valid):', syncError);
-        // Don't throw - connection is still successful even if initial sync fails
+        console.error('❌ Initial sync exception:', syncError);
+        // Don't fail the whole connection
+        return {
+          success: true,
+          tokens,
+          userId,
+          syncError: syncError.message
+        };
       }
-
-      return { success: true, tokens, userId };
     } catch (error) {
       console.error('❌ Oura OAuth callback error:', error.message);
       console.error('Stack trace:', error.stack);
@@ -320,30 +346,41 @@ class OuraService {
   // Fetch data from Oura API and store in health_metrics
   async fetchAndStoreData(userId, startDate, endDate) {
     try {
+      console.log('📊 fetchAndStoreData called with:', { userId, startDate, endDate });
+      
       const accessToken = await this.getValidAccessToken(userId);
+      console.log('🔐 Got access token:', accessToken ? 'Yes' : 'No');
       
       console.log(`💍 Fetching Oura data from ${startDate} to ${endDate}`);
 
       // Fetch readiness data
+      console.log(`📡 Fetching readiness from: ${this.apiUrl}/usercollection/daily_readiness?start_date=${startDate}&end_date=${endDate}`);
       const readinessData = await this.fetchReadinessData(accessToken, startDate, endDate);
+      console.log(`✅ Readiness data: ${readinessData.length} records`);
       
       // Fetch sleep data
+      console.log(`📡 Fetching sleep from: ${this.apiUrl}/usercollection/daily_sleep?start_date=${startDate}&end_date=${endDate}`);
       const sleepData = await this.fetchSleepData(accessToken, startDate, endDate);
+      console.log(`✅ Sleep data: ${sleepData.length} records`);
       
       // Fetch activity data
+      console.log(`📡 Fetching activity from: ${this.apiUrl}/usercollection/daily_activity?start_date=${startDate}&end_date=${endDate}`);
       const activityData = await this.fetchActivityData(accessToken, startDate, endDate);
+      console.log(`✅ Activity data: ${activityData.length} records`);
 
       // Store all data in health_metrics table
+      console.log('💾 Preparing to store in health_metrics...');
       const stored = await this.storeInHealthMetrics(userId, {
         readiness: readinessData,
         sleep: sleepData,
         activity: activityData
       });
 
-      console.log(`✅ Stored ${stored.length} Oura metrics in health_metrics`);
+      console.log(`✅ Successfully stored ${stored.length} records in health_metrics`);
       return stored;
     } catch (error) {
-      console.error('❌ Error fetching Oura data:', error);
+      console.error('❌ fetchAndStoreData failed:', error);
+      console.error('Stack:', error.stack);
       throw error;
     }
   }
@@ -352,6 +389,7 @@ class OuraService {
   async fetchReadinessData(accessToken, startDate, endDate) {
     try {
       const url = `${this.apiUrl}/usercollection/daily_readiness?start_date=${startDate}&end_date=${endDate}`;
+      console.log('🔄 Fetching readiness data from:', url);
       
       const response = await fetch(url, {
         headers: {
@@ -359,14 +397,20 @@ class OuraService {
         }
       });
 
+      console.log('📨 Readiness response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`Readiness fetch failed: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ Readiness API error:', errorText);
+        throw new Error(`Readiness fetch failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('✅ Readiness data received:', data.data ? data.data.length : 0, 'records');
       return data.data || [];
     } catch (error) {
-      console.error('❌ Error fetching Oura readiness:', error);
+      console.error('❌ Error fetching Oura readiness:', error.message);
+      console.error('Stack:', error.stack);
       return [];
     }
   }
@@ -375,6 +419,7 @@ class OuraService {
   async fetchSleepData(accessToken, startDate, endDate) {
     try {
       const url = `${this.apiUrl}/usercollection/daily_sleep?start_date=${startDate}&end_date=${endDate}`;
+      console.log('🔄 Fetching sleep data from:', url);
       
       const response = await fetch(url, {
         headers: {
@@ -382,14 +427,20 @@ class OuraService {
         }
       });
 
+      console.log('📨 Sleep response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`Sleep fetch failed: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ Sleep API error:', errorText);
+        throw new Error(`Sleep fetch failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('✅ Sleep data received:', data.data ? data.data.length : 0, 'records');
       return data.data || [];
     } catch (error) {
-      console.error('❌ Error fetching Oura sleep:', error);
+      console.error('❌ Error fetching Oura sleep:', error.message);
+      console.error('Stack:', error.stack);
       return [];
     }
   }
@@ -398,6 +449,7 @@ class OuraService {
   async fetchActivityData(accessToken, startDate, endDate) {
     try {
       const url = `${this.apiUrl}/usercollection/daily_activity?start_date=${startDate}&end_date=${endDate}`;
+      console.log('🔄 Fetching activity data from:', url);
       
       const response = await fetch(url, {
         headers: {
@@ -405,20 +457,33 @@ class OuraService {
         }
       });
 
+      console.log('📨 Activity response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`Activity fetch failed: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ Activity API error:', errorText);
+        throw new Error(`Activity fetch failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('✅ Activity data received:', data.data ? data.data.length : 0, 'records');
       return data.data || [];
     } catch (error) {
-      console.error('❌ Error fetching Oura activity:', error);
+      console.error('❌ Error fetching Oura activity:', error.message);
+      console.error('Stack:', error.stack);
       return [];
     }
   }
 
   // Store data in health_metrics table for Analytics backend to process
   async storeInHealthMetrics(userId, data) {
+    console.log('💾 storeInHealthMetrics called with:', {
+      userId,
+      readinessCount: data.readiness?.length || 0,
+      sleepCount: data.sleep?.length || 0,
+      activityCount: data.activity?.length || 0
+    });
+    
     const records = [];
 
     // Process readiness data
@@ -426,11 +491,11 @@ class OuraService {
       records.push({
         user_id: userId,
         recorded_at: readiness.day || readiness.timestamp,
-        vendor: 'oura',
+        vendor: 'oura',  // Must be 'vendor' not 'provider'
         metric_type: 'readiness',
         data: readiness,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date().toISOString()
+        // NO updated_at field - it doesn't exist in the table!
       });
     }
 
@@ -439,11 +504,11 @@ class OuraService {
       records.push({
         user_id: userId,
         recorded_at: sleep.day || sleep.timestamp,
-        vendor: 'oura',
+        vendor: 'oura',  // Must be 'vendor' not 'provider'
         metric_type: 'sleep',
         data: sleep,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date().toISOString()
+        // NO updated_at field - it doesn't exist in the table!
       });
     }
 
@@ -452,11 +517,11 @@ class OuraService {
       records.push({
         user_id: userId,
         recorded_at: activity.day || activity.timestamp,
-        vendor: 'oura',
+        vendor: 'oura',  // Must be 'vendor' not 'provider'
         metric_type: 'activity',
         data: activity,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date().toISOString()
+        // NO updated_at field - it doesn't exist in the table!
       });
     }
 
@@ -465,18 +530,26 @@ class OuraService {
       return [];
     }
 
+    console.log(`💾 About to insert ${records.length} records into health_metrics`);
+    console.log('📝 Sample record structure:', JSON.stringify(records[0], null, 2));
+    
     try {
       const { data: stored, error } = await supabase
         .from('health_metrics')
         .insert(records)
         .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Database insert error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        throw error;
+      }
 
-      console.log(`✅ Stored ${stored.length} Oura records in health_metrics`);
-      return stored;
+      console.log(`✅ Successfully stored ${stored?.length || 0} records in health_metrics`);
+      return stored || [];
     } catch (error) {
-      console.error('❌ Error storing Oura data in health_metrics:', error);
+      console.error('❌ Error storing Oura data in health_metrics:', error.message);
+      console.error('Full error:', error);
       throw error;
     }
   }

@@ -128,13 +128,24 @@ const IntegrationsScreen = ({ navigation }) => {
         // Pass state for validation, handleCallback will extract userId from stored state
         const result = await WhoopService.handleCallback(code, state);
         
-        // Initial sync is now handled automatically in handleCallback
-        console.log('✅ Whoop OAuth completed, initial sync done');
+        // Handle different sync scenarios based on result
+        if (result.success && result.syncError) {
+          // OAuth worked but sync failed
+          Alert.alert(
+            'Connected!',
+            `Whoop connected successfully. ${result.syncError ? 'Initial sync failed - please use Sync Now button to fetch your data.' : `Synced ${result.initialSyncRecords} records.`}`,
+            [{ text: 'OK' }]
+          );
+        } else if (result.success) {
+          // Everything worked perfectly
+          Alert.alert(
+            'Success',
+            `Whoop connected and synced ${result.initialSyncRecords || 0} records from the last 30 days.`,
+            [{ text: 'OK' }]
+          );
+        }
         
-        Alert.alert(
-          'Success', 
-          'Whoop connected successfully! We\'ve fetched your last 30 days of data.'
-        );
+        console.log('✅ Whoop OAuth completed');
         await AsyncStorage.removeItem('pending_oauth_vendor');
         await checkConnections();
       } else if (vendor === 'oura' && code) {
@@ -144,13 +155,24 @@ const IntegrationsScreen = ({ navigation }) => {
         // Pass state for validation, handleCallback will extract userId from stored state
         const result = await OuraService.handleCallback(code, state);
         
-        // Initial sync is now handled automatically in handleCallback
-        console.log('✅ Oura OAuth completed, initial sync done');
+        // Handle different sync scenarios based on result
+        if (result.success && result.syncError) {
+          // OAuth worked but sync failed
+          Alert.alert(
+            'Connected!',
+            `Oura connected successfully. ${result.syncError ? 'Initial sync failed - please use Sync Now button to fetch your data.' : `Synced ${result.initialSyncRecords} records.`}`,
+            [{ text: 'OK' }]
+          );
+        } else if (result.success) {
+          // Everything worked perfectly
+          Alert.alert(
+            'Success',
+            `Oura connected and synced ${result.initialSyncRecords || 0} records from the last 30 days.`,
+            [{ text: 'OK' }]
+          );
+        }
         
-        Alert.alert(
-          'Success', 
-          'Oura connected successfully! We\'ve fetched your last 30 days of data.'
-        );
+        console.log('✅ Oura OAuth completed');
         await AsyncStorage.removeItem('pending_oauth_vendor');
         await checkConnections();
       }

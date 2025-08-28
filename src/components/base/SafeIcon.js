@@ -82,6 +82,7 @@ const SafeIcon = ({
     
     // Misc
     'star': '⭐',
+    'star-filled': '⭐',
     'flag': '🚩',
     'lock': '🔒',
     'unlock': '🔓',

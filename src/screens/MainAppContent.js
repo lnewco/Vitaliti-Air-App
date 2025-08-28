@@ -13,6 +13,7 @@ import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import PremiumProfileScreen from './PremiumProfileScreen';
 import IntegrationsScreen from './IntegrationsScreen';
+import SettingsScreen from './SettingsScreen';
 import SessionRecoveryManager from '../components/SessionRecoveryManager';
 import SafeIcon from '../components/base/SafeIcon';
 import FloatingTabBar from '../design-system/components/FloatingTabBar';
@@ -36,34 +37,6 @@ function TabNavigator() {
         component={PremiumDashboard}
         options={{
           tabBarLabel: 'Monitor',
-          tabBarIcon: ({ color, size }) => (
-            <SafeIcon name="chart" size="sm" color={color} />
-          ),
-          tabBarLabelStyle: {
-            fontSize: 14,
-            fontWeight: '600',
-          },
-        }}
-      />
-      <Tab.Screen 
-        name="Sessions" 
-        component={SessionHistoryScreen}
-        options={{
-          tabBarLabel: 'Train',
-          tabBarIcon: ({ color, size }) => (
-            <SafeIcon name="history" size="sm" color={color} />
-          ),
-          tabBarLabelStyle: {
-            fontSize: 14,
-            fontWeight: '600',
-          },
-        }}
-      />
-      <Tab.Screen 
-        name="History" 
-        component={SessionHistoryScreen}
-        options={{
-          tabBarLabel: 'Data',
           tabBarIcon: ({ color, size }) => (
             <SafeIcon name="chart" size="sm" color={color} />
           ),
@@ -155,6 +128,15 @@ const MainStack = ({ onNavigateToSession }) => {
         options={{
           presentation: 'card',
           title: 'Integrations',
+        }}
+      />
+      
+      <Stack.Screen 
+        name="Settings" 
+        component={SettingsScreen}
+        options={{
+          presentation: 'card',
+          headerShown: false,
         }}
       />
       

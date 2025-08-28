@@ -58,36 +58,33 @@ const SessionHistoryScreen = ({ route, navigation }) => {
   // Check if we should auto-show a session modal (from post-session survey)
   useEffect(() => {
     const showSessionId = route?.params?.showSessionId;
+    const justCompleted = route?.params?.justCompleted;
     
-    if (showSessionId) {
+    if (showSessionId && justCompleted) {
+      // Clear the navigation params immediately to prevent re-triggering
+      navigation.setParams({ showSessionId: null, justCompleted: null });
       
-              if (sessions.length > 0) {
+      // Wait for sessions to load and database to sync
+      const timeoutId = setTimeout(() => {
+        if (sessions.length > 0) {
           // Find the session in our loaded sessions (by ID or local_session_id)
           const targetSession = sessions.find(session => 
             session.id === showSessionId || 
             session.local_session_id === showSessionId
           );
+          
           if (targetSession) {
-            loadSessionDetails(targetSession.id); // Use the actual session ID, not the search ID
-            // Clear the navigation param to prevent re-triggering
-            navigation.setParams({ showSessionId: null });
+            loadSessionDetails(targetSession.id); // Use the actual session ID
           } else {
-            // Wait a bit longer for sessions to sync, then try direct lookup
-            setTimeout(() => {
-              loadSessionDetails(showSessionId);
-            }, 1000);
-            // Clear the navigation param to prevent re-triggering
-            navigation.setParams({ showSessionId: null });
+            // Don't show error for just completed sessions that haven't synced yet
+            console.log('Session not found in list yet, may still be syncing:', showSessionId);
           }
-        } else if (!loading) {
-          // Sessions list is empty but we're not loading, try direct lookup
-          loadSessionDetails(showSessionId);
-          // Clear the navigation param to prevent re-triggering
-          navigation.setParams({ showSessionId: null });
         }
-        // If still loading, wait for next effect cycle
+      }, 2000); // Give more time for database sync
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [sessions, route?.params?.showSessionId, loading]);
+  }, [sessions, route?.params?.showSessionId, route?.params?.justCompleted, loading]);
 
   const loadSessions = async () => {
     try {
@@ -319,12 +316,20 @@ const SessionHistoryScreen = ({ route, navigation }) => {
         }
         setSessionData(sessionData); // Update modal with data
       } else {
-        setModalVisible(false); // Hide modal on error
-        Alert.alert('Error', 'Session data not found');
+        // Don't show error alert if modal is not visible (auto-show attempt)
+        if (modalVisible) {
+          setModalVisible(false); // Hide modal on error
+          Alert.alert('Error', 'Session data not found');
+        } else {
+          console.log('Session details not found for:', sessionId);
+        }
       }
     } catch (error) {
       console.error('Failed to load session details:', error);
-      Alert.alert('Error', 'Failed to load session details');
+      // Only show error if modal was already visible (user-initiated)
+      if (modalVisible) {
+        Alert.alert('Error', 'Failed to load session details');
+      }
     }
   };
 

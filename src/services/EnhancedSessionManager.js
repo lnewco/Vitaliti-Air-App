@@ -340,7 +340,12 @@ class EnhancedSessionManager {
       this.adaptiveEngine.startAltitudePhase(sessionId, 1, defaultAltitudeLevel, this.currentSessionType);
       const baselineHRV = protocolConfig.baselineHRV || null;
       
-      // Create session in Supabase with proper session data
+      // Create session in LOCAL DATABASE FIRST
+      await DatabaseService.init();
+      await DatabaseService.createSession(sessionId, defaultAltitudeLevel, this.protocolConfig);
+      console.log('✅ Session created in local database:', sessionId);
+      
+      // Then create session in Supabase with proper session data
       const supabaseSession = await SupabaseService.createSession({
         id: sessionId,  // Pass the session ID
         startTime: new Date().toISOString(),
@@ -350,7 +355,8 @@ class EnhancedSessionManager {
         });
       
       if (!supabaseSession) {
-        throw new Error('Failed to create session in Supabase');
+        console.error('⚠️ Failed to create session in Supabase, but local session exists');
+        // Continue with local session even if Supabase fails
       }
 
       // Initialize session state
@@ -905,8 +911,23 @@ class EnhancedSessionManager {
     const duration = Math.floor((Date.now() - this.startTime) / 1000);
     const stats = await this.calculateSessionStats();
 
-    // Update session in database
+    // Update session in LOCAL DATABASE FIRST
     if (this.currentSession) {
+      // End session in local database - MUST PASS START TIME!
+      await DatabaseService.endSession(
+        this.currentSession.id,
+        {
+          avgSpO2: stats.avgSpO2,
+          avgHeartRate: stats.avgHeartRate,
+          minSpO2: stats.minSpO2,
+          maxSpO2: stats.maxSpO2,
+          totalReadings: stats.totalReadings
+        },
+        this.startTime  // THIS WAS MISSING - causing 0:00 duration!
+      );
+      console.log('✅ Session ended in local database:', this.currentSession.id, 'Duration:', duration, 'seconds');
+      
+      // Then update in Supabase
       await SupabaseService.endSession(
         this.currentSession.id, 
         {

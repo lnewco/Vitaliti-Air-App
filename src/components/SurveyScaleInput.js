@@ -7,12 +7,22 @@ const SurveyScaleInput = ({
   label,
   value,
   onValueChange,
-  scaleLabels,
+  scaleLabels = {},
   isRequired = false,
   disabled = false,
 }) => {
   // Design tokens imported from design-system
   const scales = [1, 2, 3, 4, 5];
+  
+  // Ensure scaleLabels has default values
+  const safeScaleLabels = {
+    1: 'Low',
+    2: 'Slightly Low',
+    3: 'Moderate',
+    4: 'Slightly High',
+    5: 'High',
+    ...scaleLabels
+  };
 
   const styles = StyleSheet.create({
     container: {
@@ -106,7 +116,7 @@ const SurveyScaleInput = ({
             disabled={disabled}
             accessibilityRole="button"
             accessibilityState={{ selected: value === scale, disabled }}
-            accessibilityLabel={`${label}: ${scale} - ${scaleLabels[scale]}`}
+            accessibilityLabel={`${label}: ${scale} - ${safeScaleLabels[scale]}`}
           >
             <Body style={[
               styles.scaleNumber,
@@ -121,10 +131,10 @@ const SurveyScaleInput = ({
       
       <View style={styles.labelsContainer}>
         <Caption color="secondary" style={[styles.scaleLabel, styles.leftLabel]}>
-          {scaleLabels[1]}
+          {safeScaleLabels[1]}
         </Caption>
         <Caption color="secondary" style={[styles.scaleLabel, styles.rightLabel]}>
-          {scaleLabels[5]}
+          {safeScaleLabels[5]}
         </Caption>
       </View>
     </View>

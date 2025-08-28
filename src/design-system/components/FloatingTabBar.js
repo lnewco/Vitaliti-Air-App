@@ -17,7 +17,7 @@ import typography from '../typography';
 import spacing from '../spacing';
 
 const { width: screenWidth } = Dimensions.get('window');
-const TAB_WIDTH = (screenWidth - spacing.screenPadding * 2) / 4;
+const TAB_WIDTH = (screenWidth - spacing.screenPadding * 2) / 2;
 
 const TabIcon = ({ name, focused, label }) => {
   const scale = useSharedValue(focused ? 1 : 1);
@@ -73,15 +73,11 @@ const FloatingTabBar = ({ state, descriptors, navigation }) => {
 
   const tabIcons = {
     Dashboard: 'home-outline',
-    Sessions: 'fitness-outline',
-    History: 'bar-chart-outline',
     Profile: 'person-outline',
   };
 
   const tabLabels = {
     Dashboard: 'Home',
-    Sessions: 'Train',
-    History: 'Data',
     Profile: 'Profile',
   };
 

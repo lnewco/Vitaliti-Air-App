@@ -140,12 +140,12 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
       // Show success and complete
       console.log('🎉 Post-session survey save completed successfully');
       
-      // Navigate to History screen and auto-show session results modal
+      // Navigate to Profile screen where sessions are now displayed
       navigation.navigate('MainTabs', {
-        screen: 'History',
+        screen: 'Profile',
         params: {
-          showSessionId: sessionId,
-          justCompleted: true
+          justCompleted: true,
+          refreshSessions: true
         }
       });
       
@@ -222,7 +222,6 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
           >
           {/* Survey Header */}
           <View style={styles.surveyHeader}>
-            <Text style={styles.title}>Post-Session Survey</Text>
             <Text style={styles.subtitle}>
               How are you feeling after training?
             </Text>
@@ -235,11 +234,14 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Mental Clarity *</Text>
             <SurveyScaleInput
+              label="Mental Clarity"
               value={surveyData.clarity}
-              onChange={(value) => handleRatingChange('clarity', value)}
-              leftLabel="Very Foggy"
-              rightLabel="Very Clear"
-              hasError={validationErrors.includes('clarity')}
+              onValueChange={(value) => handleRatingChange('clarity', value)}
+              scaleLabels={{
+                1: "Very Foggy",
+                5: "Very Clear"
+              }}
+              isRequired={true}
               style={styles.scaleInput}
             />
           </View>
@@ -248,11 +250,14 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Energy Level *</Text>
             <SurveyScaleInput
+              label="Energy Level"
               value={surveyData.energy}
-              onChange={(value) => handleRatingChange('energy', value)}
-              leftLabel="Very Fatigued"
-              rightLabel="Very Energized"
-              hasError={validationErrors.includes('energy')}
+              onValueChange={(value) => handleRatingChange('energy', value)}
+              scaleLabels={{
+                1: "Very Fatigued",
+                5: "Very Energized"
+              }}
+              isRequired={true}
               style={styles.scaleInput}
             />
           </View>
@@ -261,11 +266,14 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Stress Level *</Text>
             <SurveyScaleInput
+              label="Stress Level"
               value={surveyData.stress}
-              onChange={(value) => handleRatingChange('stress', value)}
-              leftLabel="Negative stress"
-              rightLabel="Positive stress"
-              hasError={validationErrors.includes('stress')}
+              onValueChange={(value) => handleRatingChange('stress', value)}
+              scaleLabels={{
+                1: "Negative stress",
+                5: "Positive stress"
+              }}
+              isRequired={true}
               style={styles.scaleInput}
             />
           </View>
@@ -293,9 +301,9 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
               How was your experience?
             </Text>
             <StarRating
-              value={overallRating}
-              onChange={setOverallRating}
-              size={40}
+              rating={overallRating}
+              onRatingChange={setOverallRating}
+              size="lg"
             />
           </View>
 
@@ -365,6 +373,7 @@ const styles = StyleSheet.create({
     paddingBottom: 140, // Space for footer
   },
   surveyHeader: {
+    marginTop: spacing.md,
     marginBottom: spacing.xl,
   },
   title: {

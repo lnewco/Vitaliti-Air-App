@@ -2,6 +2,7 @@ import supabase from '../config/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import authService from '../auth/AuthService';
 import logger from '../utils/logger';
+import DatabaseService from './DatabaseService';
 
 const log = logger.createModuleLogger('SupabaseService');
 
@@ -1499,6 +1500,113 @@ class SupabaseService {
     } catch (error) {
       log.error('Error saving intra-session response:', error);
       throw error;
+    }
+  }
+
+  // Sync all user sessions from Supabase to local database
+  async syncSessionsToLocalDatabase() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        log.warn('No authenticated user for session sync');
+        return { success: false, count: 0 };
+      }
+
+      log.info('🔄 Starting sync of Supabase sessions to local database...');
+      log.info('User ID:', user.id);
+      log.info('Device ID:', this.deviceId);
+      
+      // Initialize deviceId if not already done
+      if (!this.deviceId) {
+        await this.initializeDeviceId();
+        log.info('Device ID after init:', this.deviceId);
+      }
+      
+      // Simple query - just get all sessions for this user
+      // Don't use complex OR queries that might fail
+      const query = supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(100); // Get up to 100 sessions
+      
+      const { data: sessions, error } = await query;
+
+      if (error) {
+        console.error('[SupabaseService] ❌ Error fetching sessions from Supabase:');
+        console.error('  Message:', error?.message || 'Unknown error');
+        if (error?.hint) console.error('  Hint:', error.hint);
+        if (error?.details) console.error('  Details:', error.details);
+        if (error?.code) console.error('  Code:', error.code);
+        return { success: false, count: 0, error: error.message };
+      }
+
+      if (!sessions || sessions.length === 0) {
+        log.info('No sessions found in Supabase');
+        return { success: true, count: 0 };
+      }
+
+      log.info(`📥 Found ${sessions.length} sessions in Supabase to sync`);
+      
+      // Initialize local database
+      await DatabaseService.init();
+      
+      let syncedCount = 0;
+      for (const session of sessions) {
+        try {
+          // Check if session already exists locally
+          const existingSession = await DatabaseService.getSession(session.local_session_id || session.id);
+          
+          if (!existingSession) {
+            // Create the session in local database
+            const sessionId = session.local_session_id || session.id;
+            
+            // First create the session
+            await DatabaseService.createSession(
+              sessionId,
+              session.default_altitude_level || 6,
+              {
+                totalCycles: session.planned_total_cycles || 3,
+                hypoxicDuration: session.planned_hypoxic_duration || 420,
+                hyperoxicDuration: session.planned_hyperoxic_duration || 180
+              }
+            );
+            
+            // Then update it with the actual data
+            if (session.status === 'completed' || session.end_time) {
+              await DatabaseService.endSession(sessionId, {
+                avgSpO2: session.average_spo2,
+                avgHeartRate: session.average_heart_rate,
+                minSpO2: session.min_spo2,
+                maxSpO2: session.max_spo2,
+                totalReadings: session.total_readings
+              });
+            }
+            
+            syncedCount++;
+            log.info(`✅ Synced session ${sessionId} to local database`);
+          }
+        } catch (error) {
+          log.error(`Failed to sync session ${session.id}:`, error);
+        }
+      }
+      
+      log.info(`✅ Sync complete: ${syncedCount} sessions added to local database`);
+      return { success: true, count: syncedCount };
+      
+    } catch (error) {
+      // Safe error logging without JSON.stringify which can fail
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+      
+      // Log error safely without JSON.stringify
+      console.error('[SupabaseService] ❌ Error syncing sessions to local database:');
+      console.error('  Message:', errorMessage);
+      if (error?.stack) console.error('  Stack:', error.stack);
+      if (error?.name) console.error('  Name:', error.name);
+      if (error?.code) console.error('  Code:', error.code);
+      
+      return { success: false, count: 0, error: errorMessage };
     }
   }
 

@@ -67,7 +67,7 @@ const Text = ({
 
   const textStyles = [
     styles.base,
-    typography.styles[variantMap[variant] || 'bodyMedium'],
+    typography?.[variantMap[variant] || 'bodyMedium'] || {},
     { color: getColor(color) },
     { textAlign: align },
     weight && { fontWeight: weight },

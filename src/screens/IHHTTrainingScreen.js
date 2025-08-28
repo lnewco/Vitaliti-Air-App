@@ -278,6 +278,13 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const handleEndSession = async () => {
     console.log('🏁 Handling session end...');
     
+    // Reset local state FIRST to prevent re-initialization
+    setSessionStarted(false);
+    setShowPauseOverlay(false);
+    
+    // Clear params immediately to prevent re-render with sessionId
+    navigation.setParams({ sessionId: null });
+    
     // Check if we already have a session ID from the manager
     const currentSession = EnhancedSessionManager.getSessionInfo();
     const sessionId = currentSession?.currentSession?.id || route?.params?.sessionId;
@@ -295,16 +302,12 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     
     console.log('📊 Navigating to post-session survey with session ID:', finalSessionId);
     
-    // Reset local state
-    setSessionStarted(false);
-    setShowPauseOverlay(false);
-    
     // Deactivate keep awake
     deactivateKeepAwake()
       .then(() => console.log('🌙 Screen wake lock deactivated'))
       .catch(error => console.warn('⚠️ Failed to deactivate screen wake lock:', error));
     
-    // Navigate to post-session survey with session ID
+    // Use replace to prevent going back to training screen
     navigation.replace('PostSessionSurvey', { 
       sessionId: finalSessionId,
       sessionType: 'IHHT_TRAINING'
@@ -536,7 +539,8 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   }, [navigation, sessionStarted, sessionInfo.isActive]);
 
   // Show loading state while auto-starting session
-  if (!sessionStarted && route?.params?.sessionId) {
+  // Only show if we have a valid sessionId and haven't started yet
+  if (!sessionStarted && route?.params?.sessionId && route?.params?.sessionId !== null) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background.primary }}>
         <Text style={{ fontSize: 18, color: colors.text.primary, marginBottom: 20 }}>Starting session...</Text>
