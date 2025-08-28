@@ -18,6 +18,7 @@ const WearablesMetricsCard = ({
   availableVendors = [],
   sessionInfo,
   onStartTraining,
+  selectedDate,
   style
 }) => {
   // Delayed loading state to prevent flash
@@ -50,7 +51,7 @@ const WearablesMetricsCard = ({
     hrv: 96,
     respRate: 17.8,
     vendor: vendor || 'whoop',
-    date: new Date().toISOString().split('T')[0]
+    date: selectedDate ? selectedDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
   };
   
   // Determine training recommendation based on recovery score
@@ -120,18 +121,18 @@ const WearablesMetricsCard = ({
     respRate: colors.metrics.breath
   };
 
-  // Format date
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Today';
-    const date = new Date(dateString);
+  // Format date - shows the date being viewed
+  const formatDate = () => {
+    // Use selectedDate if provided (the date user navigated to)
+    const dateToShow = selectedDate || new Date();
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     
-    if (date.toDateString() === today.toDateString()) return 'Today';
-    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    if (dateToShow.toDateString() === today.toDateString()) return 'Today';
+    if (dateToShow.toDateString() === yesterday.toDateString()) return 'Yesterday';
     
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    return dateToShow.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
   return (
@@ -143,7 +144,7 @@ const WearablesMetricsCard = ({
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.title}>Your Plan</Text>
-          <Text style={styles.date}>{formatDate(displayMetrics.date)}</Text>
+          <Text style={styles.date}>{formatDate()}</Text>
         </View>
         
         {/* Training recommendation badge - text only, no background */}

@@ -306,6 +306,7 @@ const PremiumDashboard = ({ navigation }) => {
           availableVendors={availableVendors}
           sessionInfo={sessionInfo}
           onStartTraining={() => navigation.navigate('SessionSetup')}
+          selectedDate={selectedDate}
         />
       </View>
     );
