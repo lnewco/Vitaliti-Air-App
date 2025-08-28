@@ -2,6 +2,7 @@
   "expo": {
     "name": "Vitaliti-Air-App",
     "slug": "Vitaliti-Air-App",
+    "owner": "sophiafay24",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -37,7 +38,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["vitalitiair", "com.sophiafay24.vitalitiairapp", "exp+vitaliti-air-app", "vitaliti-air-app"]
+            "CFBundleURLSchemes": ["vitalitiair", "exp+vitaliti-air-app", "vitaliti-air-app"]
           }
         ],
         "LSApplicationQueriesSchemes": ["vitalitiair"]

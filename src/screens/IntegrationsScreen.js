@@ -66,16 +66,13 @@ const IntegrationsScreen = ({ navigation }) => {
       // Check if it's an OAuth callback (has code parameter)
       // Handle multiple formats: 
       // 1. exp+vitaliti-air-app://expo-auth-session?code=xxx
-      // 2. vitalitiair://oauth-callback?code=xxx  
-      // 3. com.sophiafay24.vitalitiairapp://expo-auth-session?code=xxx
-      // 4. vitaliti-air-app://expo-auth-session?code=xxx
+      // 2. vitaliti-air-app://expo-auth-session?code=xxx
+      // 3. vitalitiair://oauth-callback?code=xxx
       if (url.includes('code=') || url.includes('expo-auth-session')) {
         // Parse URL - handle special exp+ scheme and other formats
         let cleanUrl = url;
         if (url.startsWith('exp+')) {
           cleanUrl = url.replace('exp+vitaliti-air-app://', 'https://fake.com/');
-        } else if (url.startsWith('com.sophiafay24.vitalitiairapp://')) {
-          cleanUrl = url.replace('com.sophiafay24.vitalitiairapp://', 'https://fake.com/');
         } else if (url.startsWith('vitaliti-air-app://')) {
           cleanUrl = url.replace('vitaliti-air-app://', 'https://fake.com/');
         } else if (url.startsWith('vitalitiair://')) {
