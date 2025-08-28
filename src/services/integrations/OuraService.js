@@ -2,38 +2,35 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Linking } from 'react-native';
 import { supabase } from '../../config/supabase';
 
-class WhoopService {
+class OuraService {
   constructor() {
-    this.baseUrl = 'https://api.prod.whoop.com';
-    // Use the auth endpoint (not authorize) - Whoop uses auth then redirects to consent
-    this.authUrl = 'https://api.prod.whoop.com/oauth/oauth2/auth';
-    this.tokenUrl = 'https://api.prod.whoop.com/oauth/oauth2/token';
-    this.apiUrl = 'https://api.prod.whoop.com/developer/v1';
+    this.authUrl = 'https://cloud.ouraring.com/oauth/authorize';
+    this.tokenUrl = 'https://api.ouraring.com/oauth/token';
+    this.apiUrl = 'https://api.ouraring.com/v2';
     
     // Use environment variables for credentials (no hardcoded fallbacks in production!)
-    this.clientId = process.env.EXPO_PUBLIC_WHOOP_CLIENT_ID;
-    this.clientSecret = process.env.EXPO_PUBLIC_WHOOP_CLIENT_SECRET;
+    this.clientId = process.env.EXPO_PUBLIC_OURA_CLIENT_ID;
+    this.clientSecret = process.env.EXPO_PUBLIC_OURA_CLIENT_SECRET;
     
     // Warn if credentials are missing
     if (!this.clientId || !this.clientSecret) {
-      console.warn('⚠️ Whoop OAuth credentials not configured. Integration disabled.');
+      console.warn('⚠️ Oura OAuth credentials not configured. Integration disabled.');
     }
     // Use Expo Auth Proxy to handle the OAuth redirect
     this.redirectUri = 'https://auth.expo.io/@sophiafay24/Vitaliti-Air-App';
     
-    console.log('🔧 Whoop Service initialized');
-    console.log('📱 Redirect URI:', this.redirectUri);
+    console.log('💍 Oura Service initialized');
   }
 
   // Generate OAuth URL for user authentication
   async getAuthUrl(userId) {
-    const scope = 'read:recovery read:cycles read:sleep read:workout read:profile offline';
+    const scope = 'daily readiness sleep activity';
     
-    // Generate a unique state token - WHOOP REQUIRES EXACTLY 8 CHARACTERS!
-    const stateToken = Math.random().toString(36).substr(2, 8).toUpperCase();
+    // Generate a unique state token and store it with userId
+    const stateToken = `${userId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     // Store state in AsyncStorage to validate on callback
-    await AsyncStorage.setItem('whoop_oauth_state', JSON.stringify({
+    await AsyncStorage.setItem('oura_oauth_state', JSON.stringify({
       state: stateToken,
       userId: userId,
       timestamp: Date.now()
@@ -48,31 +45,21 @@ class WhoopService {
       state: stateToken
     };
 
-    // Manually construct the query string without encoding the redirect_uri
-    const queryString = Object.entries(params)
-      .map(([key, value]) => {
-        // Don't encode the redirect_uri - Whoop needs it unencoded
-        if (key === 'redirect_uri') {
-          return `${key}=${value}`;
-        }
-        return `${key}=${encodeURIComponent(value)}`;
-      })
-      .join('&');
+    // Use URLSearchParams for Oura since their own example shows encoded redirect_uri
+    const queryString = new URLSearchParams(params).toString();
 
-    // Remove /auth since authUrl already includes /authorize
     const authUrl = `${this.authUrl}?${queryString}`;
-    console.log('🔐 OAuth URL generated:', authUrl);
-    console.log('🔗 Redirect URI included:', this.redirectUri);
+    console.log('🔐 Oura OAuth URL generated:', authUrl);
     return authUrl;
   }
 
   // Handle OAuth callback and exchange code for tokens
   async handleCallback(code, state) {
     try {
-      console.log('🔄 Processing OAuth callback...');
+      console.log('🔄 Processing Oura OAuth callback...');
       
       // Retrieve and validate state
-      const storedStateData = await AsyncStorage.getItem('whoop_oauth_state');
+      const storedStateData = await AsyncStorage.getItem('oura_oauth_state');
       if (!storedStateData) {
         throw new Error('No OAuth state found - session may have expired');
       }
@@ -94,7 +81,7 @@ class WhoopService {
       console.log('✅ State validated, exchanging code for tokens...');
       
       // Clear the stored state
-      await AsyncStorage.removeItem('whoop_oauth_state');
+      await AsyncStorage.removeItem('oura_oauth_state');
       
       const body = new URLSearchParams({
         grant_type: 'authorization_code',
@@ -119,17 +106,17 @@ class WhoopService {
       }
 
       const tokens = await response.json();
-      console.log('✅ Tokens received successfully');
+      console.log('✅ Oura tokens received successfully');
 
-      // Calculate token expiry (Whoop tokens typically last 1 hour)
-      const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
+      // Calculate token expiry (Oura tokens typically last longer)
+      const expiresAt = new Date(Date.now() + (tokens.expires_in || 86400) * 1000);
 
       // Store tokens in database
       await this.storeTokens(userId, tokens, expiresAt);
 
       return { success: true, tokens };
     } catch (error) {
-      console.error('❌ OAuth callback error:', error);
+      console.error('❌ Oura OAuth callback error:', error);
       throw error;
     }
   }
@@ -140,20 +127,20 @@ class WhoopService {
       const { data, error } = await supabase
         .from('user_profiles')
         .update({
-          whoop_access_token: tokens.access_token,
-          whoop_refresh_token: tokens.refresh_token,
-          whoop_token_expires_at: expiresAt.toISOString(),
-          whoop_connected: true,
+          oura_access_token: tokens.access_token,
+          oura_refresh_token: tokens.refresh_token,
+          oura_token_expires_at: expiresAt.toISOString(),
+          oura_connected: true,
           updated_at: new Date().toISOString()
         })
         .eq('user_id', userId);
 
       if (error) throw error;
 
-      console.log('✅ Tokens stored in database');
+      console.log('✅ Oura tokens stored in database');
       return data;
     } catch (error) {
-      console.error('❌ Error storing tokens:', error);
+      console.error('❌ Error storing Oura tokens:', error);
       throw error;
     }
   }
@@ -163,14 +150,14 @@ class WhoopService {
     try {
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('whoop_access_token, whoop_refresh_token, whoop_token_expires_at')
+        .select('oura_access_token, oura_refresh_token, oura_token_expires_at')
         .eq('user_id', userId)
         .single();
 
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('❌ Error retrieving tokens:', error);
+      console.error('❌ Error retrieving Oura tokens:', error);
       return null;
     }
   }
@@ -179,15 +166,15 @@ class WhoopService {
   async refreshAccessToken(userId) {
     try {
       const storedTokens = await this.getStoredTokens(userId);
-      if (!storedTokens?.whoop_refresh_token) {
-        throw new Error('No refresh token available');
+      if (!storedTokens?.oura_refresh_token) {
+        throw new Error('No Oura refresh token available');
       }
 
-      console.log('🔄 Refreshing Whoop access token...');
+      console.log('🔄 Refreshing Oura access token...');
 
       const body = new URLSearchParams({
         grant_type: 'refresh_token',
-        refresh_token: storedTokens.whoop_refresh_token,
+        refresh_token: storedTokens.oura_refresh_token,
         client_id: this.clientId,
         client_secret: this.clientSecret
       }).toString();
@@ -207,15 +194,15 @@ class WhoopService {
       }
 
       const tokens = await response.json();
-      const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
+      const expiresAt = new Date(Date.now() + (tokens.expires_in || 86400) * 1000);
 
       // Update tokens in database
       await this.storeTokens(userId, tokens, expiresAt);
 
-      console.log('✅ Access token refreshed successfully');
+      console.log('✅ Oura access token refreshed successfully');
       return tokens.access_token;
     } catch (error) {
-      console.error('❌ Error refreshing token:', error);
+      console.error('❌ Error refreshing Oura token:', error);
       throw error;
     }
   }
@@ -225,60 +212,60 @@ class WhoopService {
     try {
       const tokens = await this.getStoredTokens(userId);
       if (!tokens) {
-        throw new Error('No tokens found - user needs to authenticate');
+        throw new Error('No Oura tokens found - user needs to authenticate');
       }
 
-      const expiresAt = new Date(tokens.whoop_token_expires_at);
+      const expiresAt = new Date(tokens.oura_token_expires_at);
       const now = new Date();
       
-      // Refresh if token expires in less than 5 minutes
-      if (expiresAt - now < 5 * 60 * 1000) {
-        console.log('⚠️ Token expiring soon, refreshing...');
+      // Refresh if token expires in less than 1 hour
+      if (expiresAt - now < 60 * 60 * 1000) {
+        console.log('⚠️ Oura token expiring soon, refreshing...');
         return await this.refreshAccessToken(userId);
       }
 
-      return tokens.whoop_access_token;
+      return tokens.oura_access_token;
     } catch (error) {
-      console.error('❌ Error getting valid token:', error);
+      console.error('❌ Error getting valid Oura token:', error);
       throw error;
     }
   }
 
-  // Fetch data from Whoop API and store in health_metrics
+  // Fetch data from Oura API and store in health_metrics
   async fetchAndStoreData(userId, startDate, endDate) {
     try {
       const accessToken = await this.getValidAccessToken(userId);
       
-      console.log(`📊 Fetching Whoop data from ${startDate} to ${endDate}`);
+      console.log(`💍 Fetching Oura data from ${startDate} to ${endDate}`);
 
-      // Fetch recovery data
-      const recoveryData = await this.fetchRecoveryData(accessToken, startDate, endDate);
+      // Fetch readiness data
+      const readinessData = await this.fetchReadinessData(accessToken, startDate, endDate);
       
       // Fetch sleep data
       const sleepData = await this.fetchSleepData(accessToken, startDate, endDate);
       
-      // Fetch cycle data
-      const cycleData = await this.fetchCycleData(accessToken, startDate, endDate);
+      // Fetch activity data
+      const activityData = await this.fetchActivityData(accessToken, startDate, endDate);
 
       // Store all data in health_metrics table
       const stored = await this.storeInHealthMetrics(userId, {
-        recovery: recoveryData,
+        readiness: readinessData,
         sleep: sleepData,
-        cycle: cycleData
+        activity: activityData
       });
 
-      console.log(`✅ Stored ${stored.length} Whoop metrics in health_metrics`);
+      console.log(`✅ Stored ${stored.length} Oura metrics in health_metrics`);
       return stored;
     } catch (error) {
-      console.error('❌ Error fetching Whoop data:', error);
+      console.error('❌ Error fetching Oura data:', error);
       throw error;
     }
   }
 
-  // Fetch recovery data from Whoop
-  async fetchRecoveryData(accessToken, startDate, endDate) {
+  // Fetch readiness data from Oura
+  async fetchReadinessData(accessToken, startDate, endDate) {
     try {
-      const url = `${this.apiUrl}/recovery?start=${startDate}&end=${endDate}`;
+      const url = `${this.apiUrl}/usercollection/daily_readiness?start_date=${startDate}&end_date=${endDate}`;
       
       const response = await fetch(url, {
         headers: {
@@ -287,21 +274,21 @@ class WhoopService {
       });
 
       if (!response.ok) {
-        throw new Error(`Recovery fetch failed: ${response.status}`);
+        throw new Error(`Readiness fetch failed: ${response.status}`);
       }
 
       const data = await response.json();
-      return data.records || [];
+      return data.data || [];
     } catch (error) {
-      console.error('❌ Error fetching recovery:', error);
+      console.error('❌ Error fetching Oura readiness:', error);
       return [];
     }
   }
 
-  // Fetch sleep data from Whoop
+  // Fetch sleep data from Oura
   async fetchSleepData(accessToken, startDate, endDate) {
     try {
-      const url = `${this.apiUrl}/activity/sleep?start=${startDate}&end=${endDate}`;
+      const url = `${this.apiUrl}/usercollection/daily_sleep?start_date=${startDate}&end_date=${endDate}`;
       
       const response = await fetch(url, {
         headers: {
@@ -314,17 +301,17 @@ class WhoopService {
       }
 
       const data = await response.json();
-      return data.records || [];
+      return data.data || [];
     } catch (error) {
-      console.error('❌ Error fetching sleep:', error);
+      console.error('❌ Error fetching Oura sleep:', error);
       return [];
     }
   }
 
-  // Fetch cycle (strain) data from Whoop
-  async fetchCycleData(accessToken, startDate, endDate) {
+  // Fetch activity data from Oura
+  async fetchActivityData(accessToken, startDate, endDate) {
     try {
-      const url = `${this.apiUrl}/cycle?start=${startDate}&end=${endDate}`;
+      const url = `${this.apiUrl}/usercollection/daily_activity?start_date=${startDate}&end_date=${endDate}`;
       
       const response = await fetch(url, {
         headers: {
@@ -333,13 +320,13 @@ class WhoopService {
       });
 
       if (!response.ok) {
-        throw new Error(`Cycle fetch failed: ${response.status}`);
+        throw new Error(`Activity fetch failed: ${response.status}`);
       }
 
       const data = await response.json();
-      return data.records || [];
+      return data.data || [];
     } catch (error) {
-      console.error('❌ Error fetching cycles:', error);
+      console.error('❌ Error fetching Oura activity:', error);
       return [];
     }
   }
@@ -348,14 +335,14 @@ class WhoopService {
   async storeInHealthMetrics(userId, data) {
     const records = [];
 
-    // Process recovery data
-    for (const recovery of (data.recovery || [])) {
+    // Process readiness data
+    for (const readiness of (data.readiness || [])) {
       records.push({
         user_id: userId,
-        recorded_at: recovery.created_at || recovery.date,
-        vendor: 'whoop',
-        metric_type: 'recovery',
-        data: recovery,
+        recorded_at: readiness.day || readiness.timestamp,
+        vendor: 'oura',
+        metric_type: 'readiness',
+        data: readiness,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
@@ -365,8 +352,8 @@ class WhoopService {
     for (const sleep of (data.sleep || [])) {
       records.push({
         user_id: userId,
-        recorded_at: sleep.created_at || sleep.date,
-        vendor: 'whoop',
+        recorded_at: sleep.day || sleep.timestamp,
+        vendor: 'oura',
         metric_type: 'sleep',
         data: sleep,
         created_at: new Date().toISOString(),
@@ -374,21 +361,21 @@ class WhoopService {
       });
     }
 
-    // Process cycle data
-    for (const cycle of (data.cycle || [])) {
+    // Process activity data
+    for (const activity of (data.activity || [])) {
       records.push({
         user_id: userId,
-        recorded_at: cycle.created_at || cycle.start,
-        vendor: 'whoop',
-        metric_type: 'cycle',
-        data: cycle,
+        recorded_at: activity.day || activity.timestamp,
+        vendor: 'oura',
+        metric_type: 'activity',
+        data: activity,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
     }
 
     if (records.length === 0) {
-      console.log('No Whoop data to store');
+      console.log('No Oura data to store');
       return [];
     }
 
@@ -400,34 +387,34 @@ class WhoopService {
 
       if (error) throw error;
 
-      console.log(`✅ Stored ${stored.length} records in health_metrics`);
+      console.log(`✅ Stored ${stored.length} Oura records in health_metrics`);
       return stored;
     } catch (error) {
-      console.error('❌ Error storing in health_metrics:', error);
+      console.error('❌ Error storing Oura data in health_metrics:', error);
       throw error;
     }
   }
 
-  // Disconnect Whoop (remove tokens)
+  // Disconnect Oura (remove tokens)
   async disconnect(userId) {
     try {
       const { error } = await supabase
         .from('user_profiles')
         .update({
-          whoop_access_token: null,
-          whoop_refresh_token: null,
-          whoop_token_expires_at: null,
-          whoop_connected: false,
+          oura_access_token: null,
+          oura_refresh_token: null,
+          oura_token_expires_at: null,
+          oura_connected: false,
           updated_at: new Date().toISOString()
         })
         .eq('user_id', userId);
 
       if (error) throw error;
 
-      console.log('✅ Whoop disconnected');
+      console.log('✅ Oura disconnected');
       return true;
     } catch (error) {
-      console.error('❌ Error disconnecting Whoop:', error);
+      console.error('❌ Error disconnecting Oura:', error);
       throw error;
     }
   }
@@ -437,7 +424,7 @@ class WhoopService {
     const endDate = new Date().toISOString().split('T')[0];
     const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     
-    console.log(`📅 Performing initial sync from ${startDate} to ${endDate}`);
+    console.log(`📅 Performing initial Oura sync from ${startDate} to ${endDate}`);
     return await this.fetchAndStoreData(userId, startDate, endDate);
   }
 
@@ -446,9 +433,9 @@ class WhoopService {
     const endDate = new Date().toISOString().split('T')[0];
     const startDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     
-    console.log(`📅 Performing daily sync from ${startDate} to ${endDate}`);
+    console.log(`📅 Performing daily Oura sync from ${startDate} to ${endDate}`);
     return await this.fetchAndStoreData(userId, startDate, endDate);
   }
 }
 
-export default new WhoopService();
+export default new OuraService();
