@@ -34,11 +34,28 @@
           "background-processing",
           "fetch"
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["vitalitiair"]
+          }
+        ],
+        "LSApplicationQueriesSchemes": ["vitalitiair"]
       },
       "bundleIdentifier": "com.sophiafay24.VitalitiAirApp"
     },
     "android": {
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "vitalitiair"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
