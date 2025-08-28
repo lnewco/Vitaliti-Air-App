@@ -9,9 +9,17 @@ const log = logger.createModuleLogger('BluetoothService');
 
 class BluetoothService {
   constructor() {
-    this.manager = null;
+    // Initialize BleManager immediately to avoid race conditions
+    try {
+      this.manager = new BleManager();
+      this.isDestroyed = false;
+      log.info('🔄 BleManager initialized on service creation');
+    } catch (error) {
+      log.error('Failed to initialize BleManager:', error);
+      this.manager = null;
+      this.isDestroyed = true;
+    }
     this.referenceCount = 0;
-    this.isDestroyed = false;
     this.pulseOxDevice = null;
     this.onDeviceFound = null;
     this.onPulseOxDataReceived = null;
@@ -59,11 +67,16 @@ class BluetoothService {
     this.referenceCount++;
     log.info(`📱 BluetoothService reference acquired (count: ${this.referenceCount})`);
     
-    // Create manager if needed
+    // Recreate manager if it was destroyed
     if (!this.manager || this.isDestroyed) {
-      log.info('🔄 Creating new BleManager instance');
-      this.manager = new BleManager();
-      this.isDestroyed = false;
+      try {
+        log.info('🔄 Recreating BleManager instance');
+        this.manager = new BleManager();
+        this.isDestroyed = false;
+      } catch (error) {
+        log.error('Failed to recreate BleManager:', error);
+        // Keep the destroyed state if recreation fails
+      }
     }
     
     return this.referenceCount;
@@ -173,8 +186,20 @@ class BluetoothService {
     try {
       // Ensure manager exists before scanning
       if (!this.manager || this.isDestroyed) {
-        log.error('Cannot start scanning - BleManager not initialized');
-        return;
+        log.error('Cannot start scanning - BleManager not initialized. This should not happen in standalone builds. Please ensure you are not running in Expo Go.');
+        // Try to initialize if needed (fallback)
+        if (!this.manager) {
+          try {
+            log.info('Attempting emergency BleManager initialization...');
+            this.manager = new BleManager();
+            this.isDestroyed = false;
+          } catch (error) {
+            log.error('Emergency initialization failed:', error);
+            return;
+          }
+        } else {
+          return;
+        }
       }
       
       // Only support pulse-ox scanning now

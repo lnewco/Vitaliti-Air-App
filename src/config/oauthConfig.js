@@ -12,7 +12,7 @@ export const OAuthConfig = {
   // Option 2: Web redirect via Render (fallback)
   // Use if providers reject custom schemes
   WEB_REDIRECT: {
-    redirectUri: 'https://vitaliti-oauth.onrender.com/oauth-callback', // UPDATE THIS with your actual Render URL
+    redirectUri: 'https://vitaliti-oauth.onrender.com/oauth-callback-enhanced.html',
     notes: 'Deploy public folder to Render first'
   },
   
