@@ -16,8 +16,8 @@ class OuraService {
     if (!this.clientId || !this.clientSecret) {
       console.warn('⚠️ Oura OAuth credentials not configured. Integration disabled.');
     }
-    // Use Expo Auth Proxy to handle the OAuth redirect
-    this.redirectUri = 'https://auth.expo.io/@sophiafay24/Vitaliti-Air-App';
+    // Use Expo Auth Proxy - matches EAS project owner
+    this.redirectUri = 'https://auth.expo.io/@vitaliti/Vitaliti-Air-App';
     
     console.log('💍 Oura Service initialized');
   }
