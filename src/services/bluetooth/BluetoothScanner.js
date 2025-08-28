@@ -125,27 +125,30 @@ class BluetoothScanner {
     
     log.info(`🔍 Checking device type for name: "${device.name}" (lowercase: "${name}")`);
     
-    // Pulse oximeter patterns - EXPANDED list
-    const pulseOxPatterns = [
-      'oximeter', 'o2ring', 'checkme', 'o2', 'spo2', 
-      'berry', 'cms50', 'pulse', 'wellue', 'vibeat',
-      'o2max', 'masimo', 'nonin', 'contec'
+    // ONLY Wellue device patterns
+    const welluePatterns = [
+      'o2ring',
+      'checkme',
+      'wellue',
+      'viatom',  // Wellue's parent company
+      'o2max',
+      'sleepU'   // Another Wellue product
     ];
     
-    for (const pattern of pulseOxPatterns) {
+    for (const pattern of welluePatterns) {
       if (name.includes(pattern)) {
-        log.info(`✅ Matched pulse-ox pattern: ${pattern}`);
+        log.info(`✅ Matched Wellue pattern: ${pattern}`);
         return 'pulse-ox';
       }
     }
     
-    // Check if it starts with known prefixes
-    if (name.startsWith('cm') || name.startsWith('po') || name.startsWith('ox')) {
-      log.info(`✅ Matched pulse-ox prefix: ${name.substring(0, 2)}`);
+    // Also check if name contains just "o2" (common for Wellue)
+    if (name.includes('o2') || name.includes('02')) {
+      log.info(`✅ Matched O2 pattern for potential Wellue device`);
       return 'pulse-ox';
     }
     
-    log.info(`❌ No pulse-ox pattern matched for: ${device.name}`);
+    log.info(`❌ Not a Wellue device: ${device.name}`);
     return 'unknown';
   }
 
