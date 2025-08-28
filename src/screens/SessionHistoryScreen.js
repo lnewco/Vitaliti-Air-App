@@ -975,7 +975,7 @@ const SessionHistoryScreen = ({ route, navigation }) => {
       color: colors.text.secondary,
     },
     activeTabText: {
-      color: colors.white,
+      color: '#FFFFFF',
     },
     listContainer: {
       flex: 1,
@@ -1238,7 +1238,7 @@ const SessionHistoryScreen = ({ route, navigation }) => {
     statusText: {
       fontSize: 11,
       fontWeight: '600',
-      color: colors.white,
+      color: '#FFFFFF',
       textTransform: 'uppercase',
       letterSpacing: 0.5,
     },

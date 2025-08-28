@@ -293,7 +293,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   deviceNameConnected: {
     fontSize: 16,
-    color: colors.success[600],
+    color: colors.semantic.success,
     fontWeight: '600',
     marginBottom: 16,
     textAlign: 'center',
@@ -307,25 +307,25 @@ const createStyles = (colors) => StyleSheet.create({
     maxWidth: 280,
   },
   findButton: {
-    backgroundColor: colors.primary[500],
+    backgroundColor: colors.brand.accent,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
     marginBottom: 8,
   },
   findButtonText: {
-    color: colors.white,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },
   disconnectButton: {
-    backgroundColor: colors.error[500],
+    backgroundColor: colors.semantic.error,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 10,
   },
   disconnectButtonText: {
-    color: colors.white,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -343,13 +343,13 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     borderLeftWidth: 4,
-    borderLeftColor: colors.primary[500],
+    borderLeftColor: colors.brand.accent,
   },
   hrCard: {
-    borderLeftColor: colors.error[400],
+    borderLeftColor: colors.semantic.error,
   },
   pulseOxCard: {
-    borderLeftColor: colors.warning[400],
+    borderLeftColor: colors.semantic.warning,
   },
   dataLabel: {
     fontSize: 16,
@@ -369,7 +369,7 @@ const createStyles = (colors) => StyleSheet.create({
     marginRight: 8,
   },
   primaryDataValue: {
-    color: colors.success[600],
+    color: colors.semantic.success,
   },
   dataUnit: {
     fontSize: 14,
@@ -386,14 +386,14 @@ const createStyles = (colors) => StyleSheet.create({
     fontWeight: 'bold',
   },
   goodStatus: {
-    color: colors.success[500],
+    color: colors.semantic.success,
   },
   warningStatus: {
-    color: colors.warning[500],
+    color: colors.semantic.warning,
   },
   sensorWarning: {
     fontSize: 12,
-    color: colors.warning[500],
+    color: colors.semantic.warning,
     marginTop: 8,
     textAlign: 'center',
   },
@@ -407,7 +407,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     borderLeftWidth: 4,
-    borderLeftColor: colors.primary[500],
+    borderLeftColor: colors.brand.accent,
   },
   hrvLabel: {
     fontSize: 14,
@@ -418,7 +418,7 @@ const createStyles = (colors) => StyleSheet.create({
   hrvValue: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: colors.success[600],
+    color: colors.semantic.success,
     marginBottom: 4,
   },
   hrvQuality: {
@@ -503,13 +503,13 @@ const createStyles = (colors) => StyleSheet.create({
     color: colors.text.tertiary,
   },
   connectButton: {
-    backgroundColor: colors.primary[500],
+    backgroundColor: colors.brand.accent,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
   },
   connectButtonText: {
-    color: colors.white,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -543,13 +543,13 @@ const createStyles = (colors) => StyleSheet.create({
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: colors.primary[500],
+    backgroundColor: colors.brand.accent,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
   },
   retryButtonText: {
-    color: colors.white,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },

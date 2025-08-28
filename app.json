@@ -67,12 +67,6 @@
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.BLUETOOTH",
-        "android.permission.BLUETOOTH_ADMIN",
-        "android.permission.BLUETOOTH_SCAN",
-        "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
       ],
       "package": "com.sophiafay24.VitalitiAirApp"
@@ -88,6 +82,14 @@
     "plugins": [
       "expo-background-task",
       "expo-secure-store",
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": true,
+          "modes": ["peripheral", "central"],
+          "bluetoothAlwaysPermission": "$(PRODUCT_NAME) uses Bluetooth to connect to your pulse oximeter device for monitoring SpO2 and heart rate during training sessions."
+        }
+      ],
       [
         "expo-font",
         {

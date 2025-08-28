@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Linking } from 'react-native';
 import { supabase } from '../../config/supabase';
+import { OAuthConfig } from '../../config/oauthConfig';
 
 class OuraService {
   constructor() {
@@ -16,8 +17,9 @@ class OuraService {
     if (!this.clientId || !this.clientSecret) {
       console.warn('⚠️ Oura OAuth credentials not configured. Integration disabled.');
     }
-    // Use Expo Auth Proxy - matches EAS project owner
-    this.redirectUri = 'https://auth.expo.io/@vitaliti/Vitaliti-Air-App';
+    // Use configuration-based redirect URI
+    this.redirectUri = OAuthConfig.current.redirectUri;
+    console.log('💍 Using OAuth config:', OAuthConfig.current.notes);
     
     console.log('💍 Oura Service initialized');
   }
@@ -36,7 +38,7 @@ class OuraService {
       timestamp: Date.now()
     }));
     
-    // Build URL manually to avoid encoding issues with the redirect_uri
+    // Build URL with proper encoding based on redirect type
     const params = {
       response_type: 'code',
       client_id: this.clientId,
@@ -45,8 +47,10 @@ class OuraService {
       state: stateToken
     };
 
-    // Use URLSearchParams for Oura since their own example shows encoded redirect_uri
+    // Oura requires encoded URLs per their documentation
+    // This works for both HTTPS and custom schemes
     const queryString = new URLSearchParams(params).toString();
+    console.log('📝 Using standard encoding for Oura');
 
     const authUrl = `${this.authUrl}?${queryString}`;
     console.log('🔐 Oura OAuth URL generated:', authUrl);

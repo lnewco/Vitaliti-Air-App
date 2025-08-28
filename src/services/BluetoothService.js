@@ -108,17 +108,38 @@ class BluetoothService {
   async requestPermissions() {
     try {
       if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          {
-            title: 'Bluetooth Permission',
-            message: 'This app needs Bluetooth permission to connect to your pulse oximeter.',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
+        // Android 12+ requires explicit Bluetooth permissions
+        const androidVersion = Platform.Version;
+        
+        if (androidVersion >= 31) {
+          // Android 12+ (API 31+)
+          const permissions = [
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          ];
+          
+          const results = await PermissionsAndroid.requestMultiple(permissions);
+          
+          return (
+            results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
+            results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED &&
+            results[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED
+          );
+        } else {
+          // Android 11 and below
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+            {
+              title: 'Bluetooth Permission',
+              message: 'This app needs Bluetooth permission to connect to your pulse oximeter.',
+              buttonNeutral: 'Ask Me Later',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            }
+          );
+          return granted === PermissionsAndroid.RESULTS.GRANTED;
+        }
       } else {
         return true; // iOS handles Bluetooth permissions automatically
       }

@@ -53,8 +53,8 @@ const SurveyScaleInput = ({
       borderColor: colors.brand.secondary,
     },
     disabledButton: {
-      backgroundColor: colors.neutral[100],
-      borderColor: colors.neutral[300],
+      backgroundColor: colors.background.secondary,
+      borderColor: colors.border.light,
       opacity: 0.6,
     },
     scaleNumber: {
@@ -63,10 +63,10 @@ const SurveyScaleInput = ({
       color: colors.text.secondary,
     },
     selectedNumber: {
-      color: colors.background.tertiary,
+      color: '#FFFFFF',
     },
     disabledText: {
-      color: colors.text.disabled,
+      color: colors.text.quaternary,
     },
     labelsContainer: {
       flexDirection: 'row',

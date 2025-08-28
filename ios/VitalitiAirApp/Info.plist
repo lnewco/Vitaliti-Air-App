@@ -31,13 +31,10 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
+          <string>vitalitiair</string>
           <string>com.sophiafay24.VitalitiAirApp</string>
-        </array>
-      </dict>
-      <dict>
-        <key>CFBundleURLSchemes</key>
-        <array>
           <string>exp+vitaliti-air-app</string>
+          <string>vitaliti-air-app</string>
         </array>
       </dict>
     </array>

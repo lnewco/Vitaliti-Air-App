@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vitaliti Air - OAuth Redirect</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+        }
+        .container {
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+        h1 { font-size: 2rem; margin-bottom: 1rem; }
+        p { font-size: 1.1rem; opacity: 0.95; margin-bottom: 1.5rem; }
+        .button {
+            display: inline-block;
+            margin: 10px;
+            padding: 15px 30px;
+            background: white;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+        .error {
+            background: #ff4444;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .success {
+            background: #44ff44;
+            color: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .debug {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: left;
+            font-family: monospace;
+            font-size: 0.9rem;
+            word-break: break-all;
+        }
+        .methods {
+            margin-top: 30px;
+        }
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 3px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="status">Processing Authentication...</h1>
+        <div class="spinner" id="spinner"></div>
+        <p id="message">Please wait while we redirect you to the app...</p>
+        
+        <div id="manual-methods" class="methods" style="display: none;">
+            <p>If you're not redirected automatically:</p>
+            <a href="#" id="open-app" class="button">Open Vitaliti Air App</a>
+            <button onclick="copyCode()" class="button">Copy Authorization Code</button>
+        </div>
+        
+        <div id="debug-info" class="debug" style="display: none;">
+            <strong>Debug Information:</strong><br>
+            <span id="debug-content"></span>
+        </div>
+        
+        <div id="error-message" class="error" style="display: none;"></div>
+        <div id="success-message" class="success" style="display: none;"></div>
+    </div>
+
+    <script>
+        // Configuration
+        const APP_SCHEMES = [
+            'exp+vitaliti-air-app://oauth-callback',  // This one WORKS in your current build
+            'com.sophiafay24.VitalitiAirApp://oauth-callback',  // Bundle ID scheme
+            'vitalitiair://oauth-callback',  // Will work after rebuild
+            'vitaliti-air-app://oauth-callback'  // Alternative
+        ];
+        
+        // Parse URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const state = urlParams.get('state');
+        const error = urlParams.get('error');
+        const errorDescription = urlParams.get('error_description');
+        
+        // Debug logging
+        const debugInfo = {
+            timestamp: new Date().toISOString(),
+            code: code ? `${code.substring(0, 10)}...` : null,
+            state: state,
+            error: error,
+            errorDescription: errorDescription,
+            referrer: document.referrer,
+            userAgent: navigator.userAgent
+        };
+        
+        console.log('OAuth Callback Debug:', debugInfo);
+        
+        // Show debug info
+        document.getElementById('debug-content').textContent = JSON.stringify(debugInfo, null, 2);
+        
+        // Function to attempt opening the app
+        function attemptAppOpen(scheme, params) {
+            return new Promise((resolve, reject) => {
+                const url = `${scheme}?${params}`;
+                const timeout = setTimeout(() => reject('timeout'), 2500);
+                
+                // Create invisible iframe for iOS
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = url;
+                document.body.appendChild(iframe);
+                
+                // Also try direct location change
+                window.location.href = url;
+                
+                // Check if we're still on the page after a delay
+                setTimeout(() => {
+                    clearTimeout(timeout);
+                    if (document.hidden || document.visibilityState === 'hidden') {
+                        resolve('success');
+                    } else {
+                        document.body.removeChild(iframe);
+                        reject('failed');
+                    }
+                }, 2000);
+            });
+        }
+        
+        // Function to copy code to clipboard
+        function copyCode() {
+            const text = code || 'No code available';
+            navigator.clipboard.writeText(text).then(() => {
+                alert(`Code copied: ${text.substring(0, 20)}...`);
+            }).catch(err => {
+                alert('Failed to copy code');
+            });
+        }
+        
+        // Main redirect logic
+        async function handleRedirect() {
+            if (error) {
+                // OAuth error
+                document.getElementById('spinner').style.display = 'none';
+                document.getElementById('status').textContent = 'Authentication Failed';
+                document.getElementById('message').textContent = '';
+                document.getElementById('error-message').style.display = 'block';
+                document.getElementById('error-message').textContent = `Error: ${error}${errorDescription ? ' - ' + errorDescription : ''}`;
+                document.getElementById('debug-info').style.display = 'block';
+                return;
+            }
+            
+            if (!code) {
+                // No code received
+                document.getElementById('spinner').style.display = 'none';
+                document.getElementById('status').textContent = 'Invalid Response';
+                document.getElementById('message').textContent = 'No authorization code received';
+                document.getElementById('error-message').style.display = 'block';
+                document.getElementById('error-message').textContent = 'The OAuth provider did not return an authorization code';
+                document.getElementById('debug-info').style.display = 'block';
+                return;
+            }
+            
+            // Build query parameters
+            const params = new URLSearchParams({
+                code: code,
+                state: state || '',
+                timestamp: Date.now(),
+                source: 'web_redirect'
+            }).toString();
+            
+            // Try each scheme in order
+            for (let i = 0; i < APP_SCHEMES.length; i++) {
+                const scheme = APP_SCHEMES[i];
+                console.log(`Attempting redirect ${i + 1}/${APP_SCHEMES.length}: ${scheme}`);
+                
+                try {
+                    await attemptAppOpen(scheme, params);
+                    // Success!
+                    document.getElementById('spinner').style.display = 'none';
+                    document.getElementById('status').textContent = 'Success!';
+                    document.getElementById('message').textContent = 'Redirecting to app...';
+                    document.getElementById('success-message').style.display = 'block';
+                    document.getElementById('success-message').textContent = 'Authentication successful! The app should open momentarily.';
+                    return;
+                } catch (err) {
+                    console.log(`Scheme ${scheme} failed:`, err);
+                }
+            }
+            
+            // All schemes failed - show manual options
+            document.getElementById('spinner').style.display = 'none';
+            document.getElementById('status').textContent = 'Almost There!';
+            document.getElementById('message').textContent = 'Click below to complete authentication:';
+            document.getElementById('manual-methods').style.display = 'block';
+            document.getElementById('debug-info').style.display = 'block';
+            
+            // Set manual button href
+            const manualUrl = `${APP_SCHEMES[0]}?${params}`;
+            document.getElementById('open-app').href = manualUrl;
+        }
+        
+        // Add visibility change listener to detect if app opened
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('Page hidden - app likely opened successfully');
+            }
+        });
+        
+        // Start the redirect process
+        if (code || error) {
+            handleRedirect();
+        } else {
+            // No parameters - might be a direct visit
+            document.getElementById('spinner').style.display = 'none';
+            document.getElementById('status').textContent = 'OAuth Redirect Page';
+            document.getElementById('message').textContent = 'This page handles OAuth authentication for Vitaliti Air';
+            document.getElementById('debug-info').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

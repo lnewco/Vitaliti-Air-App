@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Linking } from 'react-native';
 import { supabase } from '../../config/supabase';
+import { OAuthConfig } from '../../config/oauthConfig';
 
 class WhoopService {
   constructor() {
@@ -18,8 +19,9 @@ class WhoopService {
     if (!this.clientId || !this.clientSecret) {
       console.warn('⚠️ Whoop OAuth credentials not configured. Integration disabled.');
     }
-    // Use Expo Auth Proxy - matches EAS project owner
-    this.redirectUri = 'https://auth.expo.io/@vitaliti/Vitaliti-Air-App';
+    // Use configuration-based redirect URI
+    this.redirectUri = OAuthConfig.current.redirectUri;
+    console.log('📱 Using OAuth config:', OAuthConfig.current.notes);
     
     console.log('🔧 Whoop Service initialized');
     console.log('📱 Redirect URI:', this.redirectUri);
@@ -39,7 +41,7 @@ class WhoopService {
       timestamp: Date.now()
     }));
     
-    // Build URL manually to avoid encoding issues with the redirect_uri
+    // Build URL with proper encoding based on redirect type
     const params = {
       response_type: 'code',
       client_id: this.clientId,
@@ -48,16 +50,31 @@ class WhoopService {
       state: stateToken
     };
 
-    // Manually construct the query string without encoding the redirect_uri
-    const queryString = Object.entries(params)
-      .map(([key, value]) => {
-        // Don't encode the redirect_uri - Whoop needs it unencoded
-        if (key === 'redirect_uri') {
-          return `${key}=${value}`;
-        }
-        return `${key}=${encodeURIComponent(value)}`;
-      })
-      .join('&');
+    // Encoding strategy based on redirect URI type
+    const isCustomScheme = this.redirectUri.startsWith('vitalitiair://');
+    const isHttps = this.redirectUri.startsWith('https://');
+    
+    let queryString;
+    if (isHttps) {
+      // For HTTPS URLs, use standard encoding (works with web redirects)
+      queryString = new URLSearchParams(params).toString();
+      console.log('📝 Using standard encoding for HTTPS redirect');
+    } else if (isCustomScheme) {
+      // For custom schemes, try without encoding first
+      queryString = Object.entries(params)
+        .map(([key, value]) => {
+          // Don't encode the custom scheme redirect_uri
+          if (key === 'redirect_uri') {
+            return `${key}=${value}`;
+          }
+          return `${key}=${encodeURIComponent(value)}`;
+        })
+        .join('&');
+      console.log('📝 Using unencoded custom scheme');
+    } else {
+      // Fallback to standard encoding
+      queryString = new URLSearchParams(params).toString();
+    }
 
     // Remove /auth since authUrl already includes /authorize
     const authUrl = `${this.authUrl}?${queryString}`;

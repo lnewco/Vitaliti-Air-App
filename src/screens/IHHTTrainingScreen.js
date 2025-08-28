@@ -759,11 +759,17 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const phaseColors = isAltitude 
     ? { 
         primary: colors.brand.accent, 
-        light: colors.background.elevated 
+        light: colors.background.elevated,
+        backgroundColor: colors.background.tertiary,
+        titleColor: colors.text.primary,
+        messageColor: colors.text.secondary
       }
     : { 
         primary: colors.semantic.success, 
-        light: colors.background.elevated 
+        light: colors.background.elevated,
+        backgroundColor: colors.background.tertiary,
+        titleColor: colors.text.primary,
+        messageColor: colors.text.secondary
       };
 
   // Get heart rate from pulse oximeter
@@ -788,12 +794,12 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       padding: 8,
     },
     backButtonText: {
-      color: colors.white,
+      color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '600',
     },
     headerTitle: {
-      color: colors.white,
+      color: '#FFFFFF',
       fontSize: 18,
       fontWeight: 'bold',
       flex: 1,
@@ -952,12 +958,12 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       justifyContent: 'center',
     },
     controlButtonText: {
-      color: colors.white,
+      color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '600',
     },
     pauseResumeButton: {
-      backgroundColor: colors.primary[500],
+      backgroundColor: colors.brand.accent,
       flex: 1,
       marginRight: 8,
     },
@@ -995,7 +1001,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       backgroundColor: colors.background.elevated,
     },
     warningBadge: {
-      backgroundColor: colors.warning[100],
+      backgroundColor: colors.semantic.warning,
     },
     normalBadge: {
       backgroundColor: colors.background.elevated,
@@ -1045,14 +1051,14 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       marginBottom: 20,
     },
     resumeButton: {
-      backgroundColor: colors.primary[500],
+      backgroundColor: colors.brand.accent,
       paddingHorizontal: 30,
       paddingVertical: 12,
       borderRadius: 8,
       marginBottom: 10,
     },
     resumeButtonText: {
-      color: colors.white,
+      color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '600',
     },
@@ -1061,7 +1067,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       paddingVertical: 12,
     },
     endButtonText: {
-      color: colors.white,
+      color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '600',
     },
@@ -1153,7 +1159,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       textAlign: 'center',
     },
     dismissButton: {
-      backgroundColor: colors.primary[500],
+      backgroundColor: colors.brand.accent,
       paddingHorizontal: 24,
       paddingVertical: 12,
       borderRadius: 8,

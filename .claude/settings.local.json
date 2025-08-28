@@ -66,7 +66,10 @@
       "Bash(chmod:*)",
       "Read(/var/folders/sf/czh6d2nx15q1cgq20fjxm9m00000gn/T/TemporaryItems/NSIRD_screencaptureui_kN7pkf/**)",
       "Bash(cd:*)",
-      "Bash(eas whoami:*)"
+      "Bash(eas whoami:*)",
+      "WebFetch(domain:developer.whoop.com)",
+      "WebFetch(domain:cloud.ouraring.com)",
+      "Bash(npm start:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

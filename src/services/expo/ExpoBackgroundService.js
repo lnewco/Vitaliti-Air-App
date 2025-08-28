@@ -128,7 +128,7 @@ export default class ExpoBackgroundService extends BaseBackgroundService {
             sound: true,
             priority: 'high',
           },
-          trigger,
+          trigger: { type: 'date', date: trigger },
         });
       } catch (error) {
         console.warn('⚠️ Failed to schedule notification:', error);
