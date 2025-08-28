@@ -3,6 +3,15 @@
  * 
  * This factory automatically selects between native and Expo implementations
  * based on the current runtime environment and available modules.
+ * 
+ * Background Service Architecture:
+ * - BaseBackgroundService: Abstract base class defining the interface
+ * - NativeBackgroundService: Uses native iOS/Android modules (production builds)
+ * - ExpoBackgroundService: Fallback for Expo Go using timestamps and notifications
+ * - AggressiveBackgroundService: Advanced iOS-specific background persistence (used directly by EnhancedSessionManager)
+ * 
+ * The factory dynamically selects NativeBackgroundService when available,
+ * falling back to ExpoBackgroundService for Expo Go compatibility.
  */
 
 import runtimeEnvironment from '../utils/RuntimeEnvironment';
