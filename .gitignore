@@ -79,4 +79,26 @@ yarn-error.*
 # Claude AI local settings
 .claude/settings.local.json
 
+# Build artifacts
+*.ipa
+*.log
+build-output.*
+
+# Media files
+screenshots/
+*.jpeg
+*.jpg
+*.pdf
+
+# Temporary HTML files
+expo-qr*.html
+oauth-*.html
+
+# Backup/alternative package files
+package_*.json
+app_*.json
+
+# SQL migration files in root
+*.sql
+
 # @end expo-cli.claude/
