@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, spacing } from '../../theme';
+import { colors, spacing } from '../../design-system';
 
 // Icon wrapper component
 // This will be replaced with react-native-vector-icons once installed

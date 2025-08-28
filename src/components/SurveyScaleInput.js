@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { useAppTheme } from '../theme';
+import { colors, spacing } from '../design-system';
 import { Body, Caption } from './base/Typography';
 
 const SurveyScaleInput = ({
@@ -11,14 +11,8 @@ const SurveyScaleInput = ({
   isRequired = false,
   disabled = false,
 }) => {
-  const theme = useAppTheme();
-  const { colors, spacing } = theme || {};
+  // Design tokens imported from design-system
   const scales = [1, 2, 3, 4, 5];
-  
-  // Fallback if theme is not ready
-  if (!colors || !spacing) {
-    return null;
-  }
 
   const styles = StyleSheet.create({
     container: {
@@ -31,7 +25,7 @@ const SurveyScaleInput = ({
       fontSize: 14,
     },
     required: {
-      color: colors.error[500],
+      color: colors.semantic.error,
     },
     scaleContainer: {
       flexDirection: 'row',
@@ -43,7 +37,7 @@ const SurveyScaleInput = ({
       width: 42,
       height: 42,
       borderRadius: 21,
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.background.primary,
       borderWidth: 2,
       borderColor: colors.border.medium,
       justifyContent: 'center',
@@ -55,8 +49,8 @@ const SurveyScaleInput = ({
       shadowRadius: 2,
     },
     selectedButton: {
-      backgroundColor: colors.primary[500],
-      borderColor: colors.primary[600],
+      backgroundColor: colors.brand.accent,
+      borderColor: colors.brand.secondary,
     },
     disabledButton: {
       backgroundColor: colors.neutral[100],
@@ -69,7 +63,7 @@ const SurveyScaleInput = ({
       color: colors.text.secondary,
     },
     selectedNumber: {
-      color: colors.surface.card,
+      color: colors.background.tertiary,
     },
     disabledText: {
       color: colors.text.disabled,

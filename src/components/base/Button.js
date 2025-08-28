@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, View } from 'react-native';
-import { useAppTheme } from '../../theme';
+import { colors, typography, spacing } from '../../design-system';
 
 const Button = ({
   title,
@@ -16,7 +16,7 @@ const Button = ({
   textStyle,
   ...props
 }) => {
-  const { colors, typography, spacing, shadows } = useAppTheme();
+  // Design tokens imported from design-system
   
   const styles = StyleSheet.create({
     base: {
@@ -28,22 +28,25 @@ const Button = ({
 
     // Variants
     primary: {
-      backgroundColor: colors.primary[500],
-      ...shadows.md,
+      backgroundColor: colors.brand.accent,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
     },
     primaryDisabled: {
-      backgroundColor: colors.primary[300],
-      ...shadows.none,
+      backgroundColor: colors.components.button.primary.disabled,
+      shadowOpacity: 0,
     },
     
     secondary: {
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.components.button.secondary.background,
       borderWidth: 1,
-      borderColor: colors.border.light,
+      borderColor: colors.components.button.secondary.border,
     },
     secondaryDisabled: {
-      backgroundColor: colors.surface.background,
-      borderColor: colors.border.light,
+      backgroundColor: colors.components.button.secondary.background,
+      borderColor: colors.components.button.secondary.border,
     },
     
     ghost: {
@@ -54,12 +57,15 @@ const Button = ({
     },
     
     danger: {
-      backgroundColor: colors.error[500],
-      ...shadows.md,
+      backgroundColor: colors.semantic.error,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
     },
     dangerDisabled: {
-      backgroundColor: colors.error[300],
-      ...shadows.none,
+      backgroundColor: colors.semantic.error,
+      shadowOpacity: 0,
     },
 
     // Sizes
@@ -89,7 +95,7 @@ const Button = ({
       ...typography.styles.buttonMedium,
     },
     ghostText: {
-      color: colors.primary[500],
+      color: colors.brand.accent,
       ...typography.styles.buttonMedium,
     },
     dangerText: {
@@ -153,7 +159,7 @@ const Button = ({
     <>
       {loading ? (
         <ActivityIndicator 
-          color={variant === 'primary' ? colors.text.inverse : colors.primary[500]} 
+          color={variant === 'primary' ? colors.text.inverse : colors.brand.accent} 
           size="small" 
         />
       ) : (

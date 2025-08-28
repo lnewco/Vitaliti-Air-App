@@ -31,14 +31,13 @@ if (!isExpoGo) {
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import DatabaseService from '../services/DatabaseService';
 import { useAuth } from '../auth/AuthContext';
-import { useAppTheme } from '../theme';
+import { colors } from '../design-system';
 
 const { width: screenWidth } = Dimensions.get('window');
 const CHART_WIDTH = screenWidth - 60; // Account for container padding
 
 const SessionHistoryScreen = ({ route, navigation }) => {
   const { user } = useAuth();
-  const { colors, theme } = useAppTheme();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState(null);
@@ -742,12 +741,12 @@ const SessionHistoryScreen = ({ route, navigation }) => {
                   width={CHART_WIDTH}
                   height={220}
                 chartConfig={{
-                  backgroundColor: colors.surface.card,
-                  backgroundGradientFrom: colors.surface.card,
-                  backgroundGradientTo: colors.surface.card,
+                  backgroundColor: colors.background.tertiary,
+                  backgroundGradientFrom: colors.background.tertiary,
+                  backgroundGradientTo: colors.background.tertiary,
                   decimalPlaces: 0,
                   color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`,
-                  labelColor: (opacity = 1) => theme === 'dark' ? `rgba(200, 200, 200, ${opacity})` : `rgba(102, 102, 102, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(200, 200, 200, ${opacity})`,
                   style: {
                     borderRadius: 8
                   },
@@ -789,11 +788,11 @@ const SessionHistoryScreen = ({ route, navigation }) => {
               {/* Phase legend */}
               <View style={styles.phaseLegend}>
                 <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: colors.warning[500] }]} />
+                  <View style={[styles.legendDot, { backgroundColor: colors.semantic.warning }]} />
                   <Text style={styles.legendText}>Hypoxic</Text>
                 </View>
                 <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: colors.success[500] }]} />
+                  <View style={[styles.legendDot, { backgroundColor: colors.semantic.success }]} />
                   <Text style={styles.legendText}>Hyperoxic</Text>
                 </View>
               </View>
@@ -809,12 +808,12 @@ const SessionHistoryScreen = ({ route, navigation }) => {
                 width={CHART_WIDTH}
                 height={220}
                 chartConfig={{
-                  backgroundColor: colors.surface.card,
-                  backgroundGradientFrom: colors.surface.card,
-                  backgroundGradientTo: colors.surface.card,
+                  backgroundColor: colors.background.tertiary,
+                  backgroundGradientFrom: colors.background.tertiary,
+                  backgroundGradientTo: colors.background.tertiary,
                   decimalPlaces: 0,
                   color: (opacity = 1) => `rgba(244, 67, 54, ${opacity})`,
-                  labelColor: (opacity = 1) => theme === 'dark' ? `rgba(200, 200, 200, ${opacity})` : `rgba(102, 102, 102, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(200, 200, 200, ${opacity})`,
                   style: {
                     borderRadius: 8
                   },
@@ -856,11 +855,11 @@ const SessionHistoryScreen = ({ route, navigation }) => {
               {/* Phase legend */}
               <View style={styles.phaseLegend}>
                 <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: colors.warning[500] }]} />
+                  <View style={[styles.legendDot, { backgroundColor: colors.semantic.warning }]} />
                   <Text style={styles.legendText}>Hypoxic</Text>
                 </View>
                 <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: colors.success[500] }]} />
+                  <View style={[styles.legendDot, { backgroundColor: colors.semantic.success }]} />
                   <Text style={styles.legendText}>Hyperoxic</Text>
                 </View>
               </View>
@@ -876,12 +875,12 @@ const SessionHistoryScreen = ({ route, navigation }) => {
                 width={CHART_WIDTH}
                 height={220}
                 chartConfig={{
-                  backgroundColor: colors.surface.card,
-                  backgroundGradientFrom: colors.surface.card,
-                  backgroundGradientTo: colors.surface.card,
+                  backgroundColor: colors.background.tertiary,
+                  backgroundGradientFrom: colors.background.tertiary,
+                  backgroundGradientTo: colors.background.tertiary,
                   decimalPlaces: 0,
                   color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`,
-                  labelColor: (opacity = 1) => theme === 'dark' ? `rgba(200, 200, 200, ${opacity})` : `rgba(102, 102, 102, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(200, 200, 200, ${opacity})`,
                   style: {
                     borderRadius: 8
                   },
@@ -931,11 +930,11 @@ const SessionHistoryScreen = ({ route, navigation }) => {
               {/* Phase legend */}
               <View style={styles.phaseLegend}>
                 <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: colors.warning[500] }]} />
+                  <View style={[styles.legendDot, { backgroundColor: colors.semantic.warning }]} />
                   <Text style={styles.legendText}>Hypoxic</Text>
                 </View>
                 <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: colors.success[500] }]} />
+                  <View style={[styles.legendDot, { backgroundColor: colors.semantic.success }]} />
                   <Text style={styles.legendText}>Hyperoxic</Text>
                 </View>
               </View>
@@ -950,11 +949,11 @@ const SessionHistoryScreen = ({ route, navigation }) => {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.background.primary,
     },
     tabContainer: {
       flexDirection: 'row',
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       paddingHorizontal: 16,
       paddingVertical: 8,
       borderBottomWidth: 1,
@@ -968,7 +967,7 @@ const SessionHistoryScreen = ({ route, navigation }) => {
       marginHorizontal: 4,
     },
     activeTab: {
-      backgroundColor: colors.primary[500],
+      backgroundColor: colors.brand.accent,
     },
     tabText: {
       fontSize: 14,
@@ -984,15 +983,15 @@ const SessionHistoryScreen = ({ route, navigation }) => {
       paddingTop: 16,
     },
     sessionCard: {
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       borderRadius: 12,
       padding: 16,
       marginBottom: 12,
       borderWidth: 1,
       borderColor: colors.border.light,
-      shadowColor: theme === 'dark' ? '#000' : '#000',
+      shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: theme === 'dark' ? 0.3 : 0.1,
+      shadowOpacity: 0.3,
       shadowRadius: 4,
       elevation: 3,
     },
@@ -1025,18 +1024,18 @@ const SessionHistoryScreen = ({ route, navigation }) => {
       marginLeft: 8,
     },
     statusCompleted: {
-      backgroundColor: colors.success[100],
+      backgroundColor: colors.background.elevated,
     },
     statusCompletedText: {
-      color: colors.success[700],
+      color: colors.semantic.success,
       fontSize: 11,
       fontWeight: '600',
     },
     statusIncomplete: {
-      backgroundColor: colors.warning[100],
+      backgroundColor: colors.background.elevated,
     },
     statusIncompleteText: {
-      color: colors.warning[700],
+      color: colors.semantic.warning,
       fontSize: 11,
       fontWeight: '600',
     },
@@ -1077,11 +1076,11 @@ const SessionHistoryScreen = ({ route, navigation }) => {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.background.primary,
     },
     emptyContainer: {
       flex: 1,
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.background.primary,
     },
     emptyContent: {
       flex: 1,
@@ -1126,7 +1125,7 @@ const SessionHistoryScreen = ({ route, navigation }) => {
       padding: 20,
     },
     modalContent: {
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       borderRadius: 16,
       maxWidth: 400,
       width: '100%',
@@ -1192,22 +1191,22 @@ const SessionHistoryScreen = ({ route, navigation }) => {
       borderRadius: 4,
     },
     syncedDot: {
-      backgroundColor: colors.success[500],
+      backgroundColor: colors.semantic.success,
     },
     unsyncedDot: {
-      backgroundColor: colors.warning[500],
+      backgroundColor: colors.semantic.warning,
     },
     // Session list item styles
     sessionItem: {
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       borderRadius: 12,
       padding: 16,
       marginBottom: 12,
       borderWidth: 1,
       borderColor: colors.border.light,
-      shadowColor: theme === 'dark' ? '#000' : '#000',
+      shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: theme === 'dark' ? 0.3 : 0.1,
+      shadowOpacity: 0.3,
       shadowRadius: 4,
       elevation: 3,
     },
@@ -1280,7 +1279,7 @@ const SessionHistoryScreen = ({ route, navigation }) => {
       fontStyle: 'italic',
     },
     chartFallback: {
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.background.primary,
       padding: 20,
       borderRadius: 8,
       alignItems: 'center',

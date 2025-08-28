@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Redirecting to Vitaliti Air...</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+        }
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 3px solid white;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .manual-link {
+            margin-top: 2rem;
+            padding: 1rem 2rem;
+            background: white;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 8px;
+            display: inline-block;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Authorization Successful!</h1>
+        <div class="spinner"></div>
+        <p>Redirecting to Vitaliti Air app...</p>
+        <a href="#" id="manual-link" class="manual-link" style="display: none;">Open Vitaliti Air App</a>
+    </div>
+
+    <script>
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const state = urlParams.get('state');
+        const error = urlParams.get('error');
+        
+        if (error) {
+            document.querySelector('h1').textContent = 'Authorization Failed';
+            document.querySelector('p').textContent = 'Error: ' + error;
+            document.querySelector('.spinner').style.display = 'none';
+        } else if (code) {
+            // Build the deep link URL
+            const deepLink = `vitalitiair://whoop-callback?code=${code}&state=${state || ''}`;
+            
+            // Try to open the app
+            window.location.href = deepLink;
+            
+            // Show manual link after 2 seconds if still on page
+            setTimeout(() => {
+                const manualLink = document.getElementById('manual-link');
+                manualLink.href = deepLink;
+                manualLink.style.display = 'inline-block';
+                document.querySelector('.spinner').style.display = 'none';
+                document.querySelector('p').textContent = 'If the app didn\'t open automatically:';
+            }, 2000);
+        } else {
+            document.querySelector('h1').textContent = 'Invalid Request';
+            document.querySelector('p').textContent = 'No authorization code received';
+            document.querySelector('.spinner').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text, View, StyleSheet } from 'react-native';
 import Constants from 'expo-constants';
-import { useAppTheme } from '../../theme';
+import { colors, spacing } from '../../design-system';
 
 // Import VectorIcon with error handling
 let VectorIcon = null;
@@ -17,7 +17,7 @@ const SafeIcon = ({
   color, 
   style 
 }) => {
-  const { colors, spacing } = useAppTheme();
+  // Design tokens imported from design-system
   const isExpoGo = Constants.appOwnership === 'expo';
   const isProduction = Constants.appOwnership === 'standalone' && !__DEV__;
   

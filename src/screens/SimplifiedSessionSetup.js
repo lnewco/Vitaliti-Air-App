@@ -9,6 +9,7 @@ import {
   Alert,
   StatusBar,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -32,17 +33,28 @@ import OptimizedConnectionManager from '../components/OptimizedConnectionManager
 import SessionIdGenerator from '../utils/sessionIdGenerator';
 import DatabaseService from '../services/DatabaseService';
 import SupabaseService from '../services/SupabaseService';
+import PreSessionSurvey from '../components/feedback/PreSessionSurvey';
 import Constants from 'expo-constants';
 
-// PRODUCTION NOTE: This flag disables Bluetooth requirement for Expo Go testing
-// TODO: Set to false before production build or when testing with development builds
-// When false, the app will require Bluetooth connection to start training
-const ALLOW_DEMO_MODE = __DEV__ && Constants.appOwnership === 'expo';
+// Detect if running in Expo Go (demo mode) vs production build
+const IS_EXPO_GO = Constants.appOwnership === 'expo';
+const ALLOW_DEMO_MODE = IS_EXPO_GO;
 
 const SimplifiedSessionSetup = ({ navigation }) => {
-  const { isPulseOxConnected, isAnyDeviceConnected } = useBluetoothConnection();
+  const { isPulseOxConnected, isAnyDeviceConnected, disconnect } = useBluetoothConnection();
   const [isStartingSession, setIsStartingSession] = useState(false);
+  const [showPreSessionSurvey, setShowPreSessionSurvey] = useState(false);
+  const [pendingSessionId, setPendingSessionId] = useState(null);
+  const [showConnectionManager, setShowConnectionManager] = useState(false);
   const scale = useSharedValue(1);
+
+  // Helper function to determine button title based on state
+  const getButtonTitle = () => {
+    if (IS_EXPO_GO && !isPulseOxConnected) {
+      return 'Begin Training (Demo Mode)';
+    }
+    return 'Begin Training';
+  };
 
   // Hardcoded protocol configuration
   const protocolConfig = {
@@ -69,6 +81,16 @@ const SimplifiedSessionSetup = ({ navigation }) => {
       console.warn('[DEMO MODE] Starting session without pulse oximeter - for testing only');
     }
 
+    // Generate session ID for pre-session survey
+    const sessionId = SessionIdGenerator.generate('IHHT');
+    setPendingSessionId(sessionId);
+    
+    // Show pre-session survey first
+    setShowPreSessionSurvey(true);
+  };
+
+  const handlePreSessionComplete = async (surveyData) => {
+    setShowPreSessionSurvey(false);
     setIsStartingSession(true);
 
     try {
@@ -253,23 +275,65 @@ const SimplifiedSessionSetup = ({ navigation }) => {
                 </View>
               </View>
 
+              {/* Connection Button or Demo Mode Message */}
               {!isPulseOxConnected && (
-                <View style={styles.connectionNote}>
-                  <Text style={styles.connectionNoteText}>
-                    {ALLOW_DEMO_MODE 
-                      ? 'Pulse oximeter not connected - Training in demo mode'
-                      : 'Connect your pulse oximeter to begin training'
-                    }
-                  </Text>
-                </View>
+                <>
+                  {IS_EXPO_GO ? (
+                    <View style={styles.demoModeNote}>
+                      <Text style={styles.demoModeNoteText}>
+                        Feature currently unavailable in demo mode (Expo Go)
+                      </Text>
+                      <Text style={styles.demoModeSubtext}>
+                        Build for Xcode or TestFlight to enable Bluetooth
+                      </Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.connectDeviceButton}
+                      onPress={() => setShowConnectionManager(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.connectDeviceButtonText}>Connect Pulse Oximeter</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+
+              {/* Connected Device Actions */}
+              {isPulseOxConnected && (
+                <TouchableOpacity
+                  style={styles.disconnectDeviceButton}
+                  onPress={() => disconnect('pulse-ox')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.disconnectDeviceButtonText}>Disconnect Device</Text>
+                </TouchableOpacity>
               )}
             </PremiumCard>
           </Animated.View>
 
-          {/* Bluetooth Connection Manager - Hidden but functional */}
-          <View style={styles.hiddenConnectionManager}>
-            <OptimizedConnectionManager hideDataDisplay />
-          </View>
+          {/* Bluetooth Connection Manager Modal */}
+          {showConnectionManager && !IS_EXPO_GO && (
+            <Modal
+              visible={showConnectionManager}
+              animationType="slide"
+              presentationStyle="pageSheet"
+              onRequestClose={() => setShowConnectionManager(false)}
+            >
+              <SafeAreaView style={styles.modalContainer}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Connect Device</Text>
+                  <TouchableOpacity
+                    style={styles.modalCloseButton}
+                    onPress={() => setShowConnectionManager(false)}
+                  >
+                    <Text style={styles.modalCloseText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                <OptimizedConnectionManager hideDataDisplay={false} />
+              </SafeAreaView>
+            </Modal>
+          )}
         </ScrollView>
 
         {/* Action Buttons */}
@@ -279,7 +343,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
         >
           <Animated.View style={animatedButtonStyle}>
             <PremiumButton
-              title={isStartingSession ? 'Starting...' : 'Begin Training'}
+              title={isStartingSession ? 'Starting...' : getButtonTitle()}
               onPress={handleStartSession}
               disabled={!ALLOW_DEMO_MODE && !isPulseOxConnected || isStartingSession}
               loading={isStartingSession}
@@ -296,8 +360,20 @@ const SimplifiedSessionSetup = ({ navigation }) => {
           </TouchableOpacity>
         </Animated.View>
       </SafeAreaView>
+      
+      {/* Pre-Session Survey Modal */}
+      <PreSessionSurvey
+        visible={showPreSessionSurvey}
+        onComplete={handlePreSessionComplete}
+        onCancel={handlePreSessionCancel}
+      />
     </View>
   );
+  
+  const handlePreSessionCancel = () => {
+    setShowPreSessionSurvey(false);
+    setPendingSessionId(null);
+  };
 };
 
 const styles = StyleSheet.create({
@@ -530,6 +606,75 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     color: colors.text.tertiary,
     fontWeight: '500',
+  },
+  connectDeviceButton: {
+    marginTop: spacing.md,
+    backgroundColor: colors.brand.accent,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: spacing.radius.md,
+    alignItems: 'center',
+  },
+  connectDeviceButtonText: {
+    ...typography.bodyMedium,
+    color: colors.text.primary,
+    fontWeight: '600',
+  },
+  disconnectDeviceButton: {
+    marginTop: spacing.md,
+    backgroundColor: colors.semantic.error + '20',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: spacing.radius.md,
+    alignItems: 'center',
+  },
+  disconnectDeviceButtonText: {
+    ...typography.bodyMedium,
+    color: colors.semantic.error,
+    fontWeight: '600',
+  },
+  demoModeNote: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.semantic.warning + '15',
+    borderRadius: spacing.radius.md,
+    borderWidth: 1,
+    borderColor: colors.semantic.warning + '30',
+  },
+  demoModeNoteText: {
+    ...typography.bodySmall,
+    color: colors.semantic.warning,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  demoModeSubtext: {
+    ...typography.caption,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.default,
+  },
+  modalTitle: {
+    ...typography.h2,
+    color: colors.text.primary,
+  },
+  modalCloseButton: {
+    padding: spacing.xs,
+  },
+  modalCloseText: {
+    ...typography.h3,
+    color: colors.text.secondary,
   },
 });
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { useAppTheme } from '../../theme';
+import { colors, spacing } from '../../design-system';
 import { Label, Body, Caption } from '../base/Typography';
 
 const FormRadioGroup = ({
@@ -11,7 +11,7 @@ const FormRadioGroup = ({
   error,
   required = false,
 }) => {
-  const { colors, spacing } = useAppTheme();
+  // Design tokens imported from design-system
   
   const styles = StyleSheet.create({
     container: {
@@ -42,13 +42,13 @@ const FormRadioGroup = ({
       alignItems: 'center',
     },
     radioSelected: {
-      borderColor: colors.primary[500],
+      borderColor: colors.brand.accent,
     },
     radioInner: {
       width: 10,
       height: 10,
       borderRadius: 5,
-      backgroundColor: colors.primary[500],
+      backgroundColor: colors.brand.accent,
     },
     errorText: {
       marginTop: spacing.xs,

@@ -1072,70 +1072,79 @@ class DatabaseService {
   // ========================================
 
   /**
-   * DEPRECATED: Pre-session surveys removed in simplified flow
-   * Keeping for reference only - do not use
+   * Save pre-session survey data (reactivated for AI feedback engine)
    */
-  // async savePreSessionSurvey(sessionId, clarityPre, energyPre) {
-  //   try {
-  //     // Validate input
-  //     if (!this.isValidSurveyScale(clarityPre) || !this.isValidSurveyScale(energyPre)) {
-  //       throw new Error('Survey values must be integers between 1 and 5');
-  //     }
+  async savePreSessionSurvey(sessionId, clarityPre, energyPre, stressPre) {
+    try {
+      // Validate input
+      if (!this.isValidSurveyScale(clarityPre) || !this.isValidSurveyScale(energyPre) || !this.isValidSurveyScale(stressPre)) {
+        throw new Error('Survey values must be integers between 1 and 5');
+      }
 
-  //     log.info(`Saving pre-session survey for: ${sessionId}`);
+      log.info(`Saving pre-session survey for: ${sessionId}`);
       
-  //     // Use INSERT OR IGNORE followed by UPDATE to preserve existing data
-  //     const insertQuery = `
-  //       INSERT OR IGNORE INTO session_surveys (session_id, clarity_pre, energy_pre, updated_at)
-  //       VALUES (?, ?, ?, strftime('%s', 'now'))
-  //     `;
+      // Use INSERT OR IGNORE followed by UPDATE to preserve existing data
+      const insertQuery = `
+        INSERT OR IGNORE INTO session_surveys (session_id, clarity_pre, energy_pre, stress_pre, updated_at)
+        VALUES (?, ?, ?, ?, strftime('%s', 'now'))
+      `;
       
-  //     const updateQuery = `
-  //       UPDATE session_surveys 
-  //       SET clarity_pre = ?, energy_pre = ?, updated_at = strftime('%s', 'now')
-  //       WHERE session_id = ?
-  //     `;
+      const updateQuery = `
+        UPDATE session_surveys 
+        SET clarity_pre = ?, energy_pre = ?, stress_pre = ?, updated_at = strftime('%s', 'now')
+        WHERE session_id = ?
+      `;
       
-  //     await this.db.executeSql(insertQuery, [sessionId, clarityPre, energyPre]);
-  //     await this.db.executeSql(updateQuery, [clarityPre, energyPre, sessionId]);
+      await this.db.runAsync(insertQuery, [sessionId, clarityPre, energyPre, stressPre]);
+      await this.db.runAsync(updateQuery, [clarityPre, energyPre, stressPre, sessionId]);
       
-  //     log.info(`Pre-session survey saved: clarity=${clarityPre}, energy=${energyPre}`);
+      log.info(`Pre-session survey saved: clarity=${clarityPre}, energy=${energyPre}, stress=${stressPre}`);
       
-  //     return { success: true };
-  //   } catch (error) {
-  //     log.error('❌ Failed to save pre-session survey:', error);
-  //     throw error;
-  //   }
-  // }
+      return { success: true };
+    } catch (error) {
+      log.error('❌ Failed to save pre-session survey:', error);
+      throw error;
+    }
+  }
 
   /**
-   * Save post-session survey data
+   * Save post-session survey data (enhanced with symptoms and rating)
    */
-  async savePostSessionSurvey(sessionId, clarityPost, energyPost, stressPost, notesPost = null) {
+  async savePostSessionSurvey(sessionId, clarityPost, energyPost, stressPost, notesPost = null, symptoms = [], overallRating = null) {
     try {
       // Validate input
       if (!this.isValidSurveyScale(clarityPost) || !this.isValidSurveyScale(energyPost) || !this.isValidSurveyScale(stressPost)) {
         throw new Error('Survey values must be integers between 1 and 5');
       }
 
+      if (overallRating && !this.isValidSurveyScale(overallRating)) {
+        throw new Error('Overall rating must be an integer between 1 and 5');
+      }
+
       log.info(`Saving post-session survey for: ${sessionId}`);
+      
+      // Convert symptoms array to JSON string for SQLite
+      const symptomsJson = JSON.stringify(symptoms || []);
       
       // Use INSERT OR IGNORE followed by UPDATE to preserve existing data
       const insertQuery = `
-        INSERT OR IGNORE INTO session_surveys (session_id, clarity_post, energy_post, stress_post, notes_post, updated_at)
-        VALUES (?, ?, ?, ?, ?, strftime('%s', 'now'))
+        INSERT OR IGNORE INTO session_surveys 
+        (session_id, clarity_post, energy_post, stress_post, notes_post, post_symptoms, overall_rating, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))
       `;
       
       const updateQuery = `
         UPDATE session_surveys 
-        SET clarity_post = ?, energy_post = ?, stress_post = ?, notes_post = ?, updated_at = strftime('%s', 'now')
+        SET clarity_post = ?, energy_post = ?, stress_post = ?, 
+            notes_post = ?, post_symptoms = ?, overall_rating = ?, 
+            updated_at = strftime('%s', 'now')
         WHERE session_id = ?
       `;
       
-      await this.db.runAsync(insertQuery, [sessionId, clarityPost, energyPost, stressPost, notesPost]);
-      await this.db.runAsync(updateQuery, [clarityPost, energyPost, stressPost, notesPost, sessionId]);
+      await this.db.runAsync(insertQuery, [sessionId, clarityPost, energyPost, stressPost, notesPost, symptomsJson, overallRating]);
+      await this.db.runAsync(updateQuery, [clarityPost, energyPost, stressPost, notesPost, symptomsJson, overallRating, sessionId]);
       
-      log.info(`Post-session survey saved: clarity=${clarityPost}, energy=${energyPost}, stress=${stressPost}`);
+      log.info(`Post-session survey saved: clarity=${clarityPost}, energy=${energyPost}, stress=${stressPost}, rating=${overallRating}`);
       
       return { success: true };
     } catch (error) {
@@ -1145,25 +1154,34 @@ class DatabaseService {
   }
 
   /**
-   * Save intra-session response
+   * Save intra-session response (enhanced with sensations and physiological data)
    */
-  async saveIntraSessionResponse(sessionId, phaseNumber, clarity, energy, stress, timestamp) {
+  async saveIntraSessionResponse(sessionId, phaseNumber, clarity, energy, stressPerception, timestamp, sensations = [], spo2 = null, heartRate = null) {
     try {
       // Validate input
-      if (!this.isValidSurveyScale(clarity) || !this.isValidSurveyScale(energy) || !this.isValidSurveyScale(stress)) {
+      if (!this.isValidSurveyScale(clarity) || !this.isValidSurveyScale(energy) || !this.isValidSurveyScale(stressPerception)) {
         throw new Error('Survey values must be integers between 1 and 5');
       }
 
       log.info(`Saving intra-session response for: ${sessionId}, phase: ${phaseNumber}`);
       
+      // Convert sensations array to JSON string for SQLite
+      const sensationsJson = JSON.stringify(sensations || []);
+      
       const query = `
         INSERT OR REPLACE INTO intra_session_responses 
-        (session_id, phase_number, clarity, energy, stress, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?)
+        (session_id, phase_number, clarity, energy, stress, stress_perception, 
+         sensations, spo2_value, hr_value, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
-      await this.db.runAsync(query, [sessionId, phaseNumber, clarity, energy, stress, timestamp]);
-      log.info(`Intra-session response saved: phase=${phaseNumber}, clarity=${clarity}, energy=${energy}, stress=${stress}`);
+      await this.db.runAsync(query, [
+        sessionId, phaseNumber, clarity, energy, 
+        stressPerception, stressPerception, // Using stress_perception for both old 'stress' and new field
+        sensationsJson, spo2, heartRate, timestamp
+      ]);
+      
+      log.info(`Intra-session response saved: phase=${phaseNumber}, clarity=${clarity}, energy=${energy}, stress=${stressPerception}`);
       
       return { success: true };
     } catch (error) {

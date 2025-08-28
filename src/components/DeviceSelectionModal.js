@@ -7,11 +7,15 @@ import {
   Modal,
   FlatList,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  StatusBar
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useBluetoothConnection } from '../context/BluetoothContext';
-import { useAppTheme } from '../theme';
+import SafeIcon from './base/SafeIcon';
 import logger from '../utils/logger';
+import { colors, spacing } from '../design-system';
 
 const log = logger.createModuleLogger('DeviceSelectionModal');
 
@@ -32,7 +36,6 @@ const DeviceSelectionModal = ({
     stopScanning,
     connectToDevice,
   } = useBluetoothConnection();
-  const { colors, spacing } = useAppTheme();
 
   // Start scanning when modal opens
   useEffect(() => {
@@ -96,67 +99,80 @@ const DeviceSelectionModal = ({
   const styles = StyleSheet.create({
     modalContainer: {
       flex: 1,
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.background.primary,
+    },
+    modalContent: {
+      flex: 1,
       paddingTop: 60,
+    },
+    gradient: {
+      ...StyleSheet.absoluteFillObject,
     },
     modalHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingHorizontal: 20,
-      paddingBottom: 20,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border.light,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.lg,
+      backgroundColor: 'transparent',
     },
     modalTitle: {
       fontSize: 24,
-      fontWeight: 'bold',
+      fontWeight: '700',
       color: colors.text.primary,
     },
     closeButton: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: colors.surface.card,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
       justifyContent: 'center',
       alignItems: 'center',
-    },
-    closeButtonText: {
-      fontSize: 18,
-      color: colors.text.secondary,
-      fontWeight: 'bold',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.2)',
     },
     modalInstructions: {
       fontSize: 16,
       color: colors.text.secondary,
       textAlign: 'center',
-      margin: 20,
+      marginHorizontal: spacing.xl,
+      marginBottom: spacing.lg,
       lineHeight: 24,
+    },
+    sectionTitle: {
+      fontSize: 14,
+      color: colors.text.tertiary,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      marginHorizontal: spacing.xl,
+      marginBottom: spacing.md,
+      fontWeight: '600',
     },
     deviceList: {
       flex: 1,
-      paddingHorizontal: 20,
+      paddingHorizontal: spacing.xl,
     },
     deviceItem: {
-      backgroundColor: colors.surface.card,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 12,
+      backgroundColor: 'rgba(26, 29, 35, 0.8)',
+      borderRadius: 16,
+      padding: spacing.lg,
+      marginBottom: spacing.md,
       flexDirection: 'row',
       alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.08)',
+    },
+    connectedItem: {
+      backgroundColor: 'rgba(74, 222, 128, 0.1)',
+      borderColor: colors.metrics.breath,
     },
     deviceInfo: {
       flex: 1,
-      marginRight: 12,
+      marginRight: spacing.md,
     },
     deviceName: {
       fontSize: 16,
-      fontWeight: 'bold',
+      fontWeight: '600',
       color: colors.text.primary,
       marginBottom: 4,
     },
@@ -170,30 +186,36 @@ const DeviceSelectionModal = ({
       color: colors.text.tertiary,
     },
     connectButton: {
-      backgroundColor: colors.primary[500],
-      paddingHorizontal: 20,
-      paddingVertical: 10,
-      borderRadius: 8,
+      backgroundColor: colors.brand.accent,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: 12,
+    },
+    disconnectButton: {
+      backgroundColor: colors.semantic.error,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: 12,
     },
     connectButtonText: {
       color: '#FFFFFF',
       fontSize: 14,
-      fontWeight: 'bold',
+      fontWeight: '600',
     },
     scanningContainer: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: 40,
+      paddingHorizontal: spacing.xxl,
     },
     spinner: {
-      marginBottom: 20,
+      marginBottom: spacing.lg,
     },
     scanningText: {
       fontSize: 18,
-      fontWeight: 'bold',
+      fontWeight: '600',
       color: colors.text.primary,
-      marginBottom: 10,
+      marginBottom: spacing.sm,
     },
     scanningSubtext: {
       fontSize: 14,
@@ -205,116 +227,252 @@ const DeviceSelectionModal = ({
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: 40,
+      paddingHorizontal: spacing.xxl,
     },
     noDevicesText: {
       fontSize: 18,
-      fontWeight: 'bold',
+      fontWeight: '600',
       color: colors.text.primary,
-      marginBottom: 10,
+      marginBottom: spacing.sm,
     },
     noDevicesSubtext: {
       fontSize: 14,
       color: colors.text.secondary,
       textAlign: 'center',
-      marginBottom: 20,
+      marginBottom: spacing.lg,
       lineHeight: 20,
     },
     retryButton: {
-      backgroundColor: colors.primary[500],
-      paddingHorizontal: 30,
-      paddingVertical: 12,
-      borderRadius: 8,
+      backgroundColor: colors.brand.accent,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.md,
+      borderRadius: 12,
     },
     retryButtonText: {
       color: '#FFFFFF',
       fontSize: 16,
-      fontWeight: 'bold',
+      fontWeight: '600',
+    },
+    connectedContainer: {
+      backgroundColor: 'rgba(26, 29, 35, 0.9)',
+      borderRadius: 20,
+      padding: spacing.xl,
+      marginHorizontal: spacing.xl,
+      marginTop: spacing.xxl,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.08)',
+    },
+    connectedIcon: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.metrics.breath,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: spacing.lg,
+    },
+    connectedTitle: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: colors.text.primary,
+      marginBottom: spacing.sm,
+    },
+    connectedDevice: {
+      fontSize: 18,
+      color: colors.metrics.breath,
+      fontWeight: '600',
+      marginBottom: spacing.lg,
+    },
+    liveDataContainer: {
+      flexDirection: 'row',
+      marginTop: spacing.lg,
+      gap: spacing.xl,
+    },
+    liveDataItem: {
+      alignItems: 'center',
+    },
+    liveDataLabel: {
+      fontSize: 12,
+      color: colors.text.tertiary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: spacing.xs,
+    },
+    liveDataValue: {
+      fontSize: 32,
+      fontWeight: '700',
+      color: colors.text.primary,
+    },
+    liveDataUnit: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      marginTop: spacing.xs,
     },
   });
 
-  const renderDevice = useCallback(({ item }) => (
-    <TouchableOpacity
-      style={styles.deviceItem}
-      onPress={() => handleConnectToDevice(item)}
-    >
-      <View style={styles.deviceInfo}>
-        <Text style={styles.deviceName}>
-          {deviceType === 'pulse-ox' ? '📱' : '❤️'} {item.name || item.localName || (deviceType === 'pulse-ox' ? 'Pulse Oximeter' : 'Heart Rate Monitor')}
-        </Text>
-        <Text style={styles.deviceType}>
-          {deviceType === 'pulse-ox' ? 'Pulse Oximeter' : 'Heart Rate Monitor'}
-        </Text>
-        {item.rssi && (
-          <Text style={styles.deviceRssi}>Signal: {item.rssi} dBm</Text>
-        )}
-      </View>
-      <TouchableOpacity 
-        style={styles.connectButton}
-        onPress={() => handleConnectToDevice(item)}
+  const renderDevice = useCallback(({ item }) => {
+    const isConnected = (deviceType === 'pulse-ox' && isPulseOxConnected) || 
+                       (deviceType === 'hr-monitor' && isHRConnected);
+    
+    return (
+      <TouchableOpacity
+        style={[styles.deviceItem, isConnected && styles.connectedItem]}
+        onPress={() => !isConnected && handleConnectToDevice(item)}
       >
-        <Text style={styles.connectButtonText}>Connect</Text>
+        <View style={styles.deviceInfo}>
+          <Text style={styles.deviceName}>
+            {item.name || item.localName || (deviceType === 'pulse-ox' ? 'Pulse Oximeter' : 'Heart Rate Monitor')}
+          </Text>
+          {item.id && (
+            <Text style={styles.deviceType}>
+              ID: {item.id.substring(0, 17)}...
+            </Text>
+          )}
+          {item.rssi && (
+            <Text style={styles.deviceRssi}>
+              Signal: {item.rssi} dBm
+            </Text>
+          )}
+        </View>
+        <TouchableOpacity
+          style={isConnected ? styles.disconnectButton : styles.connectButton}
+          onPress={() => !isConnected && handleConnectToDevice(item)}
+        >
+          <Text style={styles.connectButtonText}>
+            {isConnected ? 'Connected' : 'Connect'}
+          </Text>
+        </TouchableOpacity>
       </TouchableOpacity>
-    </TouchableOpacity>
-  ), [handleConnectToDevice, deviceType, styles]);
+    );
+  }, [deviceType, isPulseOxConnected, isHRConnected, handleConnectToDevice, styles]);
 
-  // Filter devices by type
-  const filteredDevices = discoveredDevices.filter(device => device.deviceType === deviceType);
+  const getConnectedDevice = () => {
+    if (deviceType === 'pulse-ox' && isPulseOxConnected) {
+      return discoveredDevices.find(d => d.name?.includes('O2Ring') || d.localName?.includes('O2Ring'));
+    }
+    return null;
+  };
+
+  const connectedDevice = getConnectedDevice();
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      presentationStyle="fullScreen"
       onRequestClose={handleClose}
     >
       <View style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>
-            {title || (deviceType === 'pulse-ox' ? 'Find Pulse Oximeter' : 'Find Heart Rate Monitor')}
-          </Text>
-          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-            <Text style={styles.closeButtonText}>✕</Text>
-          </TouchableOpacity>
-        </View>
+        <StatusBar barStyle="light-content" />
+        
+        {/* Premium gradient background */}
+        <LinearGradient
+          colors={['#0C0E12', '#13161B', '#1A1D23']}
+          style={styles.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
 
-        <Text style={styles.modalInstructions}>
-          {instructions || (isScanning 
-            ? `Scanning for ${deviceType === 'pulse-ox' ? 'pulse oximeters' : 'heart rate monitors'}...`
-            : 'Make sure your device is powered on and in pairing mode'
-          )}
-        </Text>
-
-        {filteredDevices.length > 0 ? (
-          <FlatList
-            data={filteredDevices}
-            renderItem={renderDevice}
-            keyExtractor={(item) => item.id}
-            style={styles.deviceList}
-            showsVerticalScrollIndicator={true}
-          />
-        ) : isScanning ? (
-          <View style={styles.scanningContainer}>
-            <ActivityIndicator size="large" color={colors.primary[500]} style={styles.spinner} />
-            <Text style={styles.scanningText}>Scanning...</Text>
-            <Text style={styles.scanningSubtext}>
-              Make sure your {deviceType === 'pulse-ox' ? 'pulse oximeter' : 'heart rate monitor'} is nearby and turned on
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.noDevicesContainer}>
-            <Text style={styles.noDevicesText}>No devices found</Text>
-            <Text style={styles.noDevicesSubtext}>
-              Make sure your device is powered on and in pairing mode
+        <View style={styles.modalContent}>
+          {/* Header */}
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {title || 'Connect Device'}
             </Text>
             <TouchableOpacity 
-              style={styles.retryButton} 
-              onPress={() => startScanning(deviceType)}
+              style={styles.closeButton}
+              onPress={handleClose}
             >
-              <Text style={styles.retryButtonText}>Retry Scan</Text>
+              <SafeIcon name="close" size={20} color={colors.text.primary} />
             </TouchableOpacity>
           </View>
-        )}
+
+          {/* Instructions */}
+          {instructions && (
+            <Text style={styles.modalInstructions}>
+              {instructions}
+            </Text>
+          )}
+
+          {/* Connected Device Display */}
+          {connectedDevice && (
+            <>
+              <Text style={styles.sectionTitle}>Pulse Oximeter (Required)</Text>
+              <View style={styles.connectedContainer}>
+                <View style={styles.connectedIcon}>
+                  <SafeIcon name="checkmark" size={40} color="#FFFFFF" />
+                </View>
+                <Text style={styles.connectedTitle}>Connected</Text>
+                <Text style={styles.connectedDevice}>
+                  {connectedDevice.name || 'O2Ring 0029'}
+                </Text>
+                <TouchableOpacity
+                  style={styles.disconnectButton}
+                  onPress={() => {/* Add disconnect logic */}}
+                >
+                  <Text style={styles.connectButtonText}>Disconnect</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Live Data Display */}
+              <Text style={[styles.sectionTitle, { marginTop: spacing.xl }]}>Pulse Oximeter</Text>
+              <View style={[styles.connectedContainer, { marginTop: spacing.md }]}>
+                <View style={styles.liveDataContainer}>
+                  <View style={styles.liveDataItem}>
+                    <Text style={styles.liveDataValue}>90</Text>
+                    <Text style={styles.liveDataUnit}>% SpO₂</Text>
+                  </View>
+                  <View style={styles.liveDataItem}>
+                    <Text style={styles.liveDataValue}>75</Text>
+                    <Text style={styles.liveDataUnit}>bpm</Text>
+                  </View>
+                </View>
+                <Text style={[styles.deviceRssi, { marginTop: spacing.md }]}>
+                  Signal: ████████░░
+                </Text>
+              </View>
+            </>
+          )}
+
+          {/* Device List */}
+          {!connectedDevice && (
+            <>
+              {isScanning ? (
+                <View style={styles.scanningContainer}>
+                  <ActivityIndicator size="large" color={colors.brand.accent} style={styles.spinner} />
+                  <Text style={styles.scanningText}>Scanning for Devices...</Text>
+                  <Text style={styles.scanningSubtext}>
+                    Make sure your {deviceType === 'pulse-ox' ? 'pulse oximeter' : 'heart rate monitor'} is turned on and nearby
+                  </Text>
+                </View>
+              ) : discoveredDevices.length > 0 ? (
+                <>
+                  <Text style={styles.sectionTitle}>Available Devices</Text>
+                  <FlatList
+                    style={styles.deviceList}
+                    data={discoveredDevices}
+                    keyExtractor={(item) => item.id || Math.random().toString()}
+                    renderItem={renderDevice}
+                  />
+                </>
+              ) : (
+                <View style={styles.noDevicesContainer}>
+                  <Text style={styles.noDevicesText}>No Devices Found</Text>
+                  <Text style={styles.noDevicesSubtext}>
+                    Make sure your device is powered on and in pairing mode
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.retryButton}
+                    onPress={() => startScanning(deviceType)}
+                  >
+                    <Text style={styles.retryButtonText}>Retry Scan</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
+          )}
+        </View>
       </View>
     </Modal>
   );

@@ -8,7 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useAppTheme } from '../theme';
+import { colors, spacing } from '../design-system';
 import { H1, Body, Caption } from './base/Typography';
 import Button from './base/Button';
 
@@ -26,18 +26,12 @@ const SurveyModal = ({
   validationErrors = [],
   stepIndicator = null,
 }) => {
-  const theme = useAppTheme();
-  const { colors, spacing } = theme || {};
-  
-  // Fallback if theme is not ready
-  if (!colors || !spacing) {
-    return null;
-  }
+  // Design tokens imported from design-system
 
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.background.primary,
     },
     keyboardAvoidingView: {
       flex: 1,
@@ -51,7 +45,7 @@ const SurveyModal = ({
       paddingBottom: spacing.md,
       borderBottomWidth: 1,
       borderBottomColor: colors.border.light,
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
     },
     headerContent: {
       flex: 1,
@@ -72,7 +66,7 @@ const SurveyModal = ({
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.background.primary,
       justifyContent: 'center',
       alignItems: 'center',
       marginTop: spacing.xs,
@@ -83,8 +77,8 @@ const SurveyModal = ({
       fontWeight: 'bold',
     },
     errorContainer: {
-      backgroundColor: colors.error[50],
-      borderColor: colors.error[200],
+      backgroundColor: colors.background.elevated,
+      borderColor: colors.semantic.error,
       borderWidth: 1,
       borderRadius: spacing.borderRadius.md,
       padding: spacing.md,
@@ -106,7 +100,7 @@ const SurveyModal = ({
       paddingVertical: spacing.md,
       borderTopWidth: 1,
       borderTopColor: colors.border.light,
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       gap: spacing.sm,
     },
     buttonWrapper: {

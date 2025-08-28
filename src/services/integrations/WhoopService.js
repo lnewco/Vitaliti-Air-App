@@ -18,7 +18,7 @@ class WhoopService {
     if (!this.clientId || !this.clientSecret) {
       console.warn('⚠️ Whoop OAuth credentials not configured. Integration disabled.');
     }
-    // Use Expo Auth Proxy to handle the OAuth redirect
+    // Use Expo Auth Proxy - now with proper scheme registration
     this.redirectUri = 'https://auth.expo.io/@sophiafay24/Vitaliti-Air-App';
     
     console.log('🔧 Whoop Service initialized');

@@ -1,6 +1,5 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
-import { useAppTheme } from '../theme';
 import { colors } from '../design-system';
 import LoginScreen from '../auth/screens/LoginScreen';
 import PremiumOTPScreen from '../auth/screens/PremiumOTPScreen';

@@ -16,7 +16,10 @@ import { useBluetooth } from '../context/BluetoothContext';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import AdaptiveInstructionEngine from '../services/AdaptiveInstructionEngine';
 import SessionIdGenerator from '../utils/sessionIdGenerator';
-import { useAppTheme } from '../theme';
+import { colors } from '../design-system';
+import IntraSessionFeedback from '../components/feedback/IntraSessionFeedback';
+import DatabaseService from '../services/DatabaseService';
+import SupabaseService from '../services/SupabaseService';
 
 // No longer need custom slider - using native component
 
@@ -33,7 +36,6 @@ const PHASE_TYPES = {
 };
 
 const IHHTTrainingScreen = ({ navigation, route }) => {
-  const { colors, theme } = useAppTheme();
   const adaptiveEngineRef = useRef(null);
   
   // Extract protocol configuration from navigation params or use defaults
@@ -66,6 +68,13 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const [sessionInfo, setSessionInfo] = useState(EnhancedSessionManager.getSessionInfo());
   const [forceUpdate, setForceUpdate] = useState({});
   const [altitudeLevel, setAltitudeLevel] = useState(protocolConfig.defaultAltitudeLevel || 6); // Initialize from protocol config
+  
+  // Intra-session feedback states
+  const [showIntraSessionFeedback, setShowIntraSessionFeedback] = useState(false);
+  const [hasShownFeedbackForCycle, setHasShownFeedbackForCycle] = useState({});
+  const [currentPhaseType, setCurrentPhaseType] = useState(null);
+  const [lastKnownCycle, setLastKnownCycle] = useState(0);
+  const feedbackTimerRef = useRef(null);
   
   // Adaptive instruction state
   const [adaptiveInstruction, setAdaptiveInstruction] = useState(null);
@@ -105,8 +114,91 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       }
     }, 1000); // Update every second to match the timer
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+    };
   }, [sessionStarted]);
+
+  // Separate effect to handle intra-session feedback timing
+  useEffect(() => {
+    if (!sessionStarted || !sessionInfo) return;
+    
+    const { currentPhase, currentCycle } = sessionInfo;
+    const cycleKey = `cycle_${currentCycle}`;
+    
+    // Detect phase change to RECOVERY
+    if (currentPhase === 'RECOVERY' && currentPhaseType !== 'RECOVERY') {
+      console.log(`📊 Entered RECOVERY phase for cycle ${currentCycle}`);
+      setCurrentPhaseType('RECOVERY');
+      setLastKnownCycle(currentCycle);
+      
+      // Check if we haven't shown feedback for this cycle
+      if (!hasShownFeedbackForCycle[cycleKey] && !showIntraSessionFeedback) {
+        console.log(`⏱️ Starting 30-second timer for intra-session feedback (cycle ${currentCycle})`);
+        console.log(`   Already shown for cycles:`, Object.keys(hasShownFeedbackForCycle));
+        
+        // Clear any existing timer
+        if (feedbackTimerRef.current) {
+          clearTimeout(feedbackTimerRef.current);
+        }
+        
+        // Store current cycle in closure to avoid stale references
+        const currentCycleCapture = currentCycle;
+        const cycleKeyCapture = cycleKey;
+        
+        // Set new timer for 30 seconds
+        feedbackTimerRef.current = setTimeout(() => {
+          console.log(`✅ Showing intra-session feedback for cycle ${currentCycleCapture}`);
+          
+          // Get fresh session info at trigger time
+          const freshSessionInfo = EnhancedSessionManager.getSessionInfo();
+          console.log(`   Fresh session info at trigger time:`, {
+            phase: freshSessionInfo?.currentPhase,
+            cycle: freshSessionInfo?.currentCycle,
+            isPaused: freshSessionInfo?.isPaused
+          });
+          
+          // Only show if still in RECOVERY phase and not paused
+          if (freshSessionInfo?.currentPhase === 'RECOVERY' && !freshSessionInfo?.isPaused) {
+            setShowIntraSessionFeedback(true);
+            setHasShownFeedbackForCycle(prev => ({ ...prev, [cycleKeyCapture]: true }));
+          } else {
+            console.log(`⚠️ Not showing feedback - phase changed or session paused`);
+          }
+        }, 30000); // 30 seconds
+      } else {
+        if (hasShownFeedbackForCycle[cycleKey]) {
+          console.log(`⚠️ Feedback already shown for cycle ${currentCycle}`);
+        }
+        if (showIntraSessionFeedback) {
+          console.log(`⚠️ Feedback is currently being shown`);
+        }
+      }
+    } 
+    // Update phase type when it changes
+    else if (currentPhase !== 'RECOVERY' && currentPhaseType === 'RECOVERY') {
+      console.log(`📊 Exited RECOVERY phase`);
+      setCurrentPhaseType(currentPhase);
+      
+      // Clear timer if we leave recovery phase before 30 seconds
+      if (feedbackTimerRef.current) {
+        console.log('⏹️ Clearing feedback timer - left RECOVERY phase');
+        clearTimeout(feedbackTimerRef.current);
+        feedbackTimerRef.current = null;
+      }
+    }
+    // Update phase type for other phases
+    else if (currentPhase !== currentPhaseType) {
+      setCurrentPhaseType(currentPhase);
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current);
+      }
+    };
+  }, [sessionStarted, sessionInfo?.currentPhase, sessionInfo?.currentCycle, hasShownFeedbackForCycle, showIntraSessionFeedback]);
 
   // Session control functions
   const startSession = async () => {
@@ -151,6 +243,36 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const resumeSession = () => {
     EnhancedSessionManager.resumeSession();
     setShowPauseOverlay(false);
+  };
+
+  const handleIntraSessionSubmit = async (feedbackData) => {
+    try {
+      const sessionId = route?.params?.sessionId || EnhancedSessionManager.getSessionId();
+      
+      // Save to database
+      await DatabaseService.saveIntraSessionResponse(
+        sessionId,
+        sessionInfo.currentCycle,
+        feedbackData.clarity,
+        feedbackData.energy,
+        feedbackData.stressPerception,
+        Date.now(),
+        feedbackData.sensations,
+        feedbackData.spo2,
+        feedbackData.heartRate
+      );
+      
+      console.log('✅ Intra-session feedback saved for cycle', sessionInfo.currentCycle);
+    } catch (error) {
+      console.error('Error saving intra-session feedback:', error);
+    }
+    
+    setShowIntraSessionFeedback(false);
+  };
+  
+  const handleIntraSessionDismiss = () => {
+    console.log('❌ Intra-session feedback dismissed for cycle', sessionInfo.currentCycle);
+    setShowIntraSessionFeedback(false);
   };
 
   const handleEndSession = async () => {
@@ -205,6 +327,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   };
 
   const skipToNextPhase = () => {
+    console.log('🔄 User clicked Skip - current phase:', sessionInfo?.currentPhase, 'cycle:', sessionInfo?.currentCycle);
     EnhancedSessionManager.skipToNextPhase();
   };
 
@@ -415,7 +538,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   // Show loading state while auto-starting session
   if (!sessionStarted && route?.params?.sessionId) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surface.background }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background.primary }}>
         <Text style={{ fontSize: 18, color: colors.text.primary, marginBottom: 20 }}>Starting session...</Text>
         <Text style={{ fontSize: 14, color: colors.text.secondary }}>Initializing training protocol</Text>
       </View>
@@ -425,7 +548,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   // Only show start screen if no sessionId was provided (fallback for direct navigation)
   if (!sessionStarted && !route?.params?.sessionId) {
     const phaseColors = {
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       titleColor: colors.text.primary,
       messageColor: colors.text.secondary
     };
@@ -433,19 +556,19 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     const styles = StyleSheet.create({
       container: {
         flex: 1,
-        backgroundColor: colors.surface.background,
+        backgroundColor: colors.background.primary,
       },
       mainTimer: {
         alignItems: 'center',
         paddingVertical: 20,
-        backgroundColor: colors.surface.card,
+        backgroundColor: colors.background.tertiary,
         marginHorizontal: 20,
         marginTop: 15,
         marginBottom: 5,
         borderRadius: 12,
-        shadowColor: theme === 'dark' ? '#000' : '#000',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: theme === 'dark' ? 0.3 : 0.1,
+        shadowOpacity: 0.3,
         shadowRadius: 4,
         elevation: 3,
       },
@@ -481,20 +604,20 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       },
       startButton: {
         flex: 1,
-        backgroundColor: colors.primary[500],
+        backgroundColor: colors.brand.accent,
         padding: 15,
         borderRadius: 8,
         alignItems: 'center',
       },
       backButton: {
         flex: 1,
-        backgroundColor: colors.surface.elevated,
+        backgroundColor: colors.background.elevated,
         padding: 15,
         borderRadius: 8,
         alignItems: 'center',
       },
       startButtonText: {
-        color: colors.white,
+        color: colors.text.primary,
         fontSize: 16,
         fontWeight: '600',
       },
@@ -510,17 +633,17 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
         padding: 10,
         marginHorizontal: 20,
         marginTop: 20,
-        backgroundColor: isPulseOxConnected ? colors.success[100] : colors.error[100],
+        backgroundColor: isPulseOxConnected ? colors.background.elevated : colors.background.elevated,
         borderRadius: 8,
       },
       deviceStatusText: {
         marginLeft: 8,
         fontSize: 14,
         fontWeight: '600',
-        color: isPulseOxConnected ? colors.success[700] : colors.error[700],
+        color: isPulseOxConnected ? colors.semantic.success : colors.semantic.error,
       },
       protocolInfo: {
-        backgroundColor: colors.surface.elevated,
+        backgroundColor: colors.background.elevated,
         marginHorizontal: 20,
         marginTop: 10,
         padding: 15,
@@ -547,24 +670,24 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
         color: colors.text.primary,
       },
       warningBox: {
-        backgroundColor: colors.warning[100],
+        backgroundColor: colors.background.elevated,
         marginHorizontal: 20,
         marginTop: 10,
         padding: 15,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: colors.warning[300],
+        borderColor: colors.border.medium,
       },
       warningText: {
         fontSize: 14,
-        color: colors.warning[800],
+        color: colors.semantic.warning,
         textAlign: 'center',
       },
     });
     
     return (
       <View style={styles.container}>
-        <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+        <StatusBar barStyle="light-content" />
         <View style={styles.phaseCard}>
 
           <Text style={styles.phaseTitle}>IHHT Training</Text>
@@ -635,12 +758,12 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const isAltitude = sessionInfo.currentPhase === 'ALTITUDE' || sessionInfo.currentPhase === 'HYPOXIC';
   const phaseColors = isAltitude 
     ? { 
-        primary: colors.primary[500], 
-        light: theme === 'dark' ? colors.primary[900] : colors.primary[100] 
+        primary: colors.brand.accent, 
+        light: colors.background.elevated 
       }
     : { 
-        primary: colors.success[500], 
-        light: theme === 'dark' ? colors.success[900] : colors.success[100] 
+        primary: colors.semantic.success, 
+        light: colors.background.elevated 
       };
 
   // Get heart rate from pulse oximeter
@@ -651,7 +774,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.background.primary,
     },
     header: {
       flexDirection: 'row',
@@ -680,14 +803,14 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     mainTimer: {
       alignItems: 'center',
       paddingVertical: 20,
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       marginHorizontal: 20,
       marginTop: 15,
       marginBottom: 5,
       borderRadius: 12,
-      shadowColor: theme === 'dark' ? '#000' : '#000',
+      shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: theme === 'dark' ? 0.3 : 0.1,
+      shadowOpacity: 0.3,
       shadowRadius: 4,
       elevation: 3,
     },
@@ -734,14 +857,14 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       width: '100%',
       marginTop: 20,
       paddingHorizontal: 10,
-      backgroundColor: colors.surface.elevated,
+      backgroundColor: colors.background.elevated,
       borderRadius: 12,
       padding: 15,
     },
     altitudeLabel: {
       fontSize: 18,
       fontWeight: 'bold',
-      color: colors.primary[500],
+      color: colors.brand.accent,
       textAlign: 'center',
       marginBottom: 10,
     },
@@ -760,15 +883,15 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       color: colors.text.tertiary,
     },
     dataCard: {
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       marginHorizontal: 20,
       marginTop: 15,
       marginBottom: 5,
       padding: 20,
       borderRadius: 12,
-      shadowColor: theme === 'dark' ? '#000' : '#000',
+      shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: theme === 'dark' ? 0.3 : 0.1,
+      shadowOpacity: 0.3,
       shadowRadius: 4,
       elevation: 3,
     },
@@ -803,7 +926,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     },
     scrollContainer: {
       flex: 1,
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.background.primary,
     },
     scrollView: {
       flex: 1,
@@ -814,7 +937,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     controls: {
       padding: 20,
       paddingBottom: 30,
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       borderTopWidth: 1,
       borderTopColor: colors.border.light,
       flexDirection: 'row',
@@ -839,12 +962,12 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       marginRight: 8,
     },
     skipPhaseButton: {
-      backgroundColor: colors.warning[500],
+      backgroundColor: colors.semantic.warning,
       flex: 1,
       marginRight: 8,
     },
     endSessionButton: {
-      backgroundColor: colors.error[500],
+      backgroundColor: colors.semantic.error,
       flex: 1,
     },
     backButtonDisabled: {
@@ -869,22 +992,22 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       marginLeft: 5,
     },
     dangerBadge: {
-      backgroundColor: colors.error[100],
+      backgroundColor: colors.background.elevated,
     },
     warningBadge: {
       backgroundColor: colors.warning[100],
     },
     normalBadge: {
-      backgroundColor: colors.success[100],
+      backgroundColor: colors.background.elevated,
     },
     dangerText: {
-      color: colors.error[700],
+      color: colors.semantic.error,
     },
     warningText: {
-      color: colors.warning[700],
+      color: colors.semantic.warning,
     },
     normalText: {
-      color: colors.success[700],
+      color: colors.semantic.success,
     },
     pausedOverlay: {
       ...StyleSheet.absoluteFillObject,
@@ -894,7 +1017,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       zIndex: 1000,
     },
     pausedCard: {
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       padding: 30,
       borderRadius: 20,
       alignItems: 'center',
@@ -966,25 +1089,25 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
       zIndex: 1000,
     },
     adaptiveCard: {
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       borderRadius: 16,
       padding: 24,
       marginHorizontal: 20,
       maxWidth: 350,
       alignItems: 'center',
-      shadowColor: theme === 'dark' ? '#000' : '#000',
+      shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: theme === 'dark' ? 0.4 : 0.2,
+      shadowOpacity: 0.4,
       shadowRadius: 8,
       elevation: 6,
     },
     maskLiftCard: {
       borderLeftWidth: 4,
-      borderLeftColor: colors.warning[500],
+      borderLeftColor: colors.semantic.warning,
     },
     altitudeCard: {
       borderLeftWidth: 4,
-      borderLeftColor: colors.primary[500],
+      borderLeftColor: colors.brand.accent,
     },
     adaptiveTitle: {
       fontSize: 20,
@@ -1012,12 +1135,12 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
     },
     increaseText: {
       fontSize: 16,
-      color: colors.warning[600],
+      color: colors.semantic.warning,
       fontWeight: '500',
     },
     decreaseText: {
       fontSize: 16,
-      color: colors.success[600],
+      color: colors.semantic.success,
       fontWeight: '500',
     },
     maskLiftDetails: {
@@ -1046,15 +1169,15 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style="light" />
       
       {/* Header */}
       <View style={[styles.header, { 
         backgroundColor: sessionInfo.currentPhase === 'TRANSITION' 
-          ? colors.neutral[theme === 'dark' ? 700 : 400]  // Subtle neutral for transition
+          ? colors.background.secondary  // Subtle background for transition
           : (sessionInfo.currentPhase === 'ALTITUDE' || sessionInfo.currentPhase === 'HYPOXIC')
-            ? colors.primary[theme === 'dark' ? 600 : 500]  // Blue for altitude
-            : colors.success[theme === 'dark' ? 600 : 500]  // Green for recovery
+            ? colors.brand.accent  // Blue for altitude
+            : colors.semantic.success  // Green for recovery
       }]}>
         <TouchableOpacity 
           style={[styles.backButton, (!sessionStarted || !sessionInfo.isActive) && styles.backButtonDisabled]} 
@@ -1077,9 +1200,9 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           showsVerticalScrollIndicator={false}
         >
           {!isPulseOxConnected && (
-            <View style={[styles.dataCard, { backgroundColor: colors.warning[100], marginTop: 10 }]}>
-              <Text style={[styles.cardTitle, { color: colors.warning[800] }]}>⚠️ Pulse Oximeter Disconnected</Text>
-              <Text style={[styles.phaseMessage, { color: colors.warning[700] }]}>
+            <View style={[styles.dataCard, { backgroundColor: colors.background.elevated, marginTop: 10 }]}>
+              <Text style={[styles.cardTitle, { color: colors.semantic.warning }]}>⚠️ Pulse Oximeter Disconnected</Text>
+              <Text style={[styles.phaseMessage, { color: colors.semantic.warning }]}>
                 Please reconnect your device for accurate monitoring
               </Text>
             </View>
@@ -1095,16 +1218,14 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           {sessionInfo.currentPhase === 'TRANSITION' ? (
             // Transition phase card - mask switching instructions (calmer design)
             <View style={[styles.phaseCard, { 
-              backgroundColor: theme === 'dark' 
-                ? colors.neutral[800]  // Dark mode: subtle dark background
-                : colors.neutral[100]  // Light mode: subtle light background
+              backgroundColor: colors.background.secondary
             }]}>
 
               <Text style={styles.phaseTitle}>Switching Phase</Text>
               <Text style={[styles.phaseMessage, { 
                 fontSize: 16, 
                 fontWeight: '500',
-                color: theme === 'dark' ? colors.text.primary : colors.text.secondary 
+                color: colors.text.primary 
               }]}>
                 {(sessionInfo.nextPhaseAfterTransition === 'ALTITUDE' || sessionInfo.nextPhaseAfterTransition === 'HYPOXIC')
                   ? 'Please put on your mask' 
@@ -1112,7 +1233,7 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
               </Text>
               <Text style={[styles.phaseTimer, { 
                 fontSize: 20, 
-                color: colors.primary[500],
+                color: colors.brand.accent,
                 fontWeight: '500'
               }]}>
                 {formatTime(sessionInfo.phaseTimeRemaining)}
@@ -1120,8 +1241,9 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
             </View>
           ) : (
             // Regular hypoxic/hyperoxic phase card
-            <View style={[styles.phaseCard, { backgroundColor: phaseColors.light }]}>
-
+            <View style={[styles.phaseCard, {
+              backgroundColor: isAltitude ? colors.background.secondary : colors.background.elevated
+            }]}>
               <Text style={styles.phaseTitle}>
                 {(sessionInfo.currentPhase === 'ALTITUDE' || sessionInfo.currentPhase === 'HYPOXIC') ? 'Altitude Phase' : 'Recovery Phase'}
               </Text>
@@ -1142,12 +1264,12 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
                     minimumValue={1}
                     maximumValue={11}
                     step={1}
-                    minimumTrackTintColor={colors.primary[500]}
+                    minimumTrackTintColor={colors.brand.accent}
                     maximumTrackTintColor={colors.border.light}
                     thumbStyle={{
                       width: 20,
                       height: 20,
-                      backgroundColor: colors.primary[500],
+                      backgroundColor: colors.brand.accent,
                     }}
                     trackStyle={{
                       height: 6,
@@ -1172,8 +1294,8 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
                 <Text style={styles.metricLabel}>SpO2</Text>
                 <Text style={[
                   styles.metricValue,
-                  spo2Status === 'danger' && { color: colors.error[500] },
-                  spo2Status === 'warning' && { color: colors.warning[500] }
+                  spo2Status === 'danger' && { color: colors.semantic.error },
+                  spo2Status === 'warning' && { color: colors.semantic.warning }
                 ]}>
                   {currentSpo2 || '--'}
                 </Text>
@@ -1220,6 +1342,25 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
             End
           </Text>
         </TouchableOpacity>
+        
+        {/* Debug button - only show in development */}
+        {__DEV__ && sessionInfo?.currentPhase === 'RECOVERY' && (
+          <TouchableOpacity
+            style={[styles.controlButton, { 
+              backgroundColor: colors.semantic.info,
+              marginLeft: 8
+            }]}
+            onPress={() => {
+              console.log('🔧 DEBUG: Manually triggering intra-session feedback');
+              console.log('   Current cycle:', sessionInfo?.currentCycle);
+              setShowIntraSessionFeedback(true);
+            }}
+          >
+            <Text style={styles.controlButtonText}>
+              📊 Test
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Paused Overlay */}
@@ -1297,6 +1438,16 @@ const IHHTTrainingScreen = ({ navigation, route }) => {
           </View>
         </View>
       )}
+      
+      {/* Intra-Session Feedback Overlay */}
+      <IntraSessionFeedback
+        visible={showIntraSessionFeedback}
+        onSubmit={handleIntraSessionSubmit}
+        onDismiss={handleIntraSessionDismiss}
+        cycleNumber={sessionInfo.currentCycle}
+        currentSpo2={sessionInfo.currentSpO2}
+        currentHR={sessionInfo.heartRate}
+      />
     </View>
   );
 };

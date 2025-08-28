@@ -37,7 +37,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["vitalitiair"]
+            "CFBundleURLSchemes": ["vitalitiair", "com.sophiafay24.vitalitiairapp", "exp+vitaliti-air-app", "vitaliti-air-app"]
           }
         ],
         "LSApplicationQueriesSchemes": ["vitalitiair"]

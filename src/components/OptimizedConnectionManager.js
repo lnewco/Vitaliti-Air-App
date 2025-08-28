@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, Alert } from 'react-native';
 import { useBluetoothConnection, useBluetoothData } from '../context/BluetoothContext';
-import { useAppTheme } from '../theme';
+import { colors } from '../design-system';
 
 // ===== MEMOIZED DATA DISPLAY COMPONENT =====
 const BluetoothDataDisplay = React.memo(() => {
   const { pulseOximeterData } = useBluetoothData();
   const { isPulseOxConnected } = useBluetoothConnection();
-  const { colors } = useAppTheme();
+  // Colors imported from design-system
   const styles = createStyles(colors);
 
 
@@ -43,7 +43,7 @@ const BluetoothDataDisplay = React.memo(() => {
 
 // ===== MAIN OPTIMIZED CONNECTION MANAGER =====
 const OptimizedConnectionManager = ({ hideDataDisplay = false }) => {
-  const { colors } = useAppTheme();
+  // Colors imported from design-system
   const styles = createStyles(colors);
   
   // ===== STABLE CONNECTION STATE (no re-renders from data) =====
@@ -271,7 +271,7 @@ const createStyles = (colors) => StyleSheet.create({
     lineHeight: 20,
   },
   statusCard: {
-    backgroundColor: colors.surface.card,
+    backgroundColor: colors.background.tertiary,
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
@@ -339,7 +339,7 @@ const createStyles = (colors) => StyleSheet.create({
     gap: 16,
   },
   dataCard: {
-    backgroundColor: colors.surface.elevated,
+    backgroundColor: colors.background.elevated,
     borderRadius: 12,
     padding: 16,
     borderLeftWidth: 4,
@@ -403,7 +403,7 @@ const createStyles = (colors) => StyleSheet.create({
     marginTop: 16,
   },
   hrvItem: {
-    backgroundColor: colors.surface.card,
+    backgroundColor: colors.background.tertiary,
     borderRadius: 12,
     padding: 12,
     borderLeftWidth: 4,
@@ -429,7 +429,7 @@ const createStyles = (colors) => StyleSheet.create({
   // ===== MODAL STYLES =====
   modalContainer: {
     flex: 1,
-    backgroundColor: colors.surface.background,
+    backgroundColor: colors.background.primary,
     paddingTop: 60,
   },
   modalHeader: {
@@ -450,7 +450,7 @@ const createStyles = (colors) => StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.surface.elevated,
+    backgroundColor: colors.background.elevated,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -471,7 +471,7 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: 20,
   },
   deviceItem: {
-    backgroundColor: colors.surface.card,
+    backgroundColor: colors.background.tertiary,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,

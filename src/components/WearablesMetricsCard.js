@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { colors, typography, spacing, MetricRing, PremiumButton } from '../design-system';
 
 const WearablesMetricsCard = ({
@@ -20,6 +20,25 @@ const WearablesMetricsCard = ({
   onStartTraining,
   style
 }) => {
+  // Delayed loading state to prevent flash
+  const [showLoading, setShowLoading] = useState(false);
+  
+  useEffect(() => {
+    let timeout;
+    if (isLoading) {
+      // Only show loading after 300ms to prevent flash for quick loads
+      timeout = setTimeout(() => {
+        setShowLoading(true);
+      }, 300);
+    } else {
+      setShowLoading(false);
+    }
+    
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [isLoading]);
+
   // Use mock data as fallback when no real data is available
   const displayMetrics = metrics || {
     sleepScore: 78,
@@ -61,12 +80,29 @@ const WearablesMetricsCard = ({
         return "No active session";
     }
   };
-  if (isLoading) {
+  // Show loading only after delay, or show skeleton immediately for smooth transition
+  if (isLoading && !metrics) {
+    // First load - show skeleton immediately
     return (
-      <View style={[styles.container, styles.loadingContainer, style]}>
-        <ActivityIndicator size="large" color={colors.brand.accent} />
-        <Text style={styles.loadingText}>Loading metrics...</Text>
-      </View>
+      <Animated.View 
+        entering={FadeIn.duration(200)}
+        style={[styles.container, styles.skeletonContainer, style]}
+      >
+        <View style={styles.skeletonHeader}>
+          <View style={styles.skeletonTitle} />
+          <View style={styles.skeletonSubtitle} />
+        </View>
+        <View style={styles.skeletonMetrics}>
+          <View style={styles.skeletonRing} />
+          <View style={styles.skeletonRing} />
+          <View style={styles.skeletonRing} />
+        </View>
+        {showLoading && (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.loadingOverlay}>
+            <ActivityIndicator size="small" color={colors.brand.accent} />
+          </Animated.View>
+        )}
+      </Animated.View>
     );
   }
 
@@ -442,6 +478,48 @@ const styles = StyleSheet.create({
   sourceText: {
     ...typography.caption,
     color: colors.text.quaternary,
+  },
+  // Skeleton loader styles
+  skeletonContainer: {
+    minHeight: 420,
+  },
+  skeletonHeader: {
+    marginBottom: spacing.md,
+  },
+  skeletonTitle: {
+    width: 120,
+    height: 24,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: spacing.radius.sm,
+    marginBottom: spacing.xs,
+  },
+  skeletonSubtitle: {
+    width: 80,
+    height: 14,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: spacing.radius.sm,
+  },
+  skeletonMetrics: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
+    justifyContent: 'center',
+  },
+  skeletonRing: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: colors.background.tertiary,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

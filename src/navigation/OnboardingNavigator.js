@@ -1,6 +1,6 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
-import { useAppTheme } from '../theme';
+import { colors } from '../design-system';
 
 // Import all onboarding screens
 import WelcomeScreen from '../screens/onboarding/WelcomeScreen';
@@ -13,14 +13,13 @@ import CompletionScreen from '../screens/onboarding/CompletionScreen';
 const Stack = createStackNavigator();
 
 const OnboardingNavigator = () => {
-  const { colors } = useAppTheme();
   
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
         cardStyle: {
-          backgroundColor: colors.surface.background,
+          backgroundColor: colors.background.primary,
         },
         gestureEnabled: false, // Prevent going back during onboarding
         presentation: 'card',

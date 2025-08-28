@@ -8,7 +8,7 @@ import {
   ScrollView,
   SafeAreaView,
 } from 'react-native';
-import { useAppTheme } from '../../theme';
+import { colors, spacing } from '../../design-system';
 import { H1, H3, Body, Caption } from '../base/Typography';
 
 const LegalDocumentModal = ({ 
@@ -17,12 +17,12 @@ const LegalDocumentModal = ({
   document,
   onAgree 
 }) => {
-  const { colors, spacing } = useAppTheme();
+  // Design tokens imported from design-system
 
   const styles = StyleSheet.create({
     modal: {
       flex: 1,
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.background.primary,
     },
     header: {
       flexDirection: 'row',
@@ -30,7 +30,7 @@ const LegalDocumentModal = ({
       justifyContent: 'space-between',
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       borderBottomWidth: 1,
       borderBottomColor: colors.border.light,
     },
@@ -38,7 +38,7 @@ const LegalDocumentModal = ({
       padding: spacing.sm,
     },
     backButtonText: {
-      color: colors.primary[500],
+      color: colors.brand.accent,
       fontSize: 16,
       fontWeight: '600',
     },
@@ -65,12 +65,12 @@ const LegalDocumentModal = ({
     },
     footer: {
       padding: spacing.md,
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       borderTopWidth: 1,
       borderTopColor: colors.border.light,
     },
     agreeButton: {
-      backgroundColor: colors.primary[500],
+      backgroundColor: colors.brand.accent,
       paddingVertical: spacing.md,
       paddingHorizontal: spacing.lg,
       borderRadius: spacing.borderRadius.md,
@@ -78,7 +78,7 @@ const LegalDocumentModal = ({
       marginBottom: spacing.sm,
     },
     agreeButtonText: {
-      color: colors.white,
+      color: colors.text.inverse,
       fontSize: 16,
       fontWeight: '600',
     },

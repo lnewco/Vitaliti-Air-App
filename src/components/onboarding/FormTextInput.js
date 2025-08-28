@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, TextInput, StyleSheet } from 'react-native';
-import { useAppTheme } from '../../theme';
+import { colors, spacing, typography } from '../../design-system';
 import { Label, Caption } from '../base/Typography';
 
 const FormTextInput = ({
@@ -14,7 +14,7 @@ const FormTextInput = ({
   keyboardType = 'default',
   ...props
 }) => {
-  const { colors, spacing, typography } = useAppTheme();
+  // Design tokens imported from design-system
   
   const styles = StyleSheet.create({
     container: {
@@ -25,7 +25,7 @@ const FormTextInput = ({
       marginBottom: spacing.sm,
     },
     required: {
-      color: colors.error[500],
+      color: colors.semantic.error,
     },
     input: {
       borderWidth: 1,
@@ -35,10 +35,10 @@ const FormTextInput = ({
       paddingVertical: spacing.sm + 4,
       fontSize: typography.fontSize.base,
       color: colors.text.primary,
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
     },
     inputError: {
-      borderColor: colors.error[500],
+      borderColor: colors.semantic.error,
     },
     errorText: {
       marginTop: spacing.xs,

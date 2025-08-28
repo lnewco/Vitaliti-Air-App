@@ -6,7 +6,7 @@ import {
   ScrollView, 
   Alert 
 } from 'react-native';
-import { useAppTheme } from '../../theme';
+import { colors, spacing } from '../../design-system';
 import OnboardingContainer from '../../components/onboarding/OnboardingContainer';
 import { H1, H3, Body, BodySmall, Caption } from '../../components/base/Typography';
 import Card from '../../components/base/Card';
@@ -87,7 +87,7 @@ const HealthSafetyScreen = ({ navigation }) => {
     'Uncontrolled hypertension',
   ];
 
-  const { colors, spacing } = useAppTheme();
+  // Colors and spacing imported from design-system
   
   const styles = StyleSheet.create({
     scrollContent: {
@@ -116,7 +116,7 @@ const HealthSafetyScreen = ({ navigation }) => {
     },
     conditionsContainer: {
       padding: spacing.md,
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.background.primary,
       borderRadius: spacing.borderRadius.lg,
       marginBottom: spacing.lg,
     },
@@ -133,14 +133,14 @@ const HealthSafetyScreen = ({ navigation }) => {
       borderWidth: 1,
       borderColor: colors.border.light,
       borderRadius: spacing.borderRadius.md,
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
     },
     answerSelected: {
-      borderColor: colors.primary[500],
-      backgroundColor: colors.primary[50],
+      borderColor: colors.brand.accent,
+      backgroundColor: colors.background.elevated,
     },
     answerError: {
-      borderColor: colors.error[500],
+      borderColor: colors.semantic.error,
     },
     radioButton: {
       marginRight: spacing.md,
@@ -155,20 +155,20 @@ const HealthSafetyScreen = ({ navigation }) => {
       alignItems: 'center',
     },
     radioSelected: {
-      borderColor: colors.primary[500],
+      borderColor: colors.brand.accent,
     },
     radioInner: {
       width: 10,
       height: 10,
       borderRadius: 5,
-      backgroundColor: colors.primary[500],
+      backgroundColor: colors.brand.accent,
     },
     warningContainer: {
       padding: spacing.md,
-      backgroundColor: colors.warning[50],
+      backgroundColor: colors.background.elevated,
       borderRadius: spacing.borderRadius.md,
       borderWidth: 1,
-      borderColor: colors.warning[200],
+      borderColor: colors.border.medium,
       marginTop: spacing.lg,
     },
     errorText: {

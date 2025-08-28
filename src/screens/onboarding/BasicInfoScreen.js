@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, ScrollView, StyleSheet } from 'react-native';
-import { useAppTheme } from '../../theme';
+import { colors, spacing } from '../../design-system';
 import OnboardingContainer from '../../components/onboarding/OnboardingContainer';
 import { H1, Body } from '../../components/base/Typography';
 import FormTextInput from '../../components/onboarding/FormTextInput';
@@ -56,7 +56,7 @@ const BasicInfoScreen = ({ navigation }) => {
   const maxDate = new Date();
   maxDate.setFullYear(maxDate.getFullYear() - 18); // 18 years ago
 
-  const { colors, spacing } = useAppTheme();
+  // Colors and spacing imported from design-system
   
   const styles = StyleSheet.create({
     scrollContent: {

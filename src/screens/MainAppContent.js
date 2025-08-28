@@ -5,14 +5,14 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaView, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
-import { useAppTheme } from '../theme';
-import DashboardScreen from './DashboardScreen';
+import { colors } from '../design-system';
 import PremiumDashboard from './PremiumDashboard';
 import SessionHistoryScreen from './SessionHistoryScreen';
 import SimplifiedSessionSetup from './SimplifiedSessionSetup';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import PremiumProfileScreen from './PremiumProfileScreen';
+import IntegrationsScreen from './IntegrationsScreen';
 import SessionRecoveryManager from '../components/SessionRecoveryManager';
 import SafeIcon from '../components/base/SafeIcon';
 import FloatingTabBar from '../design-system/components/FloatingTabBar';
@@ -23,7 +23,6 @@ const Stack = createStackNavigator();
 
 // Tab Navigator for Dashboard and History
 function TabNavigator() {
-  const { colors } = useAppTheme();
   
   return (
     <Tab.Navigator
@@ -94,14 +93,13 @@ function TabNavigator() {
 
 // Stack Navigator Component with navigation handling
 const MainStack = ({ onNavigateToSession }) => {
-  const { colors } = useAppTheme();
   
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: true,
         headerStyle: {
-          backgroundColor: colors.surface.card,
+          backgroundColor: colors.background.tertiary,
           elevation: 0,
           shadowOpacity: 0,
           borderBottomWidth: 1,
@@ -148,6 +146,15 @@ const MainStack = ({ onNavigateToSession }) => {
         options={{
           presentation: 'card',
           title: 'Post-Session Survey',
+        }}
+      />
+      
+      <Stack.Screen 
+        name="Integrations" 
+        component={IntegrationsScreen}
+        options={{
+          presentation: 'card',
+          title: 'Integrations',
         }}
       />
       

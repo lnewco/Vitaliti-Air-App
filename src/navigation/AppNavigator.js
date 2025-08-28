@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useAuth } from '../auth/AuthContext';
 import { OnboardingProvider } from '../context/OnboardingContext';
-import { useAppTheme } from '../theme';
+import { colors } from '../design-system';
 import AuthNavigator from './AuthNavigator';
 import OnboardingNavigator from './OnboardingNavigator';
 import MainAppContent from '../screens/MainAppContent';
@@ -16,7 +16,6 @@ const Stack = createStackNavigator();
 
 const AppNavigator = () => {
   const { isAuthenticated, isLoading, user } = useAuth();
-  const { colors } = useAppTheme();
   const [onboardingState, setOnboardingState] = useState(null); // 'not_started' | 'in_progress' | 'completed'
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
   const navigationRef = useRef();
@@ -49,6 +48,7 @@ const AppNavigator = () => {
 
   // Separate effect for navigation based on state changes
   useEffect(() => {
+    console.log('🔄 Navigation effect triggered - isAuthenticated:', isAuthenticated, 'isLoading:', isLoading);
     if (!isLoading && !isCheckingOnboarding && onboardingState !== null) {
       // Only navigate if onboarding is not in progress
       if (onboardingState !== 'in_progress') {
@@ -57,7 +57,7 @@ const AppNavigator = () => {
         console.log('🔄 Skipping navigation - onboarding is in progress');
       }
     }
-  }, [isLoading, isCheckingOnboarding, onboardingState]); // No isAuthenticated dependency here
+  }, [isLoading, isCheckingOnboarding, onboardingState, isAuthenticated]); // Added isAuthenticated to trigger on logout
 
   // Listen for app state changes to re-check onboarding status
   useEffect(() => {
@@ -195,8 +195,8 @@ const AppNavigator = () => {
   // Show loading screen while checking authentication or onboarding status
   if (isLoading || isCheckingOnboarding) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors?.surface?.background || '#FFFFFF' }]}>
-        <ActivityIndicator size="large" color={colors?.primary?.[500] || '#2563EB'} />
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background.primary }]}>
+        <ActivityIndicator size="large" color={colors.brand.accent} />
       </View>
     );
   }
@@ -251,10 +251,38 @@ const AppNavigator = () => {
 
   // New function to handle navigation based on auth and onboarding state
   const navigateBasedOnAuthAndOnboarding = () => {
+    console.log('🔴 NAVIGATION: navigateBasedOnAuthAndOnboarding called');
+    console.log('🔴 NAVIGATION: isAuthenticated =', isAuthenticated);
+    console.log('🔴 NAVIGATION: user =', user ? 'EXISTS' : 'NULL');
+    
     if (!navigationRef.current || !navigationRef.current.isReady()) {
       console.log('🔄 Navigation not ready for auth state change');
       setTimeout(() => navigateBasedOnAuthAndOnboarding(), 100);
       return;
+    }
+
+    // Handle logout case first - if user is NOT authenticated and they're in the main stack
+    if (!isAuthenticated && !user) {
+      const currentRoute = navigationRef.current.getCurrentRoute();
+      console.log('🔴 LOGOUT DETECTED: Current route =', currentRoute?.name);
+      
+      const mainStackScreens = ['Main', 'MainTabs', 'Home', 'Dashboard', 'Train', 'Data', 'Profile', 'Integrations', 'IntegrationsScreen', 'ProfileScreen', 'Sessions', 'Training', 'History', 'SimplifiedSessionSetup', 'IHHTTraining', 'PostSessionSurvey'];
+      
+      if (mainStackScreens.includes(currentRoute?.name) || isInStack(currentRoute?.name, 'Main')) {
+        console.log('🔴 LOGOUT: User is in main stack, navigating to Auth');
+        try {
+          navigationRef.current.reset({
+            index: 0,
+            routes: [{ name: 'Auth' }],
+          });
+          console.log('✅ LOGOUT: Navigation to Auth successful');
+          return;
+        } catch (error) {
+          console.error('🔴 LOGOUT: Navigation to Auth failed:', error);
+        }
+      } else {
+        console.log('🔴 LOGOUT: User not in main stack, current route:', currentRoute?.name);
+      }
     }
 
     // If authenticated user, navigate to main only if not already there

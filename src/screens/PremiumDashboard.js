@@ -30,7 +30,6 @@ import {
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import WearablesDataService from '../services/WearablesDataService';
 import WearablesMetricsCard from '../components/WearablesMetricsCard';
-import SpO2Display from '../components/SpO2Display';
 import { useAuth } from '../auth/AuthContext';
 import { supabase } from '../config/supabase';
 
@@ -44,6 +43,8 @@ const PremiumDashboard = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [wearableMetrics, setWearableMetrics] = useState(null);
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isRefreshingMetrics, setIsRefreshingMetrics] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [availableVendors, setAvailableVendors] = useState([]);
   const [userName, setUserName] = useState('');
@@ -100,7 +101,12 @@ const PremiumDashboard = ({ navigation }) => {
 
   const loadWearableMetrics = async () => {
     try {
-      setIsLoadingMetrics(true);
+      // Only show loading state on initial load, not on refreshes
+      if (isInitialLoad) {
+        setIsLoadingMetrics(true);
+      } else {
+        setIsRefreshingMetrics(true);
+      }
       
       // Format the date as YYYY-MM-DD
       const year = selectedDate.getFullYear();
@@ -116,8 +122,7 @@ const PremiumDashboard = ({ navigation }) => {
       if (metrics) {
         console.log('Found real data:', metrics); // Debug log
         
-        // Use the real data
-        setWearableMetrics({
+        const newMetrics = {
           sleepScore: metrics.sleep_score,
           recovery: metrics.recovery,
           readiness: metrics.readiness,
@@ -128,21 +133,37 @@ const PremiumDashboard = ({ navigation }) => {
           respRate: metrics.resp_rate,
           vendor: metrics.vendor || selectedVendor || 'whoop',
           date: dateKey
-        });
+        };
+        
+        // Only update if data has actually changed
+        const hasChanged = !wearableMetrics || 
+          JSON.stringify(newMetrics) !== JSON.stringify(wearableMetrics);
+        
+        if (hasChanged) {
+          setWearableMetrics(newMetrics);
+        }
         
         if (!selectedVendor && metrics.vendor) {
           setSelectedVendor(metrics.vendor === 'both' ? 'whoop' : metrics.vendor);
         }
       } else {
         console.log('No real data found for date:', dateKey); // Debug log
-        // No real data available, clear the metrics
-        setWearableMetrics(null);
+        // Only clear metrics if they were previously set
+        if (wearableMetrics) {
+          setWearableMetrics(null);
+        }
       }
     } catch (error) {
       console.error('Error loading wearable metrics:', error);
-      setWearableMetrics(null);
+      if (wearableMetrics) {
+        setWearableMetrics(null);
+      }
     } finally {
       setIsLoadingMetrics(false);
+      setIsRefreshingMetrics(false);
+      if (isInitialLoad) {
+        setIsInitialLoad(false);
+      }
     }
   };
 
@@ -189,6 +210,7 @@ const PremiumDashboard = ({ navigation }) => {
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
+    // Don't reset initial load for pull-to-refresh
     loadWearableMetrics().then(() => {
       setTimeout(() => {
         setRefreshing(false);
@@ -226,6 +248,8 @@ const PremiumDashboard = ({ navigation }) => {
     const today = new Date();
     if (newDate > today) return;
     
+    // Reset initial load for date navigation to show loading state
+    setIsInitialLoad(true);
     setSelectedDate(newDate);
     // Metrics will reload automatically via useEffect
   };
@@ -239,8 +263,8 @@ const PremiumDashboard = ({ navigation }) => {
           resizeMode="contain"
         />
         <View style={styles.headerBadge}>
-          <View style={styles.statusDot} />
-          <Text style={styles.statusText}>Connected</Text>
+          <View style={[styles.statusDot, isRefreshingMetrics && styles.statusDotLoading]} />
+          <Text style={styles.statusText}>{isRefreshingMetrics ? 'Loading...' : 'Connected'}</Text>
         </View>
       </View>
       
@@ -276,7 +300,7 @@ const PremiumDashboard = ({ navigation }) => {
       <View style={styles.metricsSection}>
         <WearablesMetricsCard
           metrics={wearableMetrics}
-          isLoading={isLoadingMetrics}
+          isLoading={isInitialLoad && isLoadingMetrics}
           vendor={selectedVendor || 'whoop'}
           onVendorToggle={handleVendorToggle}
           availableVendors={availableVendors}
@@ -323,17 +347,6 @@ const PremiumDashboard = ({ navigation }) => {
         >
           <View style={styles.headerSpacer} />
           {renderMetrics()}
-          
-          {/* SPO2 Display Section */}
-          <View style={styles.metricsSection}>
-            <PremiumCard>
-              <View style={styles.spo2Container}>
-                <Text style={styles.cardTitle}>Pulse Oximetry</Text>
-                <SpO2Display />
-              </View>
-            </PremiumCard>
-          </View>
-          
           
           {renderNotesCard()}
           
@@ -392,6 +405,9 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: colors.metrics.breath,
     marginRight: spacing.xs,
+  },
+  statusDotLoading: {
+    backgroundColor: colors.text.tertiary,
   },
   statusText: {
     ...typography.caption,
@@ -544,9 +560,6 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: spacing.xxl,
-  },
-  spo2Container: {
-    padding: spacing.md,
   },
   trainingButtonContainer: {
     padding: spacing.md,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text as RNText, StyleSheet } from 'react-native';
-import { useAppTheme } from '../../theme';
+import { colors, typography } from '../../design-system';
 
 // Base Text component
 const Text = ({ 
@@ -14,7 +14,7 @@ const Text = ({
   weight,
   ...props 
 }) => {
-  const { colors, typography } = useAppTheme();
+  // Colors and typography imported from design-system
   
   const getColor = (colorProp) => {
     // Check if it's a semantic color
@@ -25,9 +25,9 @@ const Text = ({
       inverse: colors.text.inverse,
       link: colors.text.link,
       disabled: colors.text.disabled,
-      error: colors.error[500],
-      warning: colors.warning[500],
-      success: colors.success[500],
+      error: colors.semantic.error,
+      warning: colors.semantic.warning,
+      success: colors.semantic.success,
     };
 
     if (semanticColors[colorProp]) {

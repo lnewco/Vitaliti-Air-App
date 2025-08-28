@@ -5,7 +5,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import Feather from 'react-native-vector-icons/Feather';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
-import { colors, spacing } from '../../theme';
+import { colors, spacing } from '../../design-system';
 
 // Map icon names to vector icons
 const iconMap = {

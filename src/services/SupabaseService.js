@@ -1020,24 +1020,51 @@ class SupabaseService {
   // ========================================
 
   /**
-   * DEPRECATED: Pre-session surveys removed in simplified flow
-   * Keeping for reference only - do not use
+   * Sync pre-session survey data to Supabase (reactivated for AI feedback engine)
    */
-  // async syncPreSessionSurvey(localSessionId, clarityPre, energyPre) {
-  //   try {
-  //     log.info(`Syncing pre-session survey for: ${localSessionId}`);
+  async syncPreSessionSurvey(localSessionId, clarityPre, energyPre, stressPre) {
+    try {
+      log.info(`Syncing pre-session survey for: ${localSessionId}`);
       
-  //     // Get the Supabase session UUID
-  //     const supabaseId = this.sessionMapping.get(localSessionId);
-  //     if (!supabaseId) {
-  //       log.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
-  //       this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre });
-  //       return { success: true, queued: true };
-  //     }
+      // Get the Supabase session UUID
+      const supabaseId = this.sessionMapping.get(localSessionId);
+      if (!supabaseId) {
+        log.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
+        this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre, stressPre });
+        return { success: true, queued: true };
+      }
 
-  //     // Get session data to determine correct device_id
-  //     const sessionData = await this.verifySessionData(supabaseId);
-  //     const deviceIdToUse = sessionData?.device_id || this.deviceId;
+      // Get session data to determine correct device_id
+      const sessionData = await this.verifySessionData(supabaseId);
+      const deviceIdToUse = sessionData?.device_id || this.deviceId;
+      
+      // Get current authenticated user
+      const currentUser = authService.getCurrentUser();
+      
+      // Use atomic function for pre-session survey insert
+      const { data, error } = await supabase.rpc('insert_pre_session_survey_with_device_id', {
+        device_id_value: deviceIdToUse,
+        p_session_id: supabaseId,
+        p_user_id: currentUser?.id || null,
+        p_clarity_pre: clarityPre,
+        p_energy_pre: energyPre,
+        p_stress_pre: stressPre
+      });
+
+      if (error) {
+        log.error('❌ Failed to sync pre-session survey:', error);
+        this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre, stressPre });
+        return { success: false, error: error.message };
+      }
+
+      log.info('Pre-session survey synced to Supabase');
+      return { success: true, data };
+    } catch (error) {
+      log.error('❌ Error syncing pre-session survey:', error);
+      this.queueForSync('pre_session_survey', { localSessionId, clarityPre, energyPre, stressPre });
+      return { success: false, error: error.message };
+    }
+  }
 
   //     // Get current authenticated user
   //     const currentUser = authService.getCurrentUser();
@@ -1069,7 +1096,7 @@ class SupabaseService {
   /**
    * Sync post-session survey data to Supabase
    */
-  async syncPostSessionSurvey(localSessionId, clarityPost, energyPost, stressPost, notesPost = null) {
+  async syncPostSessionSurvey(localSessionId, clarityPost, energyPost, stressPost, notesPost = null, symptoms = [], overallRating = null) {
     try {
       log.info(`Syncing post-session survey for: ${localSessionId}`);
       
@@ -1077,7 +1104,10 @@ class SupabaseService {
       const supabaseId = this.sessionMapping.get(localSessionId);
       if (!supabaseId) {
         log.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
-        this.queueForSync('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
+        this.queueForSync('post_session_survey', { 
+          localSessionId, clarityPost, energyPost, stressPost, 
+          notesPost, symptoms, overallRating 
+        });
         return { success: true, queued: true };
       }
 
@@ -1088,7 +1118,7 @@ class SupabaseService {
       // Get current authenticated user
       const currentUser = authService.getCurrentUser();
       
-      // Use atomic function for survey insert
+      // Use atomic function for survey insert with enhanced fields
       const { data, error } = await supabase.rpc('insert_post_session_survey_with_device_id', {
         device_id_value: deviceIdToUse,
         p_session_id: supabaseId,
@@ -1096,12 +1126,17 @@ class SupabaseService {
         p_clarity_post: clarityPost,
         p_energy_post: energyPost,
         p_stress_post: stressPost,
-        p_notes_post: notesPost
+        p_notes_post: notesPost,
+        p_post_symptoms: symptoms || [],
+        p_overall_rating: overallRating
       });
 
       if (error) {
         log.error('❌ Failed to sync post-session survey:', error);
-        this.queueForSync('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
+        this.queueForSync('post_session_survey', { 
+          localSessionId, clarityPost, energyPost, stressPost, 
+          notesPost, symptoms, overallRating 
+        });
         return { success: false, error: error.message };
       }
 
@@ -1109,7 +1144,10 @@ class SupabaseService {
       return { success: true, data };
     } catch (error) {
       log.error('❌ Error syncing post-session survey:', error);
-      this.queueForSync('post_session_survey', { localSessionId, clarityPost, energyPost, stressPost, notesPost });
+      this.queueForSync('post_session_survey', { 
+        localSessionId, clarityPost, energyPost, stressPost, 
+        notesPost, symptoms, overallRating 
+      });
       return { success: false, error: error.message };
     }
   }
@@ -1117,15 +1155,18 @@ class SupabaseService {
   /**
    * Sync intra-session response to Supabase
    */
-  async syncIntraSessionResponse(localSessionId, phaseNumber, clarity, energy, stress, timestamp) {
+  async syncIntraSessionResponse(localSessionId, cycleNumber, clarity, energy, stressPerception, sensations = [], spo2 = null, heartRate = null, timestamp = null) {
     try {
-      log.info(`Syncing intra-session response for: ${localSessionId}, phase: ${phaseNumber}`);
+      log.info(`Syncing intra-session response for: ${localSessionId}, cycle: ${cycleNumber}`);
       
       // Get the Supabase session UUID
       const supabaseId = this.sessionMapping.get(localSessionId);
       if (!supabaseId) {
         log.warn('⚠️ No Supabase mapping found for local session, queuing for later sync');
-        this.queueForSync('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
+        this.queueForSync('intra_session_response', { 
+          localSessionId, cycleNumber, clarity, energy, stressPerception, 
+          sensations, spo2, heartRate, timestamp 
+        });
         return { success: true, queued: true };
       }
 
@@ -1136,21 +1177,27 @@ class SupabaseService {
       // Get current authenticated user
       const currentUser = authService.getCurrentUser();
       
-      // Use atomic function for intra-session response insert
+      // Use atomic function for intra-session response insert with enhanced fields
       const { data, error } = await supabase.rpc('insert_intra_session_response_with_device_id', {
         device_id_value: deviceIdToUse,
         p_session_id: supabaseId,
         p_user_id: currentUser?.id || null,
-        p_phase_number: phaseNumber,
+        p_cycle_number: cycleNumber,
         p_clarity: clarity,
         p_energy: energy,
-        p_stress: stress,
-        p_timestamp: new Date(timestamp).toISOString()
+        p_stress_perception: stressPerception,
+        p_sensations: sensations,
+        p_spo2_value: spo2,
+        p_hr_value: heartRate,
+        p_timestamp: timestamp ? new Date(timestamp).toISOString() : new Date().toISOString()
       });
 
       if (error) {
         log.error('❌ Failed to sync intra-session response:', error);
-        this.queueForSync('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
+        this.queueForSync('intra_session_response', { 
+          localSessionId, cycleNumber, clarity, energy, stressPerception, 
+          sensations, spo2, heartRate, timestamp 
+        });
         return { success: false, error: error.message };
       }
 
@@ -1158,7 +1205,10 @@ class SupabaseService {
       return { success: true, data };
     } catch (error) {
       log.error('❌ Error syncing intra-session response:', error);
-      this.queueForSync('intra_session_response', { localSessionId, phaseNumber, clarity, energy, stress, timestamp });
+      this.queueForSync('intra_session_response', { 
+        localSessionId, cycleNumber, clarity, energy, stressPerception, 
+        sensations, spo2, heartRate, timestamp 
+      });
       return { success: false, error: error.message };
     }
   }
@@ -1364,6 +1414,93 @@ class SupabaseService {
   // ========================================
   // CALIBRATION SESSION SYNC METHODS
   // ========================================
+
+  // ========================================
+  // NEW SURVEY METHODS FOR AI FEEDBACK ENGINE
+  // ========================================
+
+  async savePreSessionSurvey(sessionId, energy, mentalClarity, stress) {
+    try {
+      // validate inputs before processing
+      if (!sessionId || energy == null || mentalClarity == null || stress == null) {
+        throw new Error('Missing required survey parameters');
+      }
+
+      // Use the enhanced sync method
+      const result = await this.syncPreSessionSurvey(sessionId, mentalClarity, energy, stress);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save pre-session survey');
+      }
+      
+      return result.data;
+    } catch (error) {
+      log.error('Error saving pre-session survey:', error);
+      throw error;
+    }
+  }
+
+  async savePostSessionSurvey(sessionId, energy, mentalClarity, breathingComfort, sessionSatisfaction, symptoms = [], overallRating = null) {
+    try {
+      // Validate inputs to ensure data integrity
+      if (!sessionId || energy == null || mentalClarity == null || breathingComfort == null || sessionSatisfaction == null) {
+        throw new Error('Missing required survey parameters');
+      }
+
+      // Map breathing comfort and session satisfaction to stress (temporary mapping)
+      const stressPost = Math.round((breathingComfort + sessionSatisfaction) / 2);
+      
+      // Use the enhanced sync method
+      const result = await this.syncPostSessionSurvey(
+        sessionId, 
+        mentalClarity, 
+        energy, 
+        stressPost,
+        null, // notes
+        symptoms,
+        overallRating
+      );
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save post-session survey');
+      }
+      
+      return result.data;
+    } catch (error) {
+      log.error('Error saving post-session survey:', error);
+      throw error;
+    }
+  }
+
+  async saveIntraSessionResponse(sessionId, cycleNumber, stressPerception, energy, clarity, sensations = [], spo2 = null, heartRate = null) {
+    try {
+      // Validate inputs to ensure all required parameters are present
+      if (!sessionId || cycleNumber == null || stressPerception == null || energy == null || clarity == null) {
+        throw new Error('Missing required intra-session parameters');
+      }
+
+      // Use the enhanced sync method
+      const result = await this.syncIntraSessionResponse(
+        sessionId,
+        cycleNumber,
+        clarity,
+        energy,
+        stressPerception,
+        sensations,
+        spo2,
+        heartRate
+      );
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save intra-session response');
+      }
+      
+      return result.data;
+    } catch (error) {
+      log.error('Error saving intra-session response:', error);
+      throw error;
+    }
+  }
 
 }
 

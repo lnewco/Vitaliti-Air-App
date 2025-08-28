@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, TextInput, StyleSheet, Platform } from 'react-native';
-import { useAppTheme } from '../theme';
+import { colors, spacing, typography } from '../design-system';
 import { Body, Caption } from './base/Typography';
 
 const SurveyNotesInput = ({
@@ -12,15 +12,9 @@ const SurveyNotesInput = ({
   isRequired = false,
   disabled = false,
 }) => {
-  const theme = useAppTheme();
-  const { colors, spacing, typography } = theme || {};
+  // Design tokens imported from design-system
   const characterCount = value.length;
   const isAtLimit = characterCount >= maxLength;
-  
-  // Fallback if theme is not ready
-  if (!colors || !spacing || !typography) {
-    return null;
-  }
 
   const styles = StyleSheet.create({
     container: {
@@ -32,7 +26,7 @@ const SurveyNotesInput = ({
       fontSize: 14,
     },
     required: {
-      color: colors.error[500],
+      color: colors.semantic.error,
     },
     textInput: {
       borderWidth: 1,
@@ -41,17 +35,17 @@ const SurveyNotesInput = ({
       padding: spacing.sm,
       fontSize: 14,
       color: colors.text.primary,
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
       minHeight: 60,
       maxHeight: 100,
       textAlignVertical: 'top',
     },
     disabledInput: {
-      backgroundColor: colors.surface.background,
+      backgroundColor: colors.background.primary,
       color: colors.text.disabled,
     },
     limitReached: {
-      borderColor: colors.warning[500],
+      borderColor: colors.semantic.warning,
     },
     footer: {
       flexDirection: 'row',

@@ -1,6 +1,5 @@
 import React from 'react';
 import { LogBox } from 'react-native';
-import { AppThemeProvider } from './src/theme';
 import { BluetoothProvider } from './src/context/BluetoothContext';
 import { AuthProvider } from './src/auth/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -32,13 +31,11 @@ export default function App() {
   
   return (
     <ErrorBoundary name="App">
-      <AppThemeProvider>
-        <AuthProvider>
-          <BluetoothProvider>
-            <AppNavigator />
-          </BluetoothProvider>
-        </AuthProvider>
-      </AppThemeProvider>
+      <AuthProvider>
+        <BluetoothProvider>
+          <AppNavigator />
+        </BluetoothProvider>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }

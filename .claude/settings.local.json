@@ -59,7 +59,13 @@
       "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/ai-agent-service/**)",
       "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/ai-agent-service/agent/**)",
       "Bash(cd:*)",
-      "Bash(pod install:*)"
+      "Bash(pod install:*)",
+      "mcp__supabase__list_branches",
+      "mcp__supabase__get_advisors",
+      "Read(/var/folders/sf/czh6d2nx15q1cgq20fjxm9m00000gn/T/TemporaryItems/NSIRD_screencaptureui_rDgAaK/**)",
+      "Bash(chmod:*)",
+      "Read(/var/folders/sf/czh6d2nx15q1cgq20fjxm9m00000gn/T/TemporaryItems/NSIRD_screencaptureui_kN7pkf/**)",
+      "Bash(cd:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

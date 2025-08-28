@@ -1,20 +1,26 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useAppTheme } from '../../theme';
+import { colors, spacing, typography } from '../../design-system';
 
 // Main Card component
 const Card = ({ children, style, padding = true, shadow = 'md', elevated = false, pressable = false, onPress, ...props }) => {
-  const { colors, spacing, shadows } = useAppTheme();
+  // Design tokens imported from design-system
   
   const cardStyles = [
     {
-      backgroundColor: elevated ? colors.surface.modal : colors.surface.card,
+      backgroundColor: elevated ? colors.background.elevated : colors.background.tertiary,
       borderRadius: spacing.borderRadius.lg,
       borderWidth: 1,
       borderColor: colors.border.light,
     },
     padding && { padding: spacing.cardPadding },
-    shadows[shadow],
+    shadow === 'md' ? {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 3
+    } : {},
     style
   ];
   
@@ -49,7 +55,7 @@ Card.Header = ({
   titleStyle,
   subtitleStyle,
 }) => {
-  const { colors, spacing, typography } = useAppTheme();
+  // Design tokens imported from design-system
   
   const styles = StyleSheet.create({
     header: {
@@ -86,7 +92,7 @@ Card.Header = ({
       marginLeft: spacing.md,
     },
     badge: {
-      backgroundColor: colors.primary[100],
+      backgroundColor: colors.background.elevated,
       paddingHorizontal: spacing.sm,
       paddingVertical: spacing.xxs,
       borderRadius: spacing.borderRadius.full,
@@ -94,7 +100,7 @@ Card.Header = ({
     },
     badgeText: {
       ...typography.styles.captionBold,
-      color: colors.primary[700],
+      color: colors.brand.accent,
       textTransform: 'uppercase',
     },
   });
@@ -134,7 +140,7 @@ Card.Header = ({
 
 // Card Body subcomponent
 Card.Body = ({ children, style, noPadding = false }) => {
-  const { spacing } = useAppTheme();
+  // Design tokens imported from design-system
   
   const styles = StyleSheet.create({
     body: {
@@ -159,7 +165,7 @@ Card.Footer = ({
   divider = true,
   justify = 'space-between' // 'start', 'end', 'center', 'space-between', 'space-around'
 }) => {
-  const { colors, spacing } = useAppTheme();
+  // Design tokens imported from design-system
   
   const justifyContent = {
     'start': 'flex-start',
@@ -196,7 +202,7 @@ Card.Footer = ({
 
 // Card Divider subcomponent
 Card.Divider = ({ style }) => {
-  const { colors, spacing } = useAppTheme();
+  // Design tokens imported from design-system
   
   const styles = StyleSheet.create({
     divider: {

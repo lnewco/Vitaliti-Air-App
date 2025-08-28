@@ -8,7 +8,7 @@ import {
   Platform,
   RefreshControl
 } from 'react-native';
-import { useAppTheme } from '../../theme';
+import { colors, spacing } from '../../design-system';
 
 const Container = ({
   children,
@@ -27,7 +27,7 @@ const Container = ({
   backgroundColor,
   ...props
 }) => {
-  const { colors, spacing } = useAppTheme();
+  // Design tokens imported from design-system
   
   const shouldScroll = scroll || scrollable;
   const shouldAvoidKeyboard = keyboardAvoid || keyboardAvoiding;
@@ -35,7 +35,7 @@ const Container = ({
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: backgroundColor || colors.surface.card,
+      backgroundColor: backgroundColor || colors.background.tertiary,
     },
     scrollView: {
       flex: 1,
@@ -74,7 +74,7 @@ const Container = ({
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                tintColor={colors.primary[500]}
+                tintColor={colors.brand.accent}
               />
             ) : undefined
           }

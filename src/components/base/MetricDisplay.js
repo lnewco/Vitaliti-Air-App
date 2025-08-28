@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { colors, spacing, shadows } from '../../theme';
+import { colors, spacing } from '../../design-system';
 import { Metric, MetricLabel, Caption, BodySmall } from './Typography';
 import Badge from './Badge';
 
@@ -20,9 +20,9 @@ const MetricDisplay = ({
     if (statusColor) return statusColor;
     
     const statusColors = {
-      good: colors.secondary[500],
-      warning: colors.warning[500],
-      danger: colors.error[500],
+      good: colors.semantic.success,
+      warning: colors.semantic.warning,
+      danger: colors.semantic.error,
       neutral: colors.text.secondary,
     };
     

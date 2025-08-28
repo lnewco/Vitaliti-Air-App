@@ -6,7 +6,7 @@ export const isValidSurveyScale = (value) => {
 };
 
 /**
- * Validates pre-session survey data
+ * Validates pre-session survey data (enhanced with stress)
  */
 export const validatePreSessionSurvey = (data) => {
   const errors = [];
@@ -17,6 +17,10 @@ export const validatePreSessionSurvey = (data) => {
 
   if (!data.energy || !isValidSurveyScale(data.energy)) {
     errors.push('Energy level is required and must be a value from 1 to 5');
+  }
+
+  if (!data.stress || !isValidSurveyScale(data.stress)) {
+    errors.push('Stress level is required and must be a value from 1 to 5');
   }
 
   return {
@@ -107,7 +111,9 @@ export const sanitizeSurveyNotes = (notes) => {
  * Checks if all required fields are filled for a survey
  */
 export const isPreSessionSurveyComplete = (data) => {
-  return isValidSurveyScale(data.clarity) && isValidSurveyScale(data.energy);
+  return isValidSurveyScale(data.clarity) && 
+         isValidSurveyScale(data.energy) && 
+         isValidSurveyScale(data.stress);
 };
 
 export const isPostSessionSurveyComplete = (data) => {
@@ -129,6 +135,7 @@ export const isIntraSessionResponseComplete = (data) => {
 export const createDefaultPreSessionSurvey = () => ({
   clarity: null,
   energy: null,
+  stress: null,
 });
 
 export const createDefaultPostSessionSurvey = () => ({

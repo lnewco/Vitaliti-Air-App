@@ -6,7 +6,7 @@ import {
   ScrollView, 
   Alert 
 } from 'react-native';
-import { useAppTheme } from '../../theme';
+import { colors, spacing } from '../../design-system';
 import OnboardingContainer from '../../components/onboarding/OnboardingContainer';
 import { H1, H3, Body, BodySmall, Caption } from '../../components/base/Typography';
 import Card from '../../components/base/Card';
@@ -67,7 +67,7 @@ const ConsentScreen = ({ navigation }) => {
     }
   };
 
-  const { colors, spacing } = useAppTheme();
+  // Colors and spacing imported from design-system
   
   const styles = StyleSheet.create({
     scrollContent: {
@@ -100,12 +100,12 @@ const ConsentScreen = ({ navigation }) => {
       width: 24,
       height: 24,
       borderRadius: 12,
-      backgroundColor: colors.primary[100],
+      backgroundColor: colors.background.elevated,
       justifyContent: 'center',
       alignItems: 'center',
     },
     infoButtonText: {
-      color: colors.primary[600],
+      color: colors.brand.accent,
       fontSize: 14,
       fontWeight: 'bold',
     },
@@ -119,14 +119,14 @@ const ConsentScreen = ({ navigation }) => {
       borderWidth: 1,
       borderColor: colors.border.light,
       borderRadius: spacing.borderRadius.md,
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
     },
     checkboxSelected: {
-      borderColor: colors.primary[500],
-      backgroundColor: colors.primary[50],
+      borderColor: colors.brand.accent,
+      backgroundColor: colors.background.elevated,
     },
     checkboxError: {
-      borderColor: colors.error[500],
+      borderColor: colors.semantic.error,
     },
     checkbox: {
       width: 24,
@@ -137,10 +137,10 @@ const ConsentScreen = ({ navigation }) => {
       marginRight: spacing.md,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: colors.surface.card,
+      backgroundColor: colors.background.tertiary,
     },
     checkmark: {
-      color: colors.primary[500],
+      color: colors.brand.accent,
       fontSize: 16,
       fontWeight: 'bold',
     },
@@ -196,7 +196,7 @@ const ConsentScreen = ({ navigation }) => {
               >
                 <View style={[
                   styles.checkbox,
-                  onboardingData.researchConsent && { borderColor: colors.primary[500] }
+                  onboardingData.researchConsent && { borderColor: colors.brand.accent }
                 ]}>
                   {onboardingData.researchConsent && (
                     <Body style={styles.checkmark}>✓</Body>
@@ -237,7 +237,7 @@ const ConsentScreen = ({ navigation }) => {
               >
                 <View style={[
                   styles.checkbox,
-                  onboardingData.liabilityWaiver && { borderColor: colors.primary[500] }
+                  onboardingData.liabilityWaiver && { borderColor: colors.brand.accent }
                 ]}>
                   {onboardingData.liabilityWaiver && (
                     <Body style={styles.checkmark}>✓</Body>

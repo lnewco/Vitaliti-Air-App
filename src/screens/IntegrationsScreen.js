@@ -53,6 +53,8 @@ const IntegrationsScreen = ({ navigation }) => {
     if (!url) return;
 
     console.log('📱 Received deep link:', url);
+    console.log('📱 URL scheme:', url.split('://')[0]);
+    console.log('📱 URL path:', url.split('://')[1]);
 
     try {
       // Parse the deep link URL - handles both formats:
@@ -62,14 +64,29 @@ const IntegrationsScreen = ({ navigation }) => {
       let code, state, vendor;
       
       // Check if it's an OAuth callback (has code parameter)
-      if (url.includes('code=')) {
-        const urlObj = new URL(url);
+      // Handle multiple formats: 
+      // 1. exp+vitaliti-air-app://expo-auth-session?code=xxx
+      // 2. vitalitiair://oauth-callback?code=xxx  
+      // 3. com.sophiafay24.vitalitiairapp://expo-auth-session?code=xxx
+      // 4. vitaliti-air-app://expo-auth-session?code=xxx
+      if (url.includes('code=') || url.includes('expo-auth-session')) {
+        // Parse URL - handle special exp+ scheme and other formats
+        let cleanUrl = url;
+        if (url.startsWith('exp+')) {
+          cleanUrl = url.replace('exp+vitaliti-air-app://', 'https://fake.com/');
+        } else if (url.startsWith('com.sophiafay24.vitalitiairapp://')) {
+          cleanUrl = url.replace('com.sophiafay24.vitalitiairapp://', 'https://fake.com/');
+        } else if (url.startsWith('vitaliti-air-app://')) {
+          cleanUrl = url.replace('vitaliti-air-app://', 'https://fake.com/');
+        } else if (url.startsWith('vitalitiair://')) {
+          cleanUrl = url.replace('vitalitiair://', 'https://fake.com/');
+        }
+        
+        const urlObj = new URL(cleanUrl);
         code = urlObj.searchParams.get('code');
         state = urlObj.searchParams.get('state');
         
-        // Determine vendor from state or URL
-        // When using Expo Auth Proxy, both Whoop and Oura redirect to the same URL
-        // We'll need to track which service initiated the OAuth
+        // Determine vendor from state or stored value
         vendor = await AsyncStorage.getItem('pending_oauth_vendor');
         
         console.log('📱 OAuth callback received:', { 

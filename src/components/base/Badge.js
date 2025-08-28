@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, spacing, typography } from '../../theme';
+import { colors, spacing, typography } from '../../design-system';
 
 const Badge = ({
   label,
@@ -56,22 +56,22 @@ const styles = StyleSheet.create({
 
   // Variants
   default: {
-    backgroundColor: colors.neutral[200],
+    backgroundColor: colors.background.secondary,
   },
   primary: {
-    backgroundColor: colors.primary[500],
+    backgroundColor: colors.brand.accent,
   },
   success: {
-    backgroundColor: colors.secondary[500],
+    backgroundColor: colors.semantic.success,
   },
   warning: {
-    backgroundColor: colors.warning[500],
+    backgroundColor: colors.semantic.warning,
   },
   error: {
-    backgroundColor: colors.error[500],
+    backgroundColor: colors.semantic.error,
   },
   info: {
-    backgroundColor: colors.primary[100],
+    backgroundColor: colors.background.elevated,
   },
 
   // Sizes
@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
     color: colors.text.inverse,
   },
   infoText: {
-    color: colors.primary[700],
+    color: colors.brand.accent,
   },
 
   smallText: {
@@ -146,22 +146,22 @@ const styles = StyleSheet.create({
     height: 10,
   },
   defaultDot: {
-    backgroundColor: colors.neutral[400],
+    backgroundColor: colors.background.secondary,
   },
   primaryDot: {
-    backgroundColor: colors.primary[500],
+    backgroundColor: colors.brand.accent,
   },
   successDot: {
-    backgroundColor: colors.secondary[500],
+    backgroundColor: colors.semantic.success,
   },
   warningDot: {
-    backgroundColor: colors.warning[500],
+    backgroundColor: colors.semantic.warning,
   },
   errorDot: {
-    backgroundColor: colors.error[500],
+    backgroundColor: colors.semantic.error,
   },
   infoDot: {
-    backgroundColor: colors.primary[300],
+    backgroundColor: colors.brand.accent,
   },
 });
 
