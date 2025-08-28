@@ -86,19 +86,24 @@ class BluetoothScanner {
    * Handle discovered device
    */
   handleDeviceDiscovered(device) {
+    // Log ALL devices for debugging
+    log.info(`🔍 Discovered device: ${device.name || 'UNNAMED'} (${device.id})`);
+    
     // Skip if already discovered
     if (this.discoveredDevices.has(device.id)) {
       return;
     }
 
     const deviceType = this.getDeviceType(device);
+    log.info(`📱 Device type identified as: ${deviceType}`);
     
     // Filter by current scan type
     if (this.currentScanType === 'pulse-ox' && deviceType !== 'pulse-ox') {
+      log.info(`⏭️ Skipping non-pulse-ox device: ${device.name}`);
       return;
     }
 
-    log.info(`📱 Found ${deviceType} device: ${device.name} (${device.id})`);
+    log.info(`✅ Adding ${deviceType} device: ${device.name} (${device.id})`);
     
     this.discoveredDevices.set(device.id, {
       device,
@@ -118,22 +123,29 @@ class BluetoothScanner {
   getDeviceType(device) {
     const name = device.name?.toLowerCase() || '';
     
-    // Pulse oximeter patterns
-    if (name.includes('oximeter') || 
-        name.includes('o2ring') || 
-        name.includes('checkme') ||
-        name.includes('o2') ||
-        name.includes('spo2') ||
-        name.includes('berry') ||
-        name.includes('cms50')) {
+    log.info(`🔍 Checking device type for name: "${device.name}" (lowercase: "${name}")`);
+    
+    // Pulse oximeter patterns - EXPANDED list
+    const pulseOxPatterns = [
+      'oximeter', 'o2ring', 'checkme', 'o2', 'spo2', 
+      'berry', 'cms50', 'pulse', 'wellue', 'vibeat',
+      'o2max', 'masimo', 'nonin', 'contec'
+    ];
+    
+    for (const pattern of pulseOxPatterns) {
+      if (name.includes(pattern)) {
+        log.info(`✅ Matched pulse-ox pattern: ${pattern}`);
+        return 'pulse-ox';
+      }
+    }
+    
+    // Check if it starts with known prefixes
+    if (name.startsWith('cm') || name.startsWith('po') || name.startsWith('ox')) {
+      log.info(`✅ Matched pulse-ox prefix: ${name.substring(0, 2)}`);
       return 'pulse-ox';
     }
     
-    // Future device types can be added here
-    // if (name.includes('hr') || name.includes('heart')) {
-    //   return 'heart-rate';
-    // }
-    
+    log.info(`❌ No pulse-ox pattern matched for: ${device.name}`);
     return 'unknown';
   }
 
