@@ -11,6 +11,7 @@ import SessionHistoryScreen from './SessionHistoryScreen';
 import SimplifiedSessionSetup from './SimplifiedSessionSetup';
 import IHHTSessionSetupScreen from './IHHTSessionSetupScreen';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
+import IHHTTrainingScreenV2 from './IHHTTrainingScreenV2';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import PremiumProfileScreen from './PremiumProfileScreen';
 import IntegrationsScreen from './IntegrationsScreen';
@@ -121,6 +122,15 @@ const MainStack = ({ onNavigateToSession }) => {
         options={{
           presentation: 'card',
           headerShown: false,  // Hide navigation header to avoid double header
+        }}
+      />
+      
+      <Stack.Screen 
+        name="IHHTTrainingV2" 
+        component={IHHTTrainingScreenV2}
+        options={{
+          presentation: 'card',
+          headerShown: false,
         }}
       />
       
