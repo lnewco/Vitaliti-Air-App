@@ -269,24 +269,42 @@ const IntegrationsScreen = ({ navigation }) => {
 
   const handleConnect = async (vendor) => {
     try {
+      console.log(`🔌 Attempting to connect ${vendor}...`);
+      console.log(`👤 User ID: ${user?.id}`);
+      
       let authUrl;
       
       // Store which vendor we're connecting (needed for Expo Auth Proxy)
       await AsyncStorage.setItem('pending_oauth_vendor', vendor.toLowerCase());
       
       if (vendor === 'Whoop') {
+        console.log('📱 Getting Whoop auth URL...');
         authUrl = await WhoopService.getAuthUrl(user.id);
       } else if (vendor === 'Oura') {
+        console.log('💍 Getting Oura auth URL...');
         authUrl = await OuraService.getAuthUrl(user.id);
       }
 
       if (authUrl) {
         console.log(`🔗 Opening ${vendor} OAuth URL:`, authUrl);
-        await Linking.openURL(authUrl);
+        const supported = await Linking.canOpenURL(authUrl);
+        console.log(`📱 Can open URL: ${supported}`);
+        
+        if (supported) {
+          await Linking.openURL(authUrl);
+          console.log(`✅ Opened ${vendor} OAuth URL`);
+        } else {
+          console.error(`❌ Cannot open URL: ${authUrl}`);
+          Alert.alert('Error', 'Cannot open authentication page. Please check your browser settings.');
+        }
+      } else {
+        console.error(`❌ No auth URL generated for ${vendor}`);
+        Alert.alert('Configuration Error', `${vendor} integration is not properly configured.`);
       }
     } catch (error) {
-      console.error(`Error connecting ${vendor}:`, error);
-      Alert.alert('Connection Error', `Failed to connect to ${vendor}. Please try again.`);
+      console.error(`❌ Error connecting ${vendor}:`, error);
+      console.error('Stack trace:', error.stack);
+      Alert.alert('Connection Error', `Failed to connect to ${vendor}. Error: ${error.message}`);
     }
   };
 

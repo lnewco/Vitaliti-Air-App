@@ -15,9 +15,14 @@ class WhoopService {
     this.clientId = process.env.EXPO_PUBLIC_WHOOP_CLIENT_ID;
     this.clientSecret = process.env.EXPO_PUBLIC_WHOOP_CLIENT_SECRET;
     
+    console.log('🔍 Environment check:');
+    console.log('  - EXPO_PUBLIC_WHOOP_CLIENT_ID:', this.clientId ? '✅ Set' : '❌ Missing');
+    console.log('  - EXPO_PUBLIC_WHOOP_CLIENT_SECRET:', this.clientSecret ? '✅ Set' : '❌ Missing');
+    
     // Warn if credentials are missing
     if (!this.clientId || !this.clientSecret) {
       console.warn('⚠️ Whoop OAuth credentials not configured. Integration disabled.');
+      console.warn('⚠️ Make sure EXPO_PUBLIC_WHOOP_CLIENT_ID and EXPO_PUBLIC_WHOOP_CLIENT_SECRET are set in your .env file');
     }
     // Use configuration-based redirect URI
     this.redirectUri = OAuthConfig.current.redirectUri;
@@ -29,6 +34,11 @@ class WhoopService {
 
   // Generate OAuth URL for user authentication
   async getAuthUrl(userId) {
+    if (!this.clientId || !this.clientSecret) {
+      console.error('❌ Cannot generate auth URL: Missing OAuth credentials');
+      return null;
+    }
+    
     const scope = 'read:recovery read:cycles read:sleep read:workout read:profile offline';
     
     // Generate a unique state token - WHOOP REQUIRES EXACTLY 8 CHARACTERS!
