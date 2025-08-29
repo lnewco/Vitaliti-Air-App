@@ -9,6 +9,7 @@ import {
   Dimensions,
   Image,
   TouchableOpacity,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -58,6 +59,28 @@ const PremiumDashboard = ({ navigation }) => {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Trigger sync when app comes to foreground
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState) => {
+      if (nextAppState === 'active' && user?.id) {
+        console.log('[Dashboard] App became active, triggering wearables sync');
+        triggerWearablesSync();
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    // Also trigger sync on mount
+    if (user?.id) {
+      console.log('[Dashboard] Component mounted, triggering initial sync');
+      triggerWearablesSync();
+    }
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [user]);
 
   // Fetch user profile
   useEffect(() => {
@@ -178,6 +201,46 @@ const PremiumDashboard = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Error checking available vendors:', error);
+    }
+  };
+
+  const triggerWearablesSync = async () => {
+    if (!user?.id) return;
+    
+    try {
+      console.log('[Dashboard] Triggering wearables sync for user:', user.id);
+      
+      // Call the backend to trigger sync (with 60 second timeout)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      
+      const response = await fetch('https://vitaliti-air-analytics.onrender.com/api/sync/manual', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          vendor: 'all', // Sync both WHOOP and Oura
+        }),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[Dashboard] Sync completed:', result);
+        
+        // Sync is now complete (we await it), so load metrics immediately
+        loadWearableMetrics();
+      } else {
+        console.error('[Dashboard] Failed to trigger sync:', response.status);
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error triggering sync:', error);
+      // Continue to load metrics even if sync fails
+      loadWearableMetrics();
     }
   };
 
