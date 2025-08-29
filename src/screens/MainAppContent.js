@@ -9,6 +9,7 @@ import { colors } from '../design-system';
 import PremiumDashboard from './PremiumDashboard';
 import SessionHistoryScreen from './SessionHistoryScreen';
 import SimplifiedSessionSetup from './SimplifiedSessionSetup';
+import IHHTSessionSetupScreen from './IHHTSessionSetupScreen';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import PremiumProfileScreen from './PremiumProfileScreen';
@@ -101,6 +102,16 @@ const MainStack = ({ onNavigateToSession }) => {
         options={{
           presentation: 'card',
           title: 'Training Session Setup',
+        }}
+      />
+      
+      <Stack.Screen 
+        name="IHHTSessionSetup" 
+        component={IHHTSessionSetupScreen}
+        options={{
+          presentation: 'card',
+          headerShown: false,
+          title: 'IHHT Session Setup',
         }}
       />
 
