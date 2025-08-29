@@ -71,7 +71,13 @@
       "WebFetch(domain:cloud.ouraring.com)",
       "Bash(npm start:*)",
       "Read(/var/folders/sf/czh6d2nx15q1cgq20fjxm9m00000gn/T/TemporaryItems/NSIRD_screencaptureui_7GpmuZ/**)",
-      "Read(/Users/danyalpanjwani/Downloads/**)"
+      "Read(/Users/danyalpanjwani/Downloads/**)",
+      "Bash(while true)",
+      "Bash(cd:*)",
+      "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/**)",
+      "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/**)",
+      "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/src/services/**)",
+      "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/src/lib/**)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

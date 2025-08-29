@@ -181,6 +181,9 @@ class WearablesDataService {
       // Get both Whoop and Oura data
       const dateFilter = date || new Date().toISOString().split('T')[0];
       
+      // Get the user's preferred vendor
+      const preferredVendor = await this.getPreferredWearable(userId) || 'whoop';
+      
       const [whoopData, ouraData] = await Promise.all([
         supabase
           .from('whoop_data')
@@ -203,19 +206,68 @@ class WearablesDataService {
         return null;
       }
 
-      // Return unified format matching analytics backend
-      return {
-        recovery: whoop?.recovery || null,
-        readiness: oura?.readiness || null,
-        strain: whoop?.strain || null,
-        activity: oura?.activity || null,
-        sleep_score: whoop?.sleep_score || oura?.sleep_score || null,
-        hrv: whoop?.hrv || oura?.hrv || null,
-        resting_hr: whoop?.resting_hr || oura?.resting_hr || null,
-        resp_rate: whoop?.resp_rate || oura?.resp_rate || null,
-        vendor: whoop && oura ? 'both' : (whoop ? 'whoop' : 'oura'),
-        date: dateFilter
-      };
+      // If both vendors have data, use the preferred vendor
+      // This prevents mixing data from different vendors
+      if (whoop && oura) {
+        if (preferredVendor === 'oura') {
+          // Return only Oura data
+          return {
+            recovery: null,
+            readiness: oura.readiness,
+            strain: null,
+            activity: oura.activity,
+            sleep_score: oura.sleep_score,
+            hrv: oura.hrv,
+            resting_hr: oura.resting_hr,
+            resp_rate: oura.resp_rate,
+            vendor: 'oura',
+            date: dateFilter
+          };
+        } else {
+          // Return only Whoop data (default)
+          return {
+            recovery: whoop.recovery,
+            readiness: null,
+            strain: whoop.strain,
+            activity: null,
+            sleep_score: whoop.sleep_score,
+            hrv: whoop.hrv,
+            resting_hr: whoop.resting_hr,
+            resp_rate: whoop.resp_rate,
+            vendor: 'whoop',
+            date: dateFilter
+          };
+        }
+      }
+
+      // If only one vendor has data, return that
+      if (whoop) {
+        return {
+          recovery: whoop.recovery,
+          readiness: null,
+          strain: whoop.strain,
+          activity: null,
+          sleep_score: whoop.sleep_score,
+          hrv: whoop.hrv,
+          resting_hr: whoop.resting_hr,
+          resp_rate: whoop.resp_rate,
+          vendor: 'whoop',
+          date: dateFilter
+        };
+      } else {
+        return {
+          recovery: null,
+          readiness: oura.readiness,
+          strain: null,
+          activity: oura.activity,
+          sleep_score: oura.sleep_score,
+          hrv: oura.hrv,
+          resting_hr: oura.resting_hr,
+          resp_rate: oura.resp_rate,
+          vendor: 'oura',
+          date: dateFilter
+        };
+      }
     } catch (error) {
       console.error('Error getting combined metrics:', error);
       return null;

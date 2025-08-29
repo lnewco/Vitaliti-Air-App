@@ -40,19 +40,8 @@ const WearablesMetricsCard = ({
     };
   }, [isLoading]);
 
-  // Use mock data as fallback when no real data is available
-  const displayMetrics = metrics || {
-    sleepScore: 78,
-    recovery: 66,
-    readiness: 66,
-    strain: 5.1,
-    activity: 5.1,
-    restingHR: 51,
-    hrv: 96,
-    respRate: 17.8,
-    vendor: vendor || 'whoop',
-    date: selectedDate ? selectedDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
-  };
+  // Use actual metrics or null (no more mock fallback)
+  const displayMetrics = metrics;
   
   // Determine training recommendation based on recovery score
   const getTrainingRecommendation = () => {
@@ -187,7 +176,7 @@ const WearablesMetricsCard = ({
               <Text style={styles.metricLabel}>SLEEP</Text>
             </View>
             <MetricRing
-              value={displayMetrics.sleepScore || 0}
+              value={displayMetrics?.sleepScore || 0}
               maxValue={100}
               size={90}
               strokeWidth={8}
@@ -197,7 +186,7 @@ const WearablesMetricsCard = ({
               showLabel={false}
             />
             <Text style={styles.metricValue}>
-              {displayMetrics.sleepScore ? `${displayMetrics.sleepScore}%` : '--'}
+              {displayMetrics?.sleepScore ? `${displayMetrics.sleepScore}%` : '--'}
             </Text>
           </View>
 
@@ -207,7 +196,7 @@ const WearablesMetricsCard = ({
               <Text style={styles.metricLabel}>{getRecoveryLabel().toUpperCase()}</Text>
             </View>
             <MetricRing
-              value={displayMetrics.recovery || displayMetrics.readiness || 0}
+              value={displayMetrics?.recovery || displayMetrics?.readiness || 0}
               maxValue={100}
               size={90}
               strokeWidth={8}
@@ -217,7 +206,7 @@ const WearablesMetricsCard = ({
               showLabel={false}
             />
             <Text style={styles.metricValue}>
-              {displayMetrics.recovery || displayMetrics.readiness ? `${displayMetrics.recovery || displayMetrics.readiness}%` : '--'}
+              {displayMetrics?.recovery || displayMetrics?.readiness ? `${displayMetrics?.recovery || displayMetrics?.readiness}%` : '--'}
             </Text>
           </View>
 
@@ -228,7 +217,7 @@ const WearablesMetricsCard = ({
             </View>
             <View style={styles.strainContainer}>
               <Text style={[styles.largeMetricValue, { color: metricColors.strain }]}>
-                {displayMetrics.strain || displayMetrics.activity || '--'}
+                {displayMetrics?.strain || displayMetrics?.activity || '--'}
               </Text>
               {vendor === 'whoop' && (
                 <View style={[styles.strainBar, { backgroundColor: metricColors.strain + '20' }]}>
@@ -236,7 +225,7 @@ const WearablesMetricsCard = ({
                     style={[
                       styles.strainFill, 
                       { 
-                        width: `${Math.min((displayMetrics.strain || 0) / 21 * 100, 100)}%`,
+                        width: `${Math.min((displayMetrics?.strain || 0) / 21 * 100, 100)}%`,
                         backgroundColor: metricColors.strain 
                       }
                     ]} 
@@ -253,7 +242,7 @@ const WearablesMetricsCard = ({
           <View style={styles.vitalCard}>
             <Text style={styles.vitalLabel}>Resting HR</Text>
             <Text style={[styles.vitalValue, { color: metricColors.hr }]}>
-              {displayMetrics.restingHR || '--'}
+              {displayMetrics?.restingHR || '--'}
             </Text>
             <Text style={styles.vitalUnit}>bpm</Text>
           </View>
@@ -262,7 +251,7 @@ const WearablesMetricsCard = ({
           <View style={styles.vitalCard}>
             <Text style={styles.vitalLabel}>HRV</Text>
             <Text style={[styles.vitalValue, { color: metricColors.hrv }]}>
-              {displayMetrics.hrv || '--'}
+              {displayMetrics?.hrv || '--'}
             </Text>
             <Text style={styles.vitalUnit}>ms</Text>
           </View>
@@ -271,7 +260,7 @@ const WearablesMetricsCard = ({
           <View style={styles.vitalCard}>
             <Text style={styles.vitalLabel}>Resp Rate</Text>
             <Text style={[styles.vitalValue, { color: metricColors.respRate }]}>
-              {displayMetrics.respRate || '--'}
+              {displayMetrics?.respRate || '--'}
             </Text>
             <Text style={styles.vitalUnit}>rpm</Text>
           </View>
@@ -283,7 +272,7 @@ const WearablesMetricsCard = ({
         <View style={styles.sourceIndicator}>
           <View style={[styles.sourceDot, { backgroundColor: metrics ? colors.metrics.breath : colors.text.tertiary }]} />
           <Text style={styles.sourceText}>
-            {metrics ? `Live from ${vendor === 'whoop' ? 'WHOOP' : 'Oura Ring'}` : 'Sample data'}
+            {metrics ? `Live from ${(metrics.vendor || vendor) === 'whoop' ? 'WHOOP' : 'Oura Ring'}` : 'Sample data'}
           </Text>
         </View>
       </View>
