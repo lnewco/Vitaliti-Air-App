@@ -596,6 +596,34 @@ class WhoopService {
   }
 
   // Disconnect Whoop (remove tokens)
+  // Check if user has connected Whoop
+  async isConnected(userId) {
+    if (!userId) {
+      console.log('❌ No user ID provided to isConnected');
+      return false;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('whoop_connected, whoop_access_token')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) {
+        console.error('❌ Error checking Whoop connection:', error);
+        return false;
+      }
+
+      const isConnected = data?.whoop_connected && !!data?.whoop_access_token;
+      console.log(`🔍 Whoop connection status for user ${userId}: ${isConnected}`);
+      return isConnected;
+    } catch (error) {
+      console.error('❌ Error checking Whoop connection:', error);
+      return false;
+    }
+  }
+
   async disconnect(userId) {
     try {
       const { error } = await supabase

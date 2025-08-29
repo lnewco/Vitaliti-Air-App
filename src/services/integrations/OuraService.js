@@ -573,6 +573,34 @@ class OuraService {
   }
 
   // Disconnect Oura (remove tokens)
+  // Check if user has connected Oura
+  async isConnected(userId) {
+    if (!userId) {
+      console.log('❌ No user ID provided to isConnected');
+      return false;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('oura_connected, oura_access_token')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) {
+        console.error('❌ Error checking Oura connection:', error);
+        return false;
+      }
+
+      const isConnected = data?.oura_connected && !!data?.oura_access_token;
+      console.log(`💍 Oura connection status for user ${userId}: ${isConnected}`);
+      return isConnected;
+    } catch (error) {
+      console.error('❌ Error checking Oura connection:', error);
+      return false;
+    }
+  }
+
   async disconnect(userId) {
     try {
       const { error } = await supabase

@@ -41,8 +41,10 @@ const SettingsScreen = ({ navigation }) => {
   }, []);
 
   const checkIntegrationStatus = async () => {
-    const whoopStatus = await WhoopService.isConnected();
-    const ouraStatus = await OuraService.isConnected();
+    console.log('🔍 Checking integration status for user:', user?.id);
+    const whoopStatus = await WhoopService.isConnected(user?.id);
+    const ouraStatus = await OuraService.isConnected(user?.id);
+    console.log('📊 Status results - Whoop:', whoopStatus, 'Oura:', ouraStatus);
     setWhoopConnected(whoopStatus);
     setOuraConnected(ouraStatus);
   };
