@@ -140,7 +140,7 @@ const IntegrationsScreen = ({ navigation }) => {
           // Everything worked perfectly
           Alert.alert(
             'Success',
-            `Whoop connected and synced ${result.initialSyncRecords || 0} records from the last 30 days.`,
+            `Whoop connected and synced ${result.initialSyncRecords || 0} records from the last 14 days.`,
             [{ text: 'OK' }]
           );
         }
@@ -167,7 +167,7 @@ const IntegrationsScreen = ({ navigation }) => {
           // Everything worked perfectly
           Alert.alert(
             'Success',
-            `Oura connected and synced ${result.initialSyncRecords || 0} records from the last 30 days.`,
+            `Oura connected and synced ${result.initialSyncRecords || 0} records from the last 14 days.`,
             [{ text: 'OK' }]
           );
         }

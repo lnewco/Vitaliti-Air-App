@@ -717,9 +717,9 @@ class OuraService {
         startDate = new Date(lastSync.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         console.log(`📅 Syncing from last sync: ${startDate} to ${endDate}`);
       } else {
-        // No previous sync, get last 30 days
-        startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        console.log(`📅 Initial sync: ${startDate} to ${endDate}`);
+        // No previous sync, get last 14 days (matches backend logic)
+        startDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        console.log(`📅 Initial sync (14 days): ${startDate} to ${endDate}`);
       }
       
       // Fetch and store data
@@ -753,7 +753,7 @@ class OuraService {
     }
   }
 
-  // Initial sync - fetch last 30 days of data
+  // Initial sync - fetch last 14 days of data
   async performInitialSync(userId) {
     console.log('🆕 Performing initial Oura sync...');
     return await this.syncNow(userId);
