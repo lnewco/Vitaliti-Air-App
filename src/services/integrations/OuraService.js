@@ -69,6 +69,14 @@ class OuraService {
 
   // Handle OAuth callback and exchange code for tokens
   async handleCallback(code, state) {
+    console.log('🚨 OuraService.handleCallback CALLED');
+    console.log('📊 Parameters:', {
+      code: code ? `${code.substring(0, 10)}...` : 'NO CODE!',
+      state: state || 'NO STATE',
+      hasSupabase: !!supabase,
+      redirectUri: this.redirectUri
+    });
+    
     try {
       console.log('🔄 Processing Oura OAuth callback...');
       console.log('📝 Full callback params:', { 

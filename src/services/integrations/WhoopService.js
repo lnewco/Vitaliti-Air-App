@@ -95,13 +95,16 @@ class WhoopService {
 
   // Handle OAuth callback and exchange code for tokens
   async handleCallback(code, state) {
+    console.log('🚨 WhoopService.handleCallback CALLED');
+    console.log('📊 Parameters:', {
+      code: code ? `${code.substring(0, 10)}...` : 'NO CODE!',
+      state: state || 'NO STATE',
+      hasSupabase: !!supabase,
+      redirectUri: this.redirectUri
+    });
+    
     try {
       console.log('🔄 Processing Whoop OAuth callback...');
-      console.log('📝 Full callback params:', { 
-        code: code?.substring(0, 10) + '...', 
-        state,
-        redirectUri: this.redirectUri 
-      });
       
       // Retrieve and validate state
       const storedStateData = await AsyncStorage.getItem('whoop_oauth_state');
