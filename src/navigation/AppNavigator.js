@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, ActivityIndicator, StyleSheet, AppState } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, AppState, Linking, Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,6 +11,8 @@ import AuthNavigator from './AuthNavigator';
 import OnboardingNavigator from './OnboardingNavigator';
 import MainAppContent from '../screens/MainAppContent';
 import { supabase } from '../config/supabase';
+import WhoopService from '../services/integrations/WhoopService';
+import OuraService from '../services/integrations/OuraService';
 
 const Stack = createStackNavigator();
 
@@ -24,6 +26,9 @@ const AppNavigator = () => {
 
   useEffect(() => {
     checkOnboardingStatus();
+    // Setup global OAuth deep link handler
+    const cleanup = setupOAuthDeepLinkHandler();
+    return cleanup;
   }, []);
 
   // Check onboarding status when auth state changes to authenticated
@@ -58,6 +63,125 @@ const AppNavigator = () => {
       }
     }
   }, [isLoading, isCheckingOnboarding, onboardingState, isAuthenticated]); // Added isAuthenticated to trigger on logout
+
+  // Global OAuth deep link handler - always active throughout app lifecycle
+  const setupOAuthDeepLinkHandler = () => {
+    console.log('🔗 Setting up GLOBAL OAuth deep link handler in AppNavigator...');
+    
+    // Handle initial URL if app was opened via deep link
+    Linking.getInitialURL().then((url) => {
+      console.log('📱 Initial URL check (OAuth):', url || 'No initial URL');
+      if (url && url.includes('code=')) {
+        handleOAuthDeepLink(url);
+      }
+    });
+    
+    // Handle deep links when app is already open
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      console.log('📱 URL event received (OAuth):', url);
+      if (url && url.includes('code=')) {
+        handleOAuthDeepLink(url);
+      }
+    });
+    
+    console.log('✅ GLOBAL OAuth deep link listener registered');
+    return () => subscription.remove();
+  };
+
+  // Handle OAuth callback deep links globally
+  const handleOAuthDeepLink = async (url) => {
+    console.log('🚨🚨🚨 GLOBAL OAUTH HANDLER CALLED 🚨🚨🚨');
+    console.log('📱 Full URL received:', url);
+    
+    if (!url || !url.includes('code=')) {
+      return;
+    }
+
+    try {
+      // Parse URL
+      let cleanUrl = url;
+      if (url.startsWith('exp+')) {
+        cleanUrl = url.replace('exp+vitaliti-air-app://', 'https://fake.com/');
+      } else if (url.startsWith('vitaliti-air-app://')) {
+        cleanUrl = url.replace('vitaliti-air-app://', 'https://fake.com/');
+      } else if (url.startsWith('vitalitiair://')) {
+        cleanUrl = url.replace('vitalitiair://', 'https://fake.com/');
+      }
+      
+      console.log('🔗 Clean URL for parsing:', cleanUrl);
+      
+      const urlObj = new URL(cleanUrl);
+      const code = urlObj.searchParams.get('code');
+      const state = urlObj.searchParams.get('state');
+      
+      // Determine vendor from stored value
+      const vendor = await AsyncStorage.getItem('pending_oauth_vendor');
+      
+      console.log('📊 OAuth Parameters:');
+      console.log('  - Vendor:', vendor);
+      console.log('  - Code:', code ? `${code.substring(0, 10)}...` : 'MISSING!');
+      console.log('  - State:', state || 'No state');
+      console.log('  - User ID:', user?.id || 'NO USER!');
+
+      if (!vendor || !code) {
+        console.log('❌ Missing vendor or code, cannot process OAuth');
+        return;
+      }
+
+      // Process OAuth based on vendor
+      if (vendor === 'whoop') {
+        console.log('🏃 PROCESSING WHOOP OAUTH');
+        try {
+          const result = await WhoopService.handleCallback(code, state);
+          console.log('📊 Whoop handleCallback result:', result);
+          
+          if (result.success) {
+            console.log('✅ WHOOP CONNECTED SUCCESSFULLY!');
+            Alert.alert(
+              'Success',
+              `Whoop connected successfully!${result.initialSyncRecords ? ` Synced ${result.initialSyncRecords} records.` : ''}`,
+              [{ text: 'OK' }]
+            );
+          } else {
+            console.log('❌ WHOOP FAILED:', result.error);
+            Alert.alert('Error', `Failed to connect Whoop: ${result.error || 'Unknown error'}`);
+          }
+        } catch (error) {
+          console.error('💥 WHOOP EXCEPTION:', error);
+          Alert.alert('Error', `Whoop connection error: ${error.message}`);
+        }
+      } else if (vendor === 'oura') {
+        console.log('💍 PROCESSING OURA OAUTH');
+        try {
+          const result = await OuraService.handleCallback(code, state);
+          console.log('📊 Oura handleCallback result:', result);
+          
+          if (result.success) {
+            console.log('✅ OURA CONNECTED SUCCESSFULLY!');
+            Alert.alert(
+              'Success',
+              `Oura connected successfully!${result.initialSyncRecords ? ` Synced ${result.initialSyncRecords} records.` : ''}`,
+              [{ text: 'OK' }]
+            );
+          } else {
+            console.log('❌ OURA FAILED:', result.error);
+            Alert.alert('Error', `Failed to connect Oura: ${result.error || 'Unknown error'}`);
+          }
+        } catch (error) {
+          console.error('💥 OURA EXCEPTION:', error);
+          Alert.alert('Error', `Oura connection error: ${error.message}`);
+        }
+      }
+      
+      // Clear the pending vendor
+      await AsyncStorage.removeItem('pending_oauth_vendor');
+      
+    } catch (error) {
+      console.error('💥 CRITICAL ERROR in global OAuth handler:', error);
+      console.error('Stack trace:', error.stack);
+      Alert.alert('Connection Error', `Failed to complete authentication: ${error.message}`);
+    }
+  };
 
   // Listen for app state changes to re-check onboarding status
   useEffect(() => {

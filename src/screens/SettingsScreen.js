@@ -28,11 +28,16 @@ const SettingsScreen = ({ navigation }) => {
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
-    console.log('🔧 SettingsScreen mounted, setting up OAuth handlers...');
+    console.log('🔧 SettingsScreen mounted');
     checkIntegrationStatus();
-    const cleanup = setupDeepLinkHandler();
-    console.log('✅ Deep link handler setup complete');
-    return cleanup;
+    // OAuth deep link handler is now global in AppNavigator
+    
+    // Poll for connection status changes when screen is focused
+    const interval = setInterval(() => {
+      checkIntegrationStatus();
+    }, 2000); // Check every 2 seconds
+    
+    return () => clearInterval(interval);
   }, []);
 
   const checkIntegrationStatus = async () => {
@@ -42,147 +47,8 @@ const SettingsScreen = ({ navigation }) => {
     setOuraConnected(ouraStatus);
   };
 
-  // Setup deep link handler for OAuth callbacks
-  const setupDeepLinkHandler = () => {
-    console.log('🔗 Setting up deep link handler...');
-    
-    // Handle initial URL if app was opened via deep link
-    Linking.getInitialURL().then((url) => {
-      console.log('📱 Initial URL check:', url || 'No initial URL');
-      if (url) handleDeepLink(url);
-    });
-    
-    // Handle deep links when app is already open
-    const subscription = Linking.addEventListener('url', ({ url }) => {
-      console.log('📱 URL event received:', url);
-      handleDeepLink(url);
-    });
-    
-    console.log('✅ Deep link listener registered');
-    return () => subscription.remove();
-  };
-
-  // Handle OAuth callback deep links
-  const handleDeepLink = async (url) => {
-    console.log('🚨🚨🚨 DEEP LINK HANDLER CALLED 🚨🚨🚨');
-    console.log('📱 Full URL received:', url);
-    
-    if (!url) {
-      console.log('❌ No URL provided, exiting handleDeepLink');
-      return;
-    }
-
-    try {
-      // Log URL structure
-      console.log('🔍 URL Analysis:');
-      console.log('  - Starts with vitalitiair://? ', url.startsWith('vitalitiair://'));
-      console.log('  - Contains code=? ', url.includes('code='));
-      console.log('  - Contains error=? ', url.includes('error='));
-      
-      // Check if it's an OAuth callback (has code parameter)
-      if (url.includes('code=')) {
-        console.log('✅ OAuth callback detected! Processing...');
-        
-        // Parse URL
-        let cleanUrl = url;
-        if (url.startsWith('exp+')) {
-          console.log('📱 Cleaning exp+ URL');
-          cleanUrl = url.replace('exp+vitaliti-air-app://', 'https://fake.com/');
-        } else if (url.startsWith('vitaliti-air-app://')) {
-          console.log('📱 Cleaning vitaliti-air-app:// URL');
-          cleanUrl = url.replace('vitaliti-air-app://', 'https://fake.com/');
-        } else if (url.startsWith('vitalitiair://')) {
-          console.log('📱 Cleaning vitalitiair:// URL');
-          cleanUrl = url.replace('vitalitiair://', 'https://fake.com/');
-        }
-        
-        console.log('🔗 Clean URL for parsing:', cleanUrl);
-        
-        const urlObj = new URL(cleanUrl);
-        const code = urlObj.searchParams.get('code');
-        const state = urlObj.searchParams.get('state');
-        
-        // Determine vendor from stored value
-        const vendor = await AsyncStorage.getItem('pending_oauth_vendor');
-        
-        console.log('📊 OAuth Parameters:');
-        console.log('  - Vendor:', vendor);
-        console.log('  - Code:', code ? `${code.substring(0, 10)}...` : 'MISSING!');
-        console.log('  - State:', state || 'No state');
-        console.log('  - User ID:', user?.id || 'NO USER!');
-
-        if (vendor === 'whoop' && code) {
-          console.log('🏃 STARTING WHOOP OAUTH EXCHANGE');
-          setSyncing(true);
-          
-          try {
-            console.log('📞 Calling WhoopService.handleCallback...');
-            const result = await WhoopService.handleCallback(code, state);
-            console.log('📊 Whoop handleCallback result:', result);
-            
-            if (result.success) {
-              console.log('✅ WHOOP SUCCESS! Records:', result.initialSyncRecords);
-              Alert.alert(
-                'Success',
-                `Whoop connected successfully!${result.initialSyncRecords ? ` Synced ${result.initialSyncRecords} records.` : ''}`,
-                [{ text: 'OK' }]
-              );
-              setWhoopConnected(true);
-            } else {
-              console.log('❌ WHOOP FAILED:', result.error);
-              Alert.alert('Error', `Failed to connect Whoop: ${result.error || 'Unknown error'}`);
-            }
-          } catch (error) {
-            console.error('💥 WHOOP EXCEPTION:', error);
-            Alert.alert('Error', `Whoop connection error: ${error.message}`);
-          }
-          
-          await AsyncStorage.removeItem('pending_oauth_vendor');
-        } else if (vendor === 'oura' && code) {
-          console.log('💍 STARTING OURA OAUTH EXCHANGE');
-          setSyncing(true);
-          
-          try {
-            console.log('📞 Calling OuraService.handleCallback...');
-            const result = await OuraService.handleCallback(code, state);
-            console.log('📊 Oura handleCallback result:', result);
-            
-            if (result.success) {
-              console.log('✅ OURA SUCCESS! Records:', result.initialSyncRecords);
-              Alert.alert(
-                'Success',
-                `Oura connected successfully!${result.initialSyncRecords ? ` Synced ${result.initialSyncRecords} records.` : ''}`,
-                [{ text: 'OK' }]
-              );
-              setOuraConnected(true);
-            } else {
-              console.log('❌ OURA FAILED:', result.error);
-              Alert.alert('Error', `Failed to connect Oura: ${result.error || 'Unknown error'}`);
-            }
-          } catch (error) {
-            console.error('💥 OURA EXCEPTION:', error);
-            Alert.alert('Error', `Oura connection error: ${error.message}`);
-          }
-          
-          await AsyncStorage.removeItem('pending_oauth_vendor');
-        } else {
-          console.log('⚠️ No vendor match or missing code');
-          console.log('  - Vendor:', vendor);
-          console.log('  - Code exists:', !!code);
-        }
-      } else {
-        console.log('❌ URL does not contain OAuth code');
-        console.log('  - URL:', url);
-        console.log('  - This might be a different type of deep link');
-      }
-    } catch (error) {
-      console.error('💥 CRITICAL ERROR in handleDeepLink:', error);
-      console.error('Stack trace:', error.stack);
-      Alert.alert('Connection Error', `Failed to complete authentication: ${error.message}`);
-    } finally {
-      setSyncing(false);
-    }
-  };
+  // OAuth deep link handling is now done globally in AppNavigator
+  // This ensures the handler is always active even when this screen unmounts
 
   const handleWhoopConnect = async () => {
     try {
