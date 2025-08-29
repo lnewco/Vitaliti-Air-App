@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Linking } from 'react-native';
 import { supabase } from '../../config/supabase';
 import { OAuthConfig } from '../../config/oauthConfig';
+import SyncTriggerService from './SyncTriggerService';
 
 class WhoopService {
   constructor() {
@@ -194,12 +195,27 @@ class WhoopService {
       const storeResult = await this.storeTokens(userId, tokens, expiresAt);
       console.log('💾 Token storage result:', { success: !!storeResult, userId });
 
-      // IMPORTANT: Perform initial sync immediately after connection
-      console.log('🔄 Starting initial data sync after OAuth success...');
+      // IMPORTANT: Trigger backend sync after connection
+      console.log('🔄 Triggering backend sync after OAuth success...');
+      
+      // First, try to trigger backend sync (which has pagination fix)
+      try {
+        const backendSync = await SyncTriggerService.triggerSyncWithRetry(userId, 'whoop', 2);
+        if (backendSync.success) {
+          console.log('✅ Backend sync triggered successfully');
+        } else {
+          console.log('⚠️ Backend sync trigger failed, but connection successful:', backendSync.error);
+        }
+      } catch (error) {
+        console.log('⚠️ Could not trigger backend sync:', error.message);
+        // Don't fail the OAuth connection if backend sync fails
+      }
+      
+      // Also perform local initial sync for immediate data
       try {
         const syncResult = await this.performInitialSync(userId);
         if (syncResult.success) {
-          console.log('✅ Initial sync completed:', {
+          console.log('✅ Initial local sync completed:', {
             recordsCount: syncResult.recordsCount,
             dateRange: `${syncResult.startDate} to ${syncResult.endDate}`
           });
@@ -211,14 +227,14 @@ class WhoopService {
             initialSyncRecords: syncResult.recordsCount
           };
         } else {
-          console.error('⚠️ Initial sync failed:', syncResult.error);
+          console.error('⚠️ Initial local sync failed:', syncResult.error);
           // Connection successful but sync failed
           return {
             success: true,
             tokens,
             userId,
             syncError: syncResult.error,
-            message: 'Connected successfully. Please use Sync Now to fetch data.'
+            message: 'Connected successfully. Data will sync automatically.'
           };
         }
       } catch (syncError) {
@@ -228,7 +244,8 @@ class WhoopService {
           success: true,
           tokens,
           userId,
-          syncError: syncError.message
+          syncError: syncError.message,
+          message: 'Connected successfully. Data will sync automatically.'
         };
       }
     } catch (error) {
@@ -776,7 +793,7 @@ class WhoopService {
     }
   }
 
-  // Initial sync - fetch last 30 days of data
+  // Initial sync - fetch last 14 days of data
   async performInitialSync(userId) {
     console.log('🆕 Performing initial Whoop sync...');
     return await this.syncNow(userId);
