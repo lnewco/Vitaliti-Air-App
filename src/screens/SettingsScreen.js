@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../auth/AuthContext';
 import { colors, typography, spacing, PremiumCard, PremiumButton } from '../design-system';
 import SafeIcon from '../components/base/SafeIcon';
@@ -24,9 +25,12 @@ const SettingsScreen = ({ navigation }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [whoopConnected, setWhoopConnected] = useState(false);
   const [ouraConnected, setOuraConnected] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     checkIntegrationStatus();
+    const cleanup = setupDeepLinkHandler();
+    return cleanup;
   }, []);
 
   const checkIntegrationStatus = async () => {
@@ -36,9 +40,101 @@ const SettingsScreen = ({ navigation }) => {
     setOuraConnected(ouraStatus);
   };
 
+  // Setup deep link handler for OAuth callbacks
+  const setupDeepLinkHandler = () => {
+    // Handle initial URL if app was opened via deep link
+    Linking.getInitialURL().then(handleDeepLink);
+    
+    // Handle deep links when app is already open
+    const subscription = Linking.addEventListener('url', ({ url }) => handleDeepLink(url));
+    
+    return () => subscription.remove();
+  };
+
+  // Handle OAuth callback deep links
+  const handleDeepLink = async (url) => {
+    if (!url) return;
+
+    console.log('📱 Received deep link in SettingsScreen:', url);
+
+    try {
+      // Check if it's an OAuth callback (has code parameter)
+      if (url.includes('code=')) {
+        // Parse URL
+        let cleanUrl = url;
+        if (url.startsWith('exp+')) {
+          cleanUrl = url.replace('exp+vitaliti-air-app://', 'https://fake.com/');
+        } else if (url.startsWith('vitaliti-air-app://')) {
+          cleanUrl = url.replace('vitaliti-air-app://', 'https://fake.com/');
+        } else if (url.startsWith('vitalitiair://')) {
+          cleanUrl = url.replace('vitalitiair://', 'https://fake.com/');
+        }
+        
+        const urlObj = new URL(cleanUrl);
+        const code = urlObj.searchParams.get('code');
+        const state = urlObj.searchParams.get('state');
+        
+        // Determine vendor from stored value
+        const vendor = await AsyncStorage.getItem('pending_oauth_vendor');
+        
+        console.log('📱 OAuth callback received:', { 
+          vendor, 
+          code: code?.substring(0, 10) + '...', 
+          state 
+        });
+
+        if (vendor === 'whoop' && code) {
+          console.log('🔗 Handling Whoop callback');
+          setSyncing(true);
+          
+          const result = await WhoopService.handleCallback(code, state);
+          
+          if (result.success) {
+            Alert.alert(
+              'Success',
+              `Whoop connected successfully!${result.initialSyncRecords ? ` Synced ${result.initialSyncRecords} records.` : ''}`,
+              [{ text: 'OK' }]
+            );
+            setWhoopConnected(true);
+          } else {
+            Alert.alert('Error', 'Failed to connect Whoop. Please try again.');
+          }
+          
+          await AsyncStorage.removeItem('pending_oauth_vendor');
+        } else if (vendor === 'oura' && code) {
+          console.log('💍 Handling Oura callback');
+          setSyncing(true);
+          
+          const result = await OuraService.handleCallback(code, state);
+          
+          if (result.success) {
+            Alert.alert(
+              'Success',
+              `Oura connected successfully!${result.initialSyncRecords ? ` Synced ${result.initialSyncRecords} records.` : ''}`,
+              [{ text: 'OK' }]
+            );
+            setOuraConnected(true);
+          } else {
+            Alert.alert('Error', 'Failed to connect Oura. Please try again.');
+          }
+          
+          await AsyncStorage.removeItem('pending_oauth_vendor');
+        }
+      }
+    } catch (error) {
+      console.error('Deep link handling error:', error);
+      Alert.alert('Connection Error', 'Failed to complete authentication. Please try again.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleWhoopConnect = async () => {
     try {
       console.log('🔌 Attempting to connect WHOOP...');
+      // Store which vendor we're connecting for callback handling
+      await AsyncStorage.setItem('pending_oauth_vendor', 'whoop');
+      
       const authUrl = await WhoopService.getAuthUrl(user?.id);
       if (authUrl) {
         console.log('🔗 Opening WHOOP OAuth URL:', authUrl);
@@ -56,6 +152,9 @@ const SettingsScreen = ({ navigation }) => {
   const handleOuraConnect = async () => {
     try {
       console.log('💍 Attempting to connect Oura...');
+      // Store which vendor we're connecting for callback handling
+      await AsyncStorage.setItem('pending_oauth_vendor', 'oura');
+      
       const authUrl = await OuraService.getAuthUrl(user?.id);
       if (authUrl) {
         console.log('🔗 Opening Oura OAuth URL:', authUrl);
