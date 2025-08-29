@@ -8,6 +8,7 @@ import {
   Alert,
   StatusBar,
   Switch,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,23 +38,35 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleWhoopConnect = async () => {
     try {
-      const authUrl = await WhoopService.getAuthUrl();
+      console.log('🔌 Attempting to connect WHOOP...');
+      const authUrl = await WhoopService.getAuthUrl(user?.id);
       if (authUrl) {
-        navigation.navigate('WhoopAuth', { authUrl });
+        console.log('🔗 Opening WHOOP OAuth URL:', authUrl);
+        await Linking.openURL(authUrl);
+      } else {
+        console.error('❌ No auth URL generated for WHOOP');
+        Alert.alert('Configuration Error', 'WHOOP integration is not properly configured.');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to connect to WHOOP');
+      console.error('❌ Error connecting WHOOP:', error);
+      Alert.alert('Error', `Failed to connect to WHOOP: ${error.message}`);
     }
   };
 
   const handleOuraConnect = async () => {
     try {
-      const authUrl = await OuraService.getAuthUrl();
+      console.log('💍 Attempting to connect Oura...');
+      const authUrl = await OuraService.getAuthUrl(user?.id);
       if (authUrl) {
-        navigation.navigate('OuraAuth', { authUrl });
+        console.log('🔗 Opening Oura OAuth URL:', authUrl);
+        await Linking.openURL(authUrl);
+      } else {
+        console.error('❌ No auth URL generated for Oura');
+        Alert.alert('Configuration Error', 'Oura integration is not properly configured.');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to connect to Oura');
+      console.error('❌ Error connecting Oura:', error);
+      Alert.alert('Error', `Failed to connect to Oura: ${error.message}`);
     }
   };
 
@@ -67,7 +80,7 @@ const SettingsScreen = ({ navigation }) => {
           text: 'Disconnect',
           style: 'destructive',
           onPress: async () => {
-            await WhoopService.disconnect();
+            await WhoopService.disconnect(user?.id);
             setWhoopConnected(false);
           },
         },
@@ -85,7 +98,7 @@ const SettingsScreen = ({ navigation }) => {
           text: 'Disconnect',
           style: 'destructive',
           onPress: async () => {
-            await OuraService.disconnect();
+            await OuraService.disconnect(user?.id);
             setOuraConnected(false);
           },
         },
