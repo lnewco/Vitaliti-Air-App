@@ -80,3 +80,5 @@ yarn-error.*
 .claude/settings.local.json
 
 # @end expo-cli.claude/
+
+coverage/*
