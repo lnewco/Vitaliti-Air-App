@@ -34,7 +34,6 @@ const PROGRESSION_CONFIG = {
     MIN_LEVEL: 0,         // Absolute minimum (sea level)
     MAX_LEVEL: 10,        // Absolute maximum
     DEFAULT_LEVEL: 6,     // Default starting level
-    BEGINNER_MAX: 8,      // Maximum for first 5 sessions
     PLATEAU_THRESHOLD: 5  // Sessions at same level before forcing change
   },
   
@@ -218,11 +217,6 @@ class AltitudeProgressionService {
       const maxIncrease = lastLevel + BOUNDS.MAX_INCREASE;
       const maxDecrease = lastLevel - BOUNDS.MAX_DECREASE;
       recommendedLevel = Math.max(maxDecrease, Math.min(maxIncrease, recommendedLevel));
-    }
-    
-    // Beginner limitation (first 5 sessions)
-    if (totalSessions < 5) {
-      recommendedLevel = Math.min(BOUNDS.BEGINNER_MAX, recommendedLevel);
     }
     
     return recommendedLevel;
