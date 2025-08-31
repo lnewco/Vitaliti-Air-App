@@ -191,14 +191,29 @@ export default function IHHTSessionSimple() {
         
         // Start session with EnhancedSessionManager
         // Ensure durations are correctly set in seconds
+        // Note: NOT passing defaultAltitudeLevel to enable progression system
         await EnhancedSessionManager.startSession(sessionId, {
           totalCycles: protocolConfig.totalCycles || 5,
           altitudeDuration: (protocolConfig.hypoxicDuration || 7) * 60,  // 7 minutes = 420 seconds
           recoveryDuration: (protocolConfig.hyperoxicDuration || 3) * 60, // 3 minutes = 180 seconds
           hypoxicDuration: (protocolConfig.hypoxicDuration || 7) * 60,   // Also set old naming for compatibility
-          hyperoxicDuration: (protocolConfig.hyperoxicDuration || 3) * 60,
-          defaultAltitudeLevel: protocolConfig.defaultAltitudeLevel || 6
+          hyperoxicDuration: (protocolConfig.hyperoxicDuration || 3) * 60
+          // defaultAltitudeLevel removed to enable progressive overload
         });
+        
+        // Get the initial session info to show altitude level
+        const initialInfo = EnhancedSessionManager.getSessionInfo();
+        if (initialInfo?.currentAltitudeLevel) {
+          console.log(`🏔️ Session starting at altitude level ${initialInfo.currentAltitudeLevel}`);
+          
+          // Show progression notification
+          Alert.alert(
+            'Session Starting',
+            `Starting at altitude level ${initialInfo.currentAltitudeLevel}`,
+            [{ text: 'OK' }],
+            { cancelable: false }
+          );
+        }
         
         setSessionStarted(true);
         setIsInitializing(false);

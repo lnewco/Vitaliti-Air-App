@@ -320,11 +320,16 @@ const PremiumDashboard = ({ navigation }) => {
   const renderHeader = () => (
     <Animated.View style={[styles.header, headerAnimatedStyle]}>
       <View style={styles.headerTop}>
-        <Image
-          source={require('../../assets/IMG_4490.png')}
-          style={styles.logoImage}
-          resizeMode="contain"
-        />
+        <TouchableOpacity
+          onPress={() => navigation.navigate('AnimationPreview')}
+          activeOpacity={0.7}
+        >
+          <Image
+            source={require('../../assets/IMG_4490.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
         <View style={styles.headerBadge}>
           <View style={[styles.statusDot, isRefreshingMetrics && styles.statusDotLoading]} />
           <Text style={styles.statusText}>{isRefreshingMetrics ? 'Loading...' : 'Connected'}</Text>

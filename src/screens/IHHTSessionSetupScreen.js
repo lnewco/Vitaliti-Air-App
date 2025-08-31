@@ -19,7 +19,7 @@ export default function IHHTSessionSetupScreen() {
   const navigation = useNavigation();
   const [currentStep, setCurrentStep] = useState(1);
   const [dialPosition, setDialPosition] = useState(null);
-  const [showExperienceModal, setShowExperienceModal] = useState(false);
+  const [showExperienceModal, setShowExperienceModal] = useState(true); // Always show on first visit
   const [userId, setUserId] = useState(null);
   const [isFirstSession, setIsFirstSession] = useState(false);
   const [countdown, setCountdown] = useState(null);
@@ -75,12 +75,39 @@ export default function IHHTSessionSetupScreen() {
 
   const scanForDevices = async () => {
     setScanning(true);
+    setDevices([]); // Clear previous devices
+    
     try {
-      const foundDevices = await BluetoothService.scanForDevices();
-      setDevices(foundDevices);
+      // Request permissions first
+      const hasPermissions = await BluetoothService.requestPermissions();
+      if (!hasPermissions) {
+        Alert.alert('Permission Required', 'Bluetooth permissions are required to scan for devices');
+        setScanning(false);
+        return;
+      }
+
+      // Start scanning and collect devices
+      const devicesList = [];
+      
+      await BluetoothService.startScanning('pulse-ox');
+      
+      // Listen for devices for 5 seconds
+      setTimeout(async () => {
+        await BluetoothService.stopScanning();
+        setScanning(false);
+        
+        // For now, show mock devices if no real devices found
+        if (devicesList.length === 0) {
+          setDevices([
+            { id: '1', name: 'Wellue O2Ring', connected: false },
+            { id: '2', name: 'Demo Device', connected: false }
+          ]);
+        }
+      }, 5000);
+      
     } catch (error) {
-      Alert.alert('Scan Error', 'Failed to scan for devices');
-    } finally {
+      console.error('Scan error:', error);
+      Alert.alert('Scan Error', 'Failed to scan for devices. Please ensure Bluetooth is enabled.');
       setScanning(false);
     }
   };
@@ -99,7 +126,7 @@ export default function IHHTSessionSetupScreen() {
 
   const startSession = () => {
     // Navigate to training screen with dial position
-    navigation.navigate('IHHTTrainingV2', {
+    navigation.navigate('ActiveIHHTSession', {
       dialPosition,
       userId,
       isFirstSession,
@@ -227,7 +254,7 @@ export default function IHHTSessionSetupScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backButton}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>IHHT Session Setup</Text>
+        <Text style={styles.title}>Air Session Setup</Text>
         <View style={{ width: 40 }} />
       </View>
 

@@ -1,8 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const supabaseUrl = 'https://yhbywcawiothhoqaurgy.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InloYnl3Y2F3aW90aGhvcWF1cmd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMyMjA5MTQsImV4cCI6MjA2ODc5NjkxNH0.QbUE7ddPa1KiHRY0_i4LHHu3iKt7Ol_MKdB2WzbhAes';
+// Use IHHT v2 branch for testing
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://pkabhnqarbmzfkcvnbud.supabase.co';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBrYWJobnFhcmJtemZrY3ZuYnVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY0NzU4MTEsImV4cCI6MjA3MjA1MTgxMX0.M_vRURfdNUJFYSxt_CjMRTDoTz3kTsV0ujgNYehNjbY';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

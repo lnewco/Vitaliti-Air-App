@@ -31,7 +31,7 @@ import SafeIcon from '../components/base/SafeIcon';
 const { height: screenHeight } = Dimensions.get('window');
 
 const PostSessionSurveyScreen = ({ route, navigation }) => {
-  const { sessionId } = route.params;
+  const { sessionId = `session_${Date.now()}` } = route.params || {};
   const [surveyData, setSurveyData] = useState({
     clarity: null,
     energy: null,
@@ -207,7 +207,6 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
             <Text style={styles.backText}>Back</Text>
           </TouchableOpacity>
           
-          <Text style={styles.headerTitle}>Post-Session Survey</Text>
         </View>
 
         {/* Main Content - Wrapped in View to fix scrolling */}
@@ -222,6 +221,7 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
           >
           {/* Survey Header */}
           <View style={styles.surveyHeader}>
+            <Text style={styles.title}>Post-Session Survey</Text>
             <Text style={styles.subtitle}>
               How are you feeling after training?
             </Text>

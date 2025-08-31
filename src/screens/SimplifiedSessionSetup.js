@@ -35,6 +35,8 @@ import DatabaseService from '../services/DatabaseService';
 import SupabaseService from '../services/SupabaseService';
 import PreSessionSurvey from '../components/feedback/PreSessionSurvey';
 import Constants from 'expo-constants';
+// TEMPORARY: Import animation for testing
+import PulseOxRingAnimation from '../components/animations/PulseOxRingAnimation';
 
 // Detect if running in Expo Go (demo mode) vs production build
 const IS_EXPO_GO = Constants.appOwnership === 'expo';
@@ -61,7 +63,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
     totalCycles: 5,
     hypoxicDuration: 7, // 7 minutes
     hyperoxicDuration: 3, // 3 minutes
-    defaultAltitudeLevel: 6 // Default altitude level (1-11 scale)
+    // defaultAltitudeLevel removed - will be calculated by progression service
   };
 
   const handleStartSession = async () => {
@@ -123,10 +125,11 @@ const SimplifiedSessionSetup = ({ navigation }) => {
         }
       })();
 
-      // Navigate directly to training screen
-      navigation.navigate('AirSession', { 
+      // Navigate directly to new simplified training screen
+      navigation.navigate('IHHTSessionSimple', { 
         sessionId: sessionId,
-        protocolConfig: protocolConfig 
+        protocolConfig: protocolConfig,
+        preSessionData: surveyData // Pass pre-session survey data
       });
     } catch (error) {
       console.error('❌ Error starting session:', error);
@@ -173,6 +176,20 @@ const SimplifiedSessionSetup = ({ navigation }) => {
             </Text>
           </Animated.View>
 
+          {/* TEMPORARY: Pulse Ox Animation Demo */}
+          <Animated.View 
+            entering={FadeInDown.duration(600).delay(150)}
+            style={styles.animationDemoCard}
+          >
+            <Text style={styles.animationTitle}>Pulse Oximeter Setup</Text>
+            <View style={styles.animationContainer}>
+              <PulseOxRingAnimation isPlaying={true} size={200} />
+            </View>
+            <Text style={styles.animationInstruction}>
+              Slide the pulse oximeter onto your left thumb
+            </Text>
+          </Animated.View>
+
           {/* Protocol Overview Card */}
           <Animated.View entering={FadeInDown.duration(600).delay(200)}>
             <PremiumCard style={styles.protocolCard}>
@@ -200,19 +217,11 @@ const SimplifiedSessionSetup = ({ navigation }) => {
               <View style={styles.altitudeSection}>
                 <View style={styles.altitudeHeader}>
                   <Text style={styles.altitudeLabel}>ALTITUDE SIMULATION</Text>
-                  <Text style={styles.altitudeValue}>Level {protocolConfig.defaultAltitudeLevel}</Text>
+                  <Text style={styles.altitudeValue}>Adaptive</Text>
                 </View>
-                <View style={styles.altitudeBar}>
-                  <LinearGradient
-                    colors={[colors.metrics.recovery, colors.metrics.strain]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={[
-                      styles.altitudeFill,
-                      { width: `${(protocolConfig.defaultAltitudeLevel / 11) * 100}%` }
-                    ]}
-                  />
-                </View>
+                <Text style={styles.altitudeDescription}>
+                  Starting altitude will be calculated based on your progression
+                </Text>
               </View>
             </PremiumCard>
           </Animated.View>
@@ -391,6 +400,38 @@ const styles = StyleSheet.create({
     padding: spacing.screenPadding,
     paddingBottom: 150, // Space for buttons
   },
+  // TEMPORARY: Animation demo styles
+  animationDemoCard: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  animationContainer: {
+    width: 220,
+    height: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10,
+  },
+  animationTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: 10,
+  },
+  animationInstruction: {
+    fontSize: 14,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    marginTop: 10,
+  },
   header: {
     marginBottom: spacing.xl,
     alignItems: 'center',
@@ -489,6 +530,12 @@ const styles = StyleSheet.create({
   altitudeFill: {
     height: '100%',
     borderRadius: 3,
+  },
+  altitudeDescription: {
+    ...typography.caption,
+    color: colors.text.tertiary,
+    marginTop: spacing.xs,
+    fontStyle: 'italic',
   },
   connectionCard: {
     marginBottom: spacing.md,

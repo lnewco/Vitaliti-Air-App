@@ -18,6 +18,7 @@ import runtimeEnvironment from '../utils/RuntimeEnvironment';
 import AggressiveBackgroundService from './AggressiveBackgroundService';
 import HKWorkoutService from './native/HKWorkoutService';
 import AdaptiveInstructionEngine from './AdaptiveInstructionEngine';
+import AltitudeProgressionService from './AltitudeProgressionService';
 
 // Configure notification handling
 Notifications.setNotificationHandler({
@@ -74,8 +75,9 @@ class EnhancedSessionManager {
     this.backgroundTimeout = null;
     this.sessionTimeout = null;
     
-    // Altitude level tracking
+    // Altitude level tracking (will be set dynamically based on progression)
     this.currentAltitudeLevel = 6; // Default altitude level (1-11 scale)
+    this.startingAltitudeLevel = 6; // Track starting level for session
     
     // App state tracking for notifications
     this.appState = AppState.currentState;
@@ -340,8 +342,45 @@ class EnhancedSessionManager {
       await this.determineSessionType();
       console.log(`✅ Session type determined: ${this.currentSessionType}`);
       
-      // Store additional protocol data for session creation
-      const defaultAltitudeLevel = protocolConfig.defaultAltitudeLevel || 6;
+      // Get optimal starting altitude using progression service
+      console.log('📝 Step 2.5: Calculating optimal starting altitude...');
+      let defaultAltitudeLevel;
+      let progressionReasoning = '';
+      
+      // Only use progression if not explicitly provided in config
+      if (protocolConfig.defaultAltitudeLevel !== undefined) {
+        defaultAltitudeLevel = protocolConfig.defaultAltitudeLevel;
+        console.log(`📋 Using provided altitude level: ${defaultAltitudeLevel}`);
+      } else {
+        try {
+          // Get user ID (you may need to pass this in or get from auth context)
+          const userId = protocolConfig.userId || 'default_user';
+          const progressionData = await AltitudeProgressionService.calculateOptimalStartingAltitude(userId);
+          
+          defaultAltitudeLevel = progressionData.recommendedLevel;
+          progressionReasoning = progressionData.reasoning;
+          
+          console.log(`🎯 Progressive altitude calculated: Level ${defaultAltitudeLevel}`);
+          console.log(`📊 Reasoning: ${progressionReasoning}`);
+          
+          // Notify about progression
+          if (progressionData.adjustments?.detraining !== 0) {
+            console.log(`⏱️ Detraining adjustment: ${progressionData.adjustments.detraining} levels (${progressionData.adjustments.daysSince} days since last session)`);
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to calculate progressive altitude, using default:', error);
+          defaultAltitudeLevel = 6; // Fallback to default
+          progressionReasoning = 'Using standard altitude due to calculation error';
+        }
+      }
+      
+      // Store progression reasoning for later use
+      this.progressionReasoning = progressionReasoning;
+      
+      // Set the current and starting altitude levels
+      this.currentAltitudeLevel = defaultAltitudeLevel;
+      this.startingAltitudeLevel = defaultAltitudeLevel;
+      console.log(`🏔️ Altitude levels set - Starting: ${this.startingAltitudeLevel}, Current: ${this.currentAltitudeLevel}`);
       
       // Initialize adaptive engine with the starting altitude phase
       console.log('📝 Step 3: Initializing adaptive engine...');
@@ -504,7 +543,9 @@ class EnhancedSessionManager {
         currentPhase: this.currentPhase,
         currentCycle: this.currentCycle,
         phaseTimeRemaining: this.phaseTimeRemaining,
-        capabilities: runtimeEnvironment.capabilities
+        capabilities: runtimeEnvironment.capabilities,
+        altitudeLevel: defaultAltitudeLevel,
+        progressionReasoning: this.progressionReasoning
       });
 
       return sessionId;
@@ -1460,8 +1501,21 @@ class EnhancedSessionManager {
 
   setAltitudeLevel(level) {
     if (level >= 1 && level <= 11) {
+      const previousLevel = this.currentAltitudeLevel;
       this.currentAltitudeLevel = level;
-      this.notify('altitudeLevelChanged', { level });
+      
+      // Update database with new altitude level
+      if (this.currentSession?.id) {
+        DatabaseService.updateSessionAltitudeLevel(this.currentSession.id, level)
+          .catch(error => console.warn('Failed to update altitude level in database:', error));
+      }
+      
+      console.log(`🏔️ Altitude level changed: ${previousLevel} → ${level}`);
+      this.notify('altitudeLevelChanged', { 
+        level, 
+        previousLevel,
+        adjustment: level - previousLevel 
+      });
     }
   }
 

@@ -593,6 +593,152 @@ class DatabaseService {
     return id;
   }
 
+  // ========================================
+  // ALTITUDE PROGRESSION MANAGEMENT
+  // ========================================
+
+  /**
+   * Get user's progression data for altitude level management
+   * Fetches last 10 sessions to analyze progression trends
+   */
+  async getUserProgressionData(userId, limit = 10) {
+    try {
+      await this.init();
+      
+      const query = `
+        SELECT 
+          id,
+          start_time,
+          end_time,
+          total_duration_seconds,
+          starting_altitude_level,
+          current_altitude_level,
+          total_mask_lifts,
+          total_altitude_adjustments,
+          avg_spo2,
+          min_spo2,
+          max_spo2,
+          session_subtype,
+          created_at
+        FROM sessions 
+        WHERE end_time IS NOT NULL
+        ORDER BY created_at DESC, start_time DESC
+        LIMIT ?
+      `;
+      
+      const sessions = await this.db.getAllAsync(query, [limit]);
+      
+      log.info(`📊 Retrieved ${sessions?.length || 0} sessions for progression analysis`);
+      
+      // Calculate progression metrics
+      const progressionData = {
+        sessions: sessions || [],
+        lastSession: sessions?.[0] || null,
+        averageEndingAltitude: 0,
+        trend: 'stable', // 'improving', 'declining', 'stable'
+        daysSinceLastSession: null,
+        totalSessions: sessions?.length || 0
+      };
+      
+      if (sessions && sessions.length > 0) {
+        // Calculate average ending altitude
+        const endingAltitudes = sessions.map(s => s.current_altitude_level || s.starting_altitude_level);
+        progressionData.averageEndingAltitude = Math.round(
+          endingAltitudes.reduce((a, b) => a + b, 0) / endingAltitudes.length
+        );
+        
+        // Calculate days since last session
+        const lastSessionTime = sessions[0].end_time || sessions[0].start_time;
+        const daysSince = Math.floor((Date.now() - lastSessionTime) / (1000 * 60 * 60 * 24));
+        progressionData.daysSinceLastSession = daysSince;
+        
+        // Determine trend (comparing first 3 sessions to last 3)
+        if (sessions.length >= 6) {
+          const recent = sessions.slice(0, 3).map(s => s.current_altitude_level);
+          const older = sessions.slice(-3).map(s => s.current_altitude_level);
+          const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
+          const olderAvg = older.reduce((a, b) => a + b, 0) / older.length;
+          
+          if (recentAvg > olderAvg + 0.5) progressionData.trend = 'improving';
+          else if (recentAvg < olderAvg - 0.5) progressionData.trend = 'declining';
+        }
+      }
+      
+      return progressionData;
+    } catch (error) {
+      log.error('❌ Failed to get user progression data:', error);
+      return {
+        sessions: [],
+        lastSession: null,
+        averageEndingAltitude: 6,
+        trend: 'stable',
+        daysSinceLastSession: null,
+        totalSessions: 0
+      };
+    }
+  }
+
+  /**
+   * Get the last completed session for a user
+   */
+  async getLastCompletedSession(userId) {
+    try {
+      await this.init();
+      
+      const query = `
+        SELECT 
+          id,
+          start_time,
+          end_time,
+          starting_altitude_level,
+          current_altitude_level,
+          total_mask_lifts,
+          avg_spo2,
+          session_subtype
+        FROM sessions 
+        WHERE end_time IS NOT NULL
+        ORDER BY created_at DESC, start_time DESC
+        LIMIT 1
+      `;
+      
+      const session = await this.db.getFirstAsync(query);
+      
+      if (session) {
+        log.info(`📝 Last completed session: ${session.id}, ended at altitude ${session.current_altitude_level}`);
+      } else {
+        log.info('📝 No completed sessions found for user');
+      }
+      
+      return session;
+    } catch (error) {
+      log.error('❌ Failed to get last completed session:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Update session altitude levels during progression
+   */
+  async updateSessionAltitudeLevel(sessionId, newAltitudeLevel) {
+    try {
+      const query = `
+        UPDATE sessions 
+        SET current_altitude_level = ?,
+            total_altitude_adjustments = total_altitude_adjustments + 1,
+            updated_at = strftime('%s', 'now')
+        WHERE id = ?
+      `;
+      
+      await this.db.runAsync(query, [newAltitudeLevel, sessionId]);
+      log.info(`✅ Updated session ${sessionId} to altitude level ${newAltitudeLevel}`);
+      
+      return { success: true };
+    } catch (error) {
+      log.error('❌ Failed to update session altitude level:', error);
+      return { success: false, error };
+    }
+  }
+
   // Save adaptive event
   async saveAdaptiveEvent(event) {
     const query = `

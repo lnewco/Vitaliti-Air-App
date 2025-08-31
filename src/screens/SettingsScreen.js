@@ -243,6 +243,26 @@ const SettingsScreen = ({ navigation }) => {
             </PremiumCard>
           </View>
 
+          {/* Developer Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Developer Tools</Text>
+            
+            <TouchableOpacity
+              onPress={() => navigation.navigate('AnimationShowcase')}
+              style={styles.devButton}
+            >
+              <PremiumCard style={styles.settingCard}>
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <Text style={styles.settingLabel}>Animation Showcase</Text>
+                    <Text style={styles.settingDescription}>View all app animations and demos</Text>
+                  </View>
+                  <SafeIcon name="chevron-right" size="sm" color={colors.text.secondary} />
+                </View>
+              </PremiumCard>
+            </TouchableOpacity>
+          </View>
+
           {/* Account Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Account</Text>
@@ -357,6 +377,9 @@ const styles = StyleSheet.create({
   settingDescription: {
     fontSize: 13,
     color: colors.text.secondary,
+  },
+  devButton: {
+    // Style for developer button wrapper
   },
   actionCard: {
     flexDirection: 'row',
