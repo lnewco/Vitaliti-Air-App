@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.expo/
+.expo-shared/
+
+# Native directories
+ios/
+android/
+
+# Generated files
+coverage/
+*.log
+
+# Config files
+*.config.js
+babel.config.js
+metro.config.js
+.eslintrc.js
+
+# Modules
+modules/
+targets/

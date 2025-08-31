@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Linking } from 'react-native';
 import { supabase } from '../../config/supabase';
 import { OAuthConfig } from '../../config/oauthConfig';
 
