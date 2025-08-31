@@ -304,6 +304,8 @@ class EnhancedSessionManager {
   }
 
   async startSession(sessionId, protocolConfig = {}) {
+    console.log('🔍 StartSession called with:', { sessionId, protocolConfig });
+    
     if (this.isActive) {
       throw new Error('Session already active');
     }
@@ -318,51 +320,72 @@ class EnhancedSessionManager {
       
       // Wait for initialization if needed
       if (!this.initialized) {
-        console.log('⏳ Waiting for initialization...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('⏳ Service not initialized, initializing now...');
+        await this.initializeServices();
+        // Additional wait to ensure everything is ready
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
       
       // Update protocol configuration
+      console.log('📝 Step 1: Updating protocol configuration...');
       this.protocolConfig = {
         totalCycles: protocolConfig.totalCycles || this.protocolConfig.totalCycles,
         altitudeDuration: protocolConfig.hypoxicDuration || this.protocolConfig.altitudeDuration,
         recoveryDuration: protocolConfig.hyperoxicDuration || this.protocolConfig.recoveryDuration
       };
+      console.log('✅ Protocol config updated:', this.protocolConfig);
 
       // Determine session type (calibration vs training)
+      console.log('📝 Step 2: Determining session type...');
       await this.determineSessionType();
-      console.log(`📊 Starting ${this.currentSessionType} session`);
+      console.log(`✅ Session type determined: ${this.currentSessionType}`);
       
       // Store additional protocol data for session creation
       const defaultAltitudeLevel = protocolConfig.defaultAltitudeLevel || 6;
       
       // Initialize adaptive engine with the starting altitude phase
+      console.log('📝 Step 3: Initializing adaptive engine...');
       this.adaptiveEngine.startAltitudePhase(sessionId, 1, defaultAltitudeLevel, this.currentSessionType);
       const baselineHRV = protocolConfig.baselineHRV || null;
+      console.log('✅ Adaptive engine initialized');
       
       // Create session in LOCAL DATABASE FIRST
+      console.log('📝 Step 4: Creating session in local database...');
       await DatabaseService.init();
       await DatabaseService.createSession(sessionId, defaultAltitudeLevel, this.protocolConfig);
       console.log('✅ Session created in local database:', sessionId);
       
       // Then create session in Supabase with proper session data
-      const supabaseSession = await SupabaseService.createSession({
-        id: sessionId,  // Pass the session ID
-        startTime: new Date().toISOString(),
-        defaultAltitudeLevel: defaultAltitudeLevel,
-        baselineHRV: baselineHRV,
+      console.log('📝 Step 5: Creating session in Supabase...');
+      let supabaseSession = null;
+      try {
+        supabaseSession = await SupabaseService.createSession({
+          id: sessionId,  // Pass the session ID
+          startTime: new Date().toISOString(),
+          defaultAltitudeLevel: defaultAltitudeLevel,
+          baselineHRV: baselineHRV,
           protocolConfig: this.protocolConfig
         });
+        console.log('✅ Supabase session created:', supabaseSession?.id);
+      } catch (supabaseError) {
+        console.error('⚠️ Supabase session creation failed:', supabaseError.message);
+        console.error('Supabase error details:', {
+          message: supabaseError.message,
+          stack: supabaseError.stack,
+          name: supabaseError.name
+        });
+        // Continue with local session even if Supabase fails
+        console.log('📝 Continuing with local session only...');
+      }
       
       if (!supabaseSession) {
-        console.error('⚠️ Failed to create session in Supabase, but local session exists');
-        // Continue with local session even if Supabase fails
+        console.warn('⚠️ No Supabase session created, using local session only');
       }
 
       // Initialize session state
       this.currentSession = {
         id: sessionId,
-        supabaseId: supabaseSession.id,  // Store the Supabase session ID
+        supabaseId: supabaseSession?.id || sessionId,  // Store the Supabase session ID, fallback to sessionId
         startTime: new Date().toISOString()
       };
       this.isActive = true;
@@ -383,13 +406,27 @@ class EnhancedSessionManager {
       }
 
       // Start Live Activity if supported
-      const liveActivitySupported = await this.checkLiveActivitySupport();
-      if (liveActivitySupported) {
-      await this.startLiveActivity();
+      console.log('📝 Step 6: Checking Live Activity support...');
+      try {
+        const liveActivitySupported = await this.checkLiveActivitySupport();
+        if (liveActivitySupported) {
+          console.log('📱 Live Activity supported, starting...');
+          await this.startLiveActivity();
+        } else {
+          console.log('📱 Live Activity not supported in this environment');
+        }
+      } catch (liveActivityError) {
+        console.warn('⚠️ Live Activity error (non-fatal):', liveActivityError.message);
       }
 
       // Schedule phase notifications
-      await this.schedulePhaseNotifications();
+      console.log('📝 Step 7: Scheduling phase notifications...');
+      try {
+        await this.schedulePhaseNotifications();
+        console.log('✅ Phase notifications scheduled');
+      } catch (notificationError) {
+        console.warn('⚠️ Notification scheduling error (non-fatal):', notificationError.message);
+      }
 
       // Start HKWorkout for iOS background execution with BLE
       if (HKWorkoutService.isAvailable && this.connectedDeviceId) {
@@ -404,45 +441,64 @@ class EnhancedSessionManager {
       }
 
       // Start AGGRESSIVE background monitoring for maximum persistence
+      console.log('📝 Step 8: Starting background monitoring services...');
       if (this.aggressiveBackgroundService) {
-        console.log('🔥 Starting AGGRESSIVE background monitoring');
-        await this.aggressiveBackgroundService.startAggressiveBackgroundMonitoring({
-          id: sessionId,
-          currentPhase: this.currentPhase,
-          currentCycle: this.currentCycle,
-          phaseTimeRemaining: this.phaseTimeRemaining,
-          totalCycles: this.protocolConfig.totalCycles,
-          hypoxicDuration: this.protocolConfig.altitudeDuration,
-          hyperoxicDuration: this.protocolConfig.recoveryDuration,
-        });
+        try {
+          console.log('🔥 Starting AGGRESSIVE background monitoring');
+          await this.aggressiveBackgroundService.startAggressiveBackgroundMonitoring({
+            id: sessionId,
+            currentPhase: this.currentPhase,
+            currentCycle: this.currentCycle,
+            phaseTimeRemaining: this.phaseTimeRemaining,
+            totalCycles: this.protocolConfig.totalCycles,
+            hypoxicDuration: this.protocolConfig.altitudeDuration,
+            hyperoxicDuration: this.protocolConfig.recoveryDuration,
+          });
+          console.log('✅ Aggressive background monitoring started');
+        } catch (aggressiveError) {
+          console.warn('⚠️ Aggressive background service error (non-fatal):', aggressiveError.message);
+        }
       }
       
       // Also start basic background monitoring as fallback
       if (this.backgroundService) {
-        await this.backgroundService.startBackgroundMonitoring({
-          id: sessionId,
-          currentPhase: this.currentPhase,
-          currentCycle: this.currentCycle,
-          phaseTimeRemaining: this.phaseTimeRemaining,
-          totalCycles: this.protocolConfig.totalCycles,
-          hypoxicDuration: this.protocolConfig.altitudeDuration,
-          hyperoxicDuration: this.protocolConfig.recoveryDuration,
-        });
+        try {
+          await this.backgroundService.startBackgroundMonitoring({
+            id: sessionId,
+            currentPhase: this.currentPhase,
+            currentCycle: this.currentCycle,
+            phaseTimeRemaining: this.phaseTimeRemaining,
+            totalCycles: this.protocolConfig.totalCycles,
+            hypoxicDuration: this.protocolConfig.altitudeDuration,
+            hyperoxicDuration: this.protocolConfig.recoveryDuration,
+          });
+          console.log('✅ Basic background monitoring started');
+        } catch (backgroundError) {
+          console.warn('⚠️ Basic background service error (non-fatal):', backgroundError.message);
+        }
       }
 
       // Start phase timer
+      console.log('📝 Step 9: Starting phase timer...');
       this.startPhaseTimer();
+      console.log('✅ Phase timer started');
 
       // Start session timeout (2 hours max)
+      console.log('📝 Step 10: Starting session timeout...');
       this.startSessionTimeout();
+      console.log('✅ Session timeout started');
 
       // Start batch processing
+      console.log('📝 Step 11: Starting batch processing...');
       this.startBatchProcessing();
+      console.log('✅ Batch processing started');
 
       // Save session state
+      console.log('📝 Step 12: Saving session state to AsyncStorage...');
       await AsyncStorage.setItem('activeSession', JSON.stringify(this.currentSession));
+      console.log('✅ Session state saved');
 
-      console.log(`🎬 Enhanced session started: ${sessionId}`);
+      console.log(`🎉 Enhanced session started successfully: ${sessionId}`);
       this.notify('sessionStarted', {
         ...this.currentSession,
         currentPhase: this.currentPhase,
@@ -454,6 +510,11 @@ class EnhancedSessionManager {
       return sessionId;
     } catch (error) {
       console.error('❌ Failed to start enhanced session:', error);
+      console.error('Full error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       throw error;
     }
   }
