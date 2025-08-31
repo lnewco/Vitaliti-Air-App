@@ -78,7 +78,8 @@
       "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/**)",
       "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/src/services/**)",
       "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/src/lib/**)",
-      "Read(//**)"
+      "Read(//**)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
