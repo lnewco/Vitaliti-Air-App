@@ -1,6 +1,5 @@
 import { supabase } from '../config/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getMockMetrics } from './MockWearablesData';
 
 class WearablesDataService {
   constructor() {
@@ -102,11 +101,7 @@ class WearablesDataService {
       // Use preferred vendor if not specified
       const targetVendor = vendor || await this.getPreferredWearable(userId);
       
-      // Return mock data if enabled (for testing)
-      if (this.USE_MOCK_DATA) {
-        console.log('📊 Using mock data for vendor:', targetVendor);
-        return await getMockMetrics(targetVendor);
-      }
+      // Mock data removed - using real data from analytics backend
 
       // Get the most recent date first
       const today = new Date().toISOString().split('T')[0];
