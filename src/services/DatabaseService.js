@@ -1,11 +1,15 @@
 import * as SQLite from 'expo-sqlite';
 import logger from '../utils/logger';
+import SurveyDatabaseService from './database/SurveyDatabaseService';
+import AdaptiveDatabaseService from './database/AdaptiveDatabaseService';
 
 const log = logger.createModuleLogger('DatabaseService');
 
 class DatabaseService {
   constructor() {
     this.db = null;
+    this.surveyService = null;
+    this.adaptiveService = null;
   }
 
   async init() {
@@ -16,8 +20,12 @@ class DatabaseService {
       
       await this.createTables();
       
+      // Initialize specialized services
+      this.adaptiveService = new AdaptiveDatabaseService(this.db);
+      this.surveyService = new SurveyDatabaseService(this.db);
+      
       // Check if adaptive columns exist and force migration if needed
-      await this.ensureAdaptiveColumnsExist();
+      await this.adaptiveService.ensureAdaptiveColumnsExist();
       
       log.info('✅ [DatabaseService] Database initialized successfully');
     } catch (error) {
@@ -27,124 +35,11 @@ class DatabaseService {
   }
 
   async ensureAdaptiveColumnsExist() {
-    try {
-      // Test if adaptive columns exist by running a simple query
-      await this.db.getAllAsync('SELECT session_subtype, adaptive_system_enabled FROM sessions LIMIT 1', []);
-      log.info('✅ [DatabaseService] Adaptive columns verified');
-    } catch (error) {
-      log.info('🔧 [DatabaseService] Adaptive columns missing, forcing migration...');
-      
-      // Force add the missing columns
-      const adaptiveColumns = [
-        'session_subtype TEXT DEFAULT \'calibration\'',
-        'starting_altitude_level INTEGER DEFAULT 6',
-        'current_altitude_level INTEGER DEFAULT 6',
-        'adaptive_system_enabled INTEGER DEFAULT 1',
-        'total_mask_lifts INTEGER DEFAULT 0',
-        'total_altitude_adjustments INTEGER DEFAULT 0'
-      ];
-      
-      for (const column of adaptiveColumns) {
-        try {
-          await this.db.execAsync(`ALTER TABLE sessions ADD COLUMN ${column}`);
-          log.info(`✅ [DatabaseService] Added column: ${column.split(' ')[0]}`);
-        } catch (e) {
-          // Column might already exist
-          log.info(`⚠️ [DatabaseService] Column might already exist: ${column.split(' ')[0]}`);
-        }
-      }
-      
-      // Test again to make sure it worked
-      await this.db.getAllAsync('SELECT session_subtype, adaptive_system_enabled FROM sessions LIMIT 1', []);
-      log.info('✅ [DatabaseService] Adaptive columns migration completed');
-      
-      // Also ensure adaptive tables exist
-      await this.ensureAdaptiveTablesExist();
-    }
+    return this.adaptiveService.ensureAdaptiveColumnsExist();
   }
 
   async ensureAdaptiveTablesExist() {
-    try {
-      // Test if adaptive tables exist
-      await this.db.getAllAsync('SELECT COUNT(*) FROM session_adaptive_events LIMIT 1', []);
-      await this.db.getAllAsync('SELECT COUNT(*) FROM session_phase_stats LIMIT 1', []);
-      await this.db.getAllAsync('SELECT COUNT(*) FROM altitude_levels LIMIT 1', []);
-      log.info('✅ [DatabaseService] Adaptive tables verified');
-    } catch (error) {
-      log.info('🔧 [DatabaseService] Creating missing adaptive tables...');
-      
-      // Create adaptive tables
-      const createAdaptiveEventsTable = `
-        CREATE TABLE IF NOT EXISTS session_adaptive_events (
-          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-          session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-          event_type TEXT NOT NULL CHECK (event_type IN ('mask_lift', 'dial_adjustment', 'recovery_complete', 'altitude_phase_complete')),
-          event_timestamp INTEGER NOT NULL,
-          altitude_phase_number INTEGER,
-          recovery_phase_number INTEGER,
-          current_altitude_level INTEGER,
-          spo2_value INTEGER,
-          additional_data TEXT DEFAULT '{}',
-          created_at INTEGER DEFAULT (strftime('%s', 'now'))
-        );
-      `;
-
-      const createPhaseStatsTable = `
-        CREATE TABLE IF NOT EXISTS session_phase_stats (
-          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-          session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-          phase_type TEXT NOT NULL CHECK (phase_type IN ('altitude', 'recovery')),
-          phase_number INTEGER NOT NULL,
-          altitude_level INTEGER NOT NULL,
-          start_time INTEGER NOT NULL,
-          end_time INTEGER,
-          duration_seconds INTEGER,
-          min_spo2 INTEGER,
-          max_spo2 INTEGER,
-          avg_spo2 REAL,
-          spo2_readings_count INTEGER DEFAULT 0,
-          mask_lift_count INTEGER DEFAULT 0,
-          target_min_spo2 INTEGER NOT NULL,
-          target_max_spo2 INTEGER NOT NULL,
-          recovery_trigger TEXT CHECK (recovery_trigger IN ('spo2_stabilized', 'time_limit', 'manual')),
-          time_to_95_percent_seconds INTEGER,
-          time_above_95_percent_seconds INTEGER,
-          created_at INTEGER DEFAULT (strftime('%s', 'now'))
-        );
-      `;
-
-      const createAltitudeLevelsTable = `
-        CREATE TABLE IF NOT EXISTS altitude_levels (
-          level INTEGER PRIMARY KEY CHECK (level >= 0 AND level <= 10),
-          oxygen_percentage REAL NOT NULL,
-          equivalent_altitude_feet INTEGER NOT NULL,
-          equivalent_altitude_meters INTEGER NOT NULL,
-          description TEXT
-        );
-      `;
-
-      const insertAltitudeLevels = `
-        INSERT OR IGNORE INTO altitude_levels (level, oxygen_percentage, equivalent_altitude_feet, equivalent_altitude_meters, description) VALUES
-        (0, 20.9, 0, 0, 'Sea Level'),
-        (1, 18.1, 6500, 1981, 'Low Altitude'),
-        (2, 17.3, 8000, 2438, 'Moderate Altitude'),
-        (3, 16.5, 9500, 2896, 'High Altitude'),
-        (4, 15.7, 11000, 3353, 'Very High Altitude'),
-        (5, 14.9, 12500, 3810, 'Extreme Altitude'),
-        (6, 14.1, 14000, 4267, 'Peak Training'),
-        (7, 13.3, 15500, 4724, 'Advanced Training'),
-        (8, 12.5, 17000, 5182, 'Expert Level'),
-        (9, 11.7, 18500, 5639, 'Elite Training'),
-        (10, 10.9, 20000, 6096, 'Maximum Level');
-      `;
-
-      await this.db.execAsync(createAdaptiveEventsTable);
-      await this.db.execAsync(createPhaseStatsTable);
-      await this.db.execAsync(createAltitudeLevelsTable);
-      await this.db.execAsync(insertAltitudeLevels);
-
-      log.info('✅ [DatabaseService] Adaptive tables created successfully');
-    }
+    return this.adaptiveService.ensureAdaptiveTablesExist();
   }
 
   async createTables() {
@@ -521,133 +416,27 @@ class DatabaseService {
 
   // Get completed adaptive sessions for user (local SQLite version)
   async getCompletedAdaptiveSessions() {
-    const query = `
-      SELECT id, session_subtype, start_time, end_time 
-      FROM sessions 
-      WHERE status = 'completed' AND adaptive_system_enabled = 1
-      ORDER BY start_time DESC
-    `;
-    
-    try {
-      const result = await this.db.getAllAsync(query, []);
-      return result || [];
-    } catch (error) {
-      log.error('Error getting completed adaptive sessions:', error);
-      return [];
-    }
+    return this.adaptiveService.getCompletedAdaptiveSessions();
   }
 
   // Get altitude level information
   async getAltitudeLevel(level) {
-    const query = `
-      SELECT * FROM altitude_levels WHERE level = ?
-    `;
-    
-    try {
-      const result = await this.db.getFirstAsync(query, [level]);
-      return result;
-    } catch (error) {
-      log.error('Error getting altitude level:', error);
-      return null;
-    }
+    return this.adaptiveService.getAltitudeLevel(level);
   }
 
   // Save phase statistics
   async savePhaseStats(phaseStats) {
-    const query = `
-      INSERT INTO session_phase_stats (
-        id, session_id, phase_type, phase_number, altitude_level,
-        start_time, end_time, duration_seconds,
-        min_spo2, max_spo2, avg_spo2, spo2_readings_count,
-        mask_lift_count, target_min_spo2, target_max_spo2,
-        recovery_trigger, time_to_95_percent_seconds, time_above_95_percent_seconds,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    
-    const id = this.generateId();
-    const values = [
-      id,
-      phaseStats.sessionId,
-      phaseStats.phaseType,
-      phaseStats.phaseNumber,
-      phaseStats.altitudeLevel,
-      phaseStats.startTime,
-      phaseStats.endTime || null,
-      phaseStats.durationSeconds || null,
-      phaseStats.minSpO2 || null,
-      phaseStats.maxSpO2 || null,
-      phaseStats.avgSpO2 || null,
-      phaseStats.spo2ReadingsCount || 0,
-      phaseStats.maskLiftCount || 0,
-      phaseStats.targetMinSpO2,
-      phaseStats.targetMaxSpO2,
-      phaseStats.recoveryTrigger || null,
-      phaseStats.timeTo95PercentSeconds || null,
-      phaseStats.timeAbove95PercentSeconds || null,
-      Date.now()
-    ];
-    
-    await this.db.runAsync(query, values);
-    log.info(`Saved ${phaseStats.phaseType} phase stats for session ${phaseStats.sessionId}`);
-    return id;
+    return this.adaptiveService.savePhaseStats(phaseStats);
   }
 
   // Save adaptive event
   async saveAdaptiveEvent(event) {
-    const query = `
-      INSERT INTO session_adaptive_events (
-        id, session_id, event_type, event_timestamp,
-        altitude_phase_number, recovery_phase_number, current_altitude_level,
-        spo2_value, additional_data, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    
-    const id = this.generateId();
-    const values = [
-      id,
-      event.session_id || event.sessionId, // Support both naming conventions
-      event.event_type || event.eventType,
-      new Date(event.event_timestamp || event.eventTimestamp).getTime(), // Convert to timestamp
-      event.altitude_phase_number || event.altitudePhaseNumber || null,
-      event.recovery_phase_number || event.recoveryPhaseNumber || null,
-      event.current_altitude_level || event.currentAltitudeLevel || null,
-      event.spo2_value || event.additionalData?.spo2Value || null,
-      event.additional_data || JSON.stringify(event.additionalData || {}),
-      Date.now()
-    ];
-    
-    await this.db.runAsync(query, values);
-    log.info(`Saved adaptive event: ${event.event_type || event.eventType} for session ${event.session_id || event.sessionId}`);
-    return id;
+    return this.adaptiveService.saveAdaptiveEvent(event);
   }
 
   // Update session with adaptive data
   async updateSessionAdaptive(sessionId, adaptiveData) {
-    const query = `
-      UPDATE sessions 
-      SET session_subtype = ?,
-          starting_altitude_level = ?,
-          current_altitude_level = ?,
-          adaptive_system_enabled = ?,
-          total_mask_lifts = ?,
-          total_altitude_adjustments = ?,
-          updated_at = ?
-      WHERE id = ?
-    `;
-    
-    await this.db.runAsync(query, [
-      adaptiveData.sessionSubtype || 'calibration',
-      adaptiveData.startingAltitudeLevel || 6,
-      adaptiveData.currentAltitudeLevel || 6,
-      adaptiveData.adaptiveSystemEnabled ? 1 : 0,
-      adaptiveData.totalMaskLifts || 0,
-      adaptiveData.totalAltitudeAdjustments || 0,
-      Date.now(),
-      sessionId
-    ]);
-    
-    log.info(`Updated adaptive data for session ${sessionId}`);
+    return this.adaptiveService.updateSessionAdaptive(sessionId, adaptiveData);
   }
 
   // Helper method to generate UUID-like ID for SQLite
@@ -1170,246 +959,49 @@ class DatabaseService {
    * Save pre-session survey data (reactivated for AI feedback engine)
    */
   async savePreSessionSurvey(sessionId, clarityPre, energyPre, stressPre) {
-    try {
-      // Validate input
-      if (!this.isValidSurveyScale(clarityPre) || !this.isValidSurveyScale(energyPre) || !this.isValidSurveyScale(stressPre)) {
-        throw new Error('Survey values must be integers between 1 and 5');
-      }
-
-      log.info(`Saving pre-session survey for: ${sessionId}`);
-      
-      // Use INSERT OR IGNORE followed by UPDATE to preserve existing data
-      const insertQuery = `
-        INSERT OR IGNORE INTO session_surveys (session_id, clarity_pre, energy_pre, stress_pre, updated_at)
-        VALUES (?, ?, ?, ?, strftime('%s', 'now'))
-      `;
-      
-      const updateQuery = `
-        UPDATE session_surveys 
-        SET clarity_pre = ?, energy_pre = ?, stress_pre = ?, updated_at = strftime('%s', 'now')
-        WHERE session_id = ?
-      `;
-      
-      await this.db.runAsync(insertQuery, [sessionId, clarityPre, energyPre, stressPre]);
-      await this.db.runAsync(updateQuery, [clarityPre, energyPre, stressPre, sessionId]);
-      
-      log.info(`Pre-session survey saved: clarity=${clarityPre}, energy=${energyPre}, stress=${stressPre}`);
-      
-      return { success: true };
-    } catch (error) {
-      log.error('❌ Failed to save pre-session survey:', error);
-      throw error;
-    }
+    return this.surveyService.savePreSessionSurvey(sessionId, clarityPre, energyPre, stressPre);
   }
 
   /**
    * Save post-session survey data (enhanced with symptoms and rating)
    */
   async savePostSessionSurvey(sessionId, clarityPost, energyPost, stressPost, notesPost = null, symptoms = [], overallRating = null) {
-    try {
-      // Validate input
-      if (!this.isValidSurveyScale(clarityPost) || !this.isValidSurveyScale(energyPost) || !this.isValidSurveyScale(stressPost)) {
-        throw new Error('Survey values must be integers between 1 and 5');
-      }
-
-      if (overallRating && !this.isValidSurveyScale(overallRating)) {
-        throw new Error('Overall rating must be an integer between 1 and 5');
-      }
-
-      log.info(`Saving post-session survey for: ${sessionId}`);
-      
-      // Convert symptoms array to JSON string for SQLite
-      const symptomsJson = JSON.stringify(symptoms || []);
-      
-      // Use INSERT OR IGNORE followed by UPDATE to preserve existing data
-      const insertQuery = `
-        INSERT OR IGNORE INTO session_surveys 
-        (session_id, clarity_post, energy_post, stress_post, notes_post, post_symptoms, overall_rating, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))
-      `;
-      
-      const updateQuery = `
-        UPDATE session_surveys 
-        SET clarity_post = ?, energy_post = ?, stress_post = ?, 
-            notes_post = ?, post_symptoms = ?, overall_rating = ?, 
-            updated_at = strftime('%s', 'now')
-        WHERE session_id = ?
-      `;
-      
-      await this.db.runAsync(insertQuery, [sessionId, clarityPost, energyPost, stressPost, notesPost, symptomsJson, overallRating]);
-      await this.db.runAsync(updateQuery, [clarityPost, energyPost, stressPost, notesPost, symptomsJson, overallRating, sessionId]);
-      
-      log.info(`Post-session survey saved: clarity=${clarityPost}, energy=${energyPost}, stress=${stressPost}, rating=${overallRating}`);
-      
-      return { success: true };
-    } catch (error) {
-      log.error('❌ Failed to save post-session survey:', error);
-      throw error;
-    }
+    return this.surveyService.savePostSessionSurvey(sessionId, clarityPost, energyPost, stressPost, notesPost, symptoms, overallRating);
   }
 
   /**
    * Save intra-session response (enhanced with sensations and physiological data)
    */
   async saveIntraSessionResponse(sessionId, phaseNumber, clarity, energy, stressPerception, timestamp, sensations = [], spo2 = null, heartRate = null) {
-    try {
-      // Validate input
-      if (!this.isValidSurveyScale(clarity) || !this.isValidSurveyScale(energy) || !this.isValidSurveyScale(stressPerception)) {
-        throw new Error('Survey values must be integers between 1 and 5');
-      }
-
-      log.info(`Saving intra-session response for: ${sessionId}, phase: ${phaseNumber}`);
-      
-      // Convert sensations array to JSON string for SQLite
-      const sensationsJson = JSON.stringify(sensations || []);
-      
-      const query = `
-        INSERT OR REPLACE INTO intra_session_responses 
-        (session_id, phase_number, clarity, energy, stress, stress_perception, 
-         sensations, spo2_value, hr_value, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-      
-      await this.db.runAsync(query, [
-        sessionId, phaseNumber, clarity, energy, 
-        stressPerception, stressPerception, // Using stress_perception for both old 'stress' and new field
-        sensationsJson, spo2, heartRate, timestamp
-      ]);
-      
-      log.info(`Intra-session response saved: phase=${phaseNumber}, clarity=${clarity}, energy=${energy}, stress=${stressPerception}`);
-      
-      return { success: true };
-    } catch (error) {
-      log.error('❌ Failed to save intra-session response:', error);
-      throw error;
-    }
+    return this.surveyService.saveIntraSessionResponse(sessionId, phaseNumber, clarity, energy, stressPerception, timestamp, sensations, spo2, heartRate);
   }
 
   /**
    * Get complete survey data for a session
    */
   async getSessionSurveyData(sessionId) {
-    try {
-      log.info(`Fetching survey data for session: ${sessionId}`);
-      
-      // Get main survey data
-      const surveyRow = await this.db.getFirstAsync(
-        'SELECT * FROM session_surveys WHERE session_id = ?',
-        [sessionId]
-      );
-      
-      // Get intra-session responses
-      const responsesResult = await this.db.getAllAsync(
-        'SELECT * FROM intra_session_responses WHERE session_id = ? ORDER BY phase_number ASC',
-        [sessionId]
-      );
-      
-      const surveyData = {
-        sessionId,
-        preSession: null,
-        postSession: null,
-        intraSessionResponses: []
-      };
-      
-      // Process main survey data
-      if (surveyRow) {
-        if (surveyRow.clarity_pre !== null && surveyRow.energy_pre !== null) {
-          surveyData.preSession = {
-            clarity: surveyRow.clarity_pre,
-            energy: surveyRow.energy_pre
-          };
-        }
-        
-        if (surveyRow.clarity_post !== null && surveyRow.energy_post !== null && surveyRow.stress_post !== null) {
-          surveyData.postSession = {
-            clarity: surveyRow.clarity_post,
-            energy: surveyRow.energy_post,
-            stress: surveyRow.stress_post,
-            notes: surveyRow.notes_post || undefined
-          };
-        }
-      }
-      
-      // Process intra-session responses
-      for (const row of responsesResult) {
-        surveyData.intraSessionResponses.push({
-          clarity: row.clarity,
-          energy: row.energy,
-          stress: row.stress,
-          phaseNumber: row.phase_number,
-          timestamp: row.timestamp
-        });
-      }
-      
-      log.info(`Survey data retrieved for ${sessionId}:`, {
-        hasPreSession: !!surveyData.preSession,
-        hasPostSession: !!surveyData.postSession,
-        intraResponseCount: surveyData.intraSessionResponses.length
-      });
-      
-      return surveyData;
-    } catch (error) {
-      log.error('❌ Failed to get survey data:', error);
-      throw error;
-    }
+    return this.surveyService.getSessionSurveyData(sessionId);
   }
 
   /**
    * Get survey completion status for a session
    */
   async getSurveyCompletionStatus(sessionId) {
-    try {
-      const row = await this.db.getFirstAsync(
-        'SELECT clarity_pre, energy_pre, clarity_post, energy_post, stress_post FROM session_surveys WHERE session_id = ?',
-        [sessionId]
-      );
-      
-      if (!row) {
-        return {
-          hasPreSession: false,
-          hasPostSession: false,
-          isPreSessionComplete: false,
-          isPostSessionComplete: false
-        };
-      }
-      const hasPreSession = row.clarity_pre !== null && row.energy_pre !== null;
-      const hasPostSession = row.clarity_post !== null && row.energy_post !== null && row.stress_post !== null;
-      
-      return {
-        hasPreSession,
-        hasPostSession,
-        isPreSessionComplete: hasPreSession,
-        isPostSessionComplete: hasPostSession
-      };
-    } catch (error) {
-      log.error('❌ Failed to check survey completion status:', error);
-      throw error;
-    }
+    return this.surveyService.getSurveyCompletionStatus(sessionId);
   }
 
   /**
    * Validate survey scale value (1-5)
    */
   isValidSurveyScale(value) {
-    return Number.isInteger(value) && value >= 1 && value <= 5;
+    return this.surveyService.isValidSurveyScale(value);
   }
 
   /**
    * Delete all survey data for a session
    */
   async deleteSurveyData(sessionId) {
-    try {
-      log.info(`Deleting survey data for session: ${sessionId}`);
-      
-      await this.db.runAsync('DELETE FROM session_surveys WHERE session_id = ?', [sessionId]);
-      await this.db.runAsync('DELETE FROM intra_session_responses WHERE session_id = ?', [sessionId]);
-      
-      log.info(`Survey data deleted for session: ${sessionId}`);
-      return { success: true };
-    } catch (error) {
-      log.error('❌ Failed to delete survey data:', error);
-      throw error;
-    }
+    return this.surveyService.deleteSurveyData(sessionId);
   }
 
   /**
