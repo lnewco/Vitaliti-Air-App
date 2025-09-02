@@ -11,12 +11,22 @@ const log = logger.createModuleLogger('AdaptiveInstructionEngine');
 
 class AdaptiveInstructionEngine {
   constructor() {
-    this.lastMaskLiftCheck = 0;
-    this.MASK_LIFT_CHECK_INTERVAL = 1500; // Check every 1.5 seconds
+    // Improved mask lift system with cooldown and escalation
+    this.maskLiftState = {
+      isInCooldown: false,
+      cooldownStartTime: null,
+      lastInstructionTime: 0,
+      pendingEvaluation: false,
+      spo2AtInstruction: null,
+      completedCycles: 0  // Only count after 15-second evaluation
+    };
+    
+    this.MASK_LIFT_COOLDOWN = 15000; // 15 seconds cooldown
+    this.CRITICAL_SPO2 = 75; // Critical threshold for immediate action
     
     // Current phase tracking
     this.currentPhaseStats = null;
-    this.currentPhaseMaskLifts = 0;
+    this.currentPhaseMaskLifts = 0; // This will track completed cycles
     this.currentPhaseMinSpO2 = null;
     this.currentPhaseMaxSpO2 = null;
     this.currentPhaseSpO2Readings = [];
@@ -120,6 +130,16 @@ class AdaptiveInstructionEngine {
     this.currentPhaseMaxSpO2 = null;
     this.currentPhaseSpO2Readings = [];
     
+    // Reset mask lift state for new phase
+    this.maskLiftState = {
+      isInCooldown: false,
+      cooldownStartTime: null,
+      lastInstructionTime: 0,
+      pendingEvaluation: false,
+      spo2AtInstruction: null,
+      completedCycles: 0
+    };
+    
     log.info(`Started altitude phase ${phaseNumber} at level ${altitudeLevel}`, {
       targets,
       sessionId
@@ -127,7 +147,7 @@ class AdaptiveInstructionEngine {
   }
 
   /**
-   * Process SpO2 reading during altitude phase (throttled)
+   * Process SpO2 reading during altitude phase with improved mask lift system
    */
   processAltitudeSpO2Reading(currentSpO2, sessionType, timestamp = Date.now()) {
     if (!this.currentPhaseStats || this.currentPhaseStats.phaseType !== 'altitude') {
@@ -144,37 +164,134 @@ class AdaptiveInstructionEngine {
       this.currentPhaseMaxSpO2 = currentSpO2;
     }
 
-    // Throttled mask lift check (every 1.5 seconds)
-    if (timestamp - this.lastMaskLiftCheck < this.MASK_LIFT_CHECK_INTERVAL) {
+    const targets = AdaptiveInstructionEngine.getTargetRanges(sessionType);
+    const maskLiftThreshold = targets.min - 2; // 83% for training, 86% for calibration
+    
+    // Check if we're in cooldown period
+    if (this.maskLiftState.isInCooldown) {
+      const cooldownElapsed = timestamp - this.maskLiftState.cooldownStartTime;
+      
+      // Critical SpO2 check during cooldown
+      if (currentSpO2 < this.CRITICAL_SPO2) {
+        // Emergency: End cooldown immediately and issue critical instruction
+        this.maskLiftState.isInCooldown = false;
+        this.maskLiftState.pendingEvaluation = false;
+        
+        log.warn(`CRITICAL SpO2 during cooldown: ${currentSpO2}%`);
+        
+        return {
+          instruction: 'mask_lift_critical',
+          message: 'CRITICAL: Lift mask and take 3 deep breaths immediately',
+          spo2Value: currentSpO2,
+          isCritical: true
+        };
+      }
+      
+      // Check if cooldown period is complete (15 seconds)
+      if (cooldownElapsed >= this.MASK_LIFT_COOLDOWN) {
+        // Cooldown complete - evaluate if another instruction is needed
+        this.maskLiftState.isInCooldown = false;
+        
+        // Determine if escalation is needed based on current SpO2
+        let breaths = 1;
+        let message = 'Lift mask and take one breath';
+        
+        if (currentSpO2 < 80) {
+          // SpO2 dropped below 80% - escalate to 2 breaths
+          breaths = 2;
+          message = 'Lift mask and take two deep breaths';
+          
+          log.info(`Escalating mask lift instruction after cooldown`, {
+            spo2: currentSpO2,
+            originalSpO2: this.maskLiftState.spo2AtInstruction,
+            breaths
+          });
+        } else if (currentSpO2 <= maskLiftThreshold) {
+          // Still below threshold but not critical - 1 breath
+          log.info(`Additional mask lift needed after cooldown`, {
+            spo2: currentSpO2,
+            originalSpO2: this.maskLiftState.spo2AtInstruction
+          });
+        } else {
+          // SpO2 recovered during cooldown - mark cycle as complete
+          this.maskLiftState.completedCycles++;
+          this.currentPhaseMaskLifts = this.maskLiftState.completedCycles;
+          
+          log.info(`SpO2 recovered during cooldown`, {
+            spo2: currentSpO2,
+            completedCycles: this.maskLiftState.completedCycles
+          });
+          
+          return null; // No additional instruction needed
+        }
+        
+        // Issue follow-up instruction and start new cooldown
+        this.maskLiftState.cooldownStartTime = timestamp;
+        this.maskLiftState.isInCooldown = true;
+        this.maskLiftState.spo2AtInstruction = currentSpO2;
+        
+        // Record mask lift event
+        this.recordAdaptiveEvent('mask_lift_escalated', {
+          spo2Value: currentSpO2,
+          breaths,
+          phaseNumber: this.currentPhaseStats.phaseNumber,
+          previousSpO2: this.maskLiftState.spo2AtInstruction
+        });
+        
+        return {
+          instruction: 'mask_lift',
+          message,
+          spo2Value: currentSpO2,
+          threshold: maskLiftThreshold,
+          breaths,
+          isEscalated: true
+        };
+      }
+      
+      // Still in cooldown - no new instructions
       return null;
     }
     
-    this.lastMaskLiftCheck = timestamp;
-    
-    const targets = AdaptiveInstructionEngine.getTargetRanges(sessionType);
-    const maskLiftThreshold = targets.min - 2;
-    
+    // Not in cooldown - check if mask lift instruction is needed
     if (currentSpO2 <= maskLiftThreshold) {
-      this.currentPhaseMaskLifts++;
+      // Determine number of breaths based on SpO2 level
+      let breaths = 1;
+      let message = 'Lift mask and take one breath';
       
-      log.info(`Mask lift instruction triggered`, {
+      if (currentSpO2 < 80) {
+        breaths = 2;
+        message = 'Lift mask and take two deep breaths';
+      }
+      
+      // Start cooldown period
+      this.maskLiftState.isInCooldown = true;
+      this.maskLiftState.cooldownStartTime = timestamp;
+      this.maskLiftState.lastInstructionTime = timestamp;
+      this.maskLiftState.spo2AtInstruction = currentSpO2;
+      this.maskLiftState.pendingEvaluation = true;
+      
+      log.info(`Mask lift instruction triggered with cooldown`, {
         spo2: currentSpO2,
         threshold: maskLiftThreshold,
-        maskLiftCount: this.currentPhaseMaskLifts
+        breaths,
+        cooldownDuration: this.MASK_LIFT_COOLDOWN
       });
       
       // Record mask lift event
       this.recordAdaptiveEvent('mask_lift', {
         spo2Value: currentSpO2,
         threshold: maskLiftThreshold,
+        breaths,
         phaseNumber: this.currentPhaseStats.phaseNumber
       });
       
       return {
         instruction: 'mask_lift',
-        message: 'Lift mask and take one breath',
+        message,
         spo2Value: currentSpO2,
-        threshold: maskLiftThreshold
+        threshold: maskLiftThreshold,
+        breaths,
+        cooldownActive: true
       };
     }
     
@@ -198,7 +315,7 @@ class AdaptiveInstructionEngine {
       ? this.currentPhaseSpO2Readings.reduce((sum, reading) => sum + reading.spo2, 0) / this.currentPhaseSpO2Readings.length
       : null;
 
-    // Complete phase stats
+    // Complete phase stats - use completed cycles for mask lift count
     const phaseStats = {
       ...this.currentPhaseStats,
       endTime,
@@ -207,7 +324,7 @@ class AdaptiveInstructionEngine {
       maxSpO2: this.currentPhaseMaxSpO2,
       avgSpO2: Math.round(avgSpO2 * 10) / 10, // Round to 1 decimal
       spo2ReadingsCount: this.currentPhaseSpO2Readings.length,
-      maskLiftCount: this.currentPhaseMaskLifts
+      maskLiftCount: this.maskLiftState.completedCycles // Use completed cycles only
     };
 
     // Calculate altitude adjustment for next phase
@@ -235,7 +352,7 @@ class AdaptiveInstructionEngine {
       duration,
       minSpO2: this.currentPhaseMinSpO2,
       maxSpO2: this.currentPhaseMaxSpO2,
-      maskLifts: this.currentPhaseMaskLifts,
+      completedMaskLiftCycles: this.maskLiftState.completedCycles,
       altitudeAdjustment
     });
 
@@ -247,15 +364,17 @@ class AdaptiveInstructionEngine {
    * Calculate altitude adjustment based on phase performance
    */
   calculateAltitudeAdjustment(phaseStats) {
-    const { minSpO2, maskLiftCount, altitudeLevel, targetMinSpO2, targetMaxSpO2 } = phaseStats;
+    const { minSpO2, altitudeLevel, targetMinSpO2, targetMaxSpO2 } = phaseStats;
+    // Use completed cycles from mask lift state instead of raw count
+    const completedMaskLiftCycles = this.maskLiftState.completedCycles;
     
     let altitudeAdjustment = 0;
     let adjustmentReason = '';
     
-    // Priority 1: Check for mask lifts (dial down takes precedence)
-    if (maskLiftCount >= 2) {
+    // Priority 1: Check for completed mask lift cycles (dial down takes precedence)
+    if (completedMaskLiftCycles >= 2) {
       altitudeAdjustment = -1;
-      adjustmentReason = `SpO2 dropped below ${targetMinSpO2 - 2}% multiple times (${maskLiftCount} times)`;
+      adjustmentReason = `Completed ${completedMaskLiftCycles} mask lift cycles (SpO2 dropped below ${targetMinSpO2 - 2}%)`;
     }
     // Priority 2: Check if min SpO2 was too high (only if no dial down needed)
     else if (minSpO2 >= targetMaxSpO2) {
@@ -278,6 +397,7 @@ class AdaptiveInstructionEngine {
       requestedAdjustment: altitudeAdjustment,
       hitBounds,
       reason: adjustmentReason,
+      completedMaskLiftCycles,
       instruction: actualAdjustment !== 0 
         ? `Adjust altitude dial to level ${newAltitudeLevel}` 
         : 'Keep altitude dial at current level'
@@ -531,14 +651,14 @@ class AdaptiveInstructionEngine {
       };
     }
 
-    // Rule: If multiple mask lifts (≥2), decrease altitude (-1)  
-    if (this.currentPhaseMaskLifts >= 2) {
+    // Rule: If multiple completed mask lift cycles (≥2), decrease altitude (-1)  
+    if (this.maskLiftState.completedCycles >= 2) {
       const newLevel = Math.max(0, currentLevel - 1); // Floor at level 0
       return {
         adjustment: -1,
         newLevel,
-        reason: `Multiple mask lifts (${this.currentPhaseMaskLifts}) - decrease altitude`,
-        maskLiftCount: this.currentPhaseMaskLifts
+        reason: `Multiple completed mask lift cycles (${this.maskLiftState.completedCycles}) - decrease altitude`,
+        completedMaskLiftCycles: this.maskLiftState.completedCycles
       };
     }
 
@@ -546,7 +666,7 @@ class AdaptiveInstructionEngine {
     return {
       adjustment: 0,
       newLevel: currentLevel,
-      reason: `No adjustment needed - min SpO2: ${minSpO2}%, mask lifts: ${this.currentPhaseMaskLifts}`
+      reason: `No adjustment needed - min SpO2: ${minSpO2}%, completed mask lift cycles: ${this.maskLiftState.completedCycles}`
     };
   }
 }
