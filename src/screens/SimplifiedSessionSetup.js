@@ -123,10 +123,11 @@ const SimplifiedSessionSetup = ({ navigation }) => {
         }
       })();
 
-      // Navigate directly to training screen
-      navigation.navigate('AirSession', { 
+      // Navigate directly to new simplified training screen
+      navigation.navigate('IHHTSessionSimple', { 
         sessionId: sessionId,
-        protocolConfig: protocolConfig 
+        protocolConfig: protocolConfig,
+        preSessionData: surveyData // Pass pre-session survey data
       });
     } catch (error) {
       console.error('❌ Error starting session:', error);

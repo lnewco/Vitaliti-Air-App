@@ -93,13 +93,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   label: {
-    ...typography.bodyMedium,
+    ...typography.bodySmall,
     color: colors.text.tertiary,
     textAlign: 'center',
     fontWeight: '500',
+    fontSize: 11,
+    lineHeight: 14,
   },
   labelCompact: {
-    ...typography.caption,
+    fontSize: 10,
+    lineHeight: 12,
   },
   labelSelected: {
     color: colors.text.primary,

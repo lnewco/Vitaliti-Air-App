@@ -388,8 +388,9 @@ class EnhancedSessionManager {
       await this.startLiveActivity();
       }
 
-      // Schedule phase notifications
-      await this.schedulePhaseNotifications();
+      // Don't schedule notifications at session start - they'll be scheduled by phase timer
+      // when we're actually in the middle of a phase (not at the beginning)
+      console.log('📱 Skipping initial notification scheduling - will schedule mid-phase');
 
       // Start HKWorkout for iOS background execution with BLE
       if (HKWorkoutService.isAvailable && this.connectedDeviceId) {
@@ -574,22 +575,22 @@ class EnhancedSessionManager {
         return;
       }
 
-      // Don't schedule notifications at session start (when phase just started)
-      // Only schedule when we're mid-phase and have enough time remaining
-      const warningTime = (this.phaseTimeRemaining - 30) * 1000;
-      console.log(`📱 Notification timing: phaseTimeRemaining=${this.phaseTimeRemaining}s, warningTime=${warningTime}ms, currentPhase=${this.currentPhase}`);
+      // This function should now only be called when appropriate (30+ seconds into phase)
+      // No need for all the early-exit checks since we control when this is called
       
-      // Skip notifications if we just started the phase (within first 10 seconds)
-      const phaseDuration = this.currentPhase === 'ALTITUDE' ? this.protocolConfig.altitudeDuration : this.protocolConfig.recoveryDuration;
-      const timeElapsedInPhase = phaseDuration - this.phaseTimeRemaining;
-      
-      if (timeElapsedInPhase < 10) {
-        console.log(`📱 Skipping notifications - phase just started (${timeElapsedInPhase}s elapsed)`);
+      if (this.currentPhase === 'TRANSITION') {
+        console.log('📱 No notifications for transition phase');
         return;
       }
       
-      if (warningTime > 0) {
+      console.log(`📱 Scheduling notifications: phase=${this.currentPhase}, cycle=${this.currentCycle}/${this.protocolConfig.totalCycles}, remaining=${this.phaseTimeRemaining}s`);
+      
+      // Only schedule 30-second warning if there's more than 35 seconds remaining
+      if (this.phaseTimeRemaining > 35) {
+        const warningTime = (this.phaseTimeRemaining - 30) * 1000;
         const nextPhase = this.currentPhase === 'ALTITUDE' ? 'Recovery' : 'Altitude';
+        
+        console.log(`📱 Scheduling 30-second warning in ${warningTime/1000}s`);
         
         await Notifications.scheduleNotificationAsync({
           content: {
@@ -603,23 +604,46 @@ class EnhancedSessionManager {
         });
       }
       
-      // Schedule phase change notification
-      const changeTime = this.phaseTimeRemaining * 1000;
-      const nextPhase = this.currentPhase === 'ALTITUDE' ? 'Recovery' : 'Altitude';
-      const instruction = nextPhase === 'Altitude' ? 'Put ON mask' : 'Take OFF mask';
-      
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `${nextPhase === 'Altitude' ? '🔴' : '🔵'} ${nextPhase} Phase Now`,
-          body: instruction,
-          data: { type: 'phaseChange' }
-        },
-        trigger: {
-          seconds: Math.max(1, Math.floor(changeTime / 1000))
+      // Schedule phase change notification ONLY if there's enough time remaining
+      // Don't schedule if we're near the end already
+      if (this.phaseTimeRemaining > 10) {
+        const changeTime = this.phaseTimeRemaining * 1000;
+        
+        // Determine what comes AFTER current phase
+        let nextPhaseTitle = '';
+        let nextInstruction = '';
+        let nextCycle = this.currentCycle;
+        
+        if (this.currentPhase === 'ALTITUDE') {
+          // After altitude comes recovery (same cycle)
+          nextPhaseTitle = 'Switch to Recovery Phase';
+          nextInstruction = 'Take OFF mask - Recovery time';
+        } else if (this.currentPhase === 'RECOVERY') {
+          // After recovery comes altitude of NEXT cycle (or session end)
+          if (this.currentCycle < this.protocolConfig.totalCycles) {
+            nextCycle = this.currentCycle + 1;
+            nextPhaseTitle = 'Switch to Hypoxic Phase';
+            nextInstruction = `Put ON mask - Starting Cycle ${nextCycle}/${this.protocolConfig.totalCycles}`;
+          } else {
+            // Session will end, don't schedule a phase change notification
+            console.log('📱 Last recovery phase - skipping end notification');
+            return;
+          }
         }
-      });
-      
-      console.log('📱 Scheduled phase notifications');
+        
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `${this.currentPhase === 'ALTITUDE' ? '🔵' : '🔴'} ${nextPhaseTitle}`,
+            body: nextInstruction,
+            data: { type: 'phaseChange' }
+          },
+          trigger: {
+            seconds: Math.max(1, Math.floor(changeTime / 1000))
+          }
+        });
+        
+        console.log(`📱 Scheduled phase change notification in ${changeTime/1000}s: "${nextPhaseTitle}"`);
+      }
     } catch (error) {
       console.error('❌ Error scheduling notifications:', error);
     }
@@ -648,6 +672,15 @@ class EnhancedSessionManager {
         console.log(`⏱️ Phase timer: ${this.currentPhase} - ${this.phaseTimeRemaining}s remaining`);
       }
 
+      // Schedule notifications when we're 30 seconds into a phase (not at start)
+      // Only schedule once per phase
+      if (elapsed === 30 && this.currentPhase !== 'TRANSITION') {
+        console.log('📱 Now scheduling notifications - 30 seconds into phase');
+        this.schedulePhaseNotifications().catch(err => 
+          console.error('Error scheduling notifications:', err)
+        );
+      }
+      
       // Check for phase transition
       if (this.phaseTimeRemaining <= 0) {
         this.advancePhase();
@@ -758,15 +791,17 @@ class EnhancedSessionManager {
       console.log('⚠️ Entering mask switch transition → Take OFF mask for Recovery phase');
       
     } else if (this.currentPhase === 'RECOVERY') {
-      // Check if session is complete
-      if (this.currentCycle >= this.protocolConfig.totalCycles) {
-        console.log(`🎉 DEBUG: Session completing - cycle ${this.currentCycle}/${this.protocolConfig.totalCycles}`);
+      // Move to next cycle
+      this.currentCycle++;
+      
+      // Check if session is complete AFTER incrementing cycle
+      if (this.currentCycle > this.protocolConfig.totalCycles) {
+        console.log(`🎉 Session completing - completed all ${this.protocolConfig.totalCycles} cycles`);
         await this.completeSession();
         return;
       }
 
-      // Move to next cycle via transition
-      this.currentCycle++;
+      // Continue to next altitude phase via transition
       this.currentPhase = 'TRANSITION';
       this.nextPhaseAfterTransition = 'ALTITUDE';
       this.phaseTimeRemaining = 10; // 10 seconds
@@ -778,9 +813,9 @@ class EnhancedSessionManager {
       console.log(`⚠️ Entering mask switch transition → PUT ON mask for Hypoxic phase (Cycle ${this.currentCycle})`);
     }
 
-    // Schedule new notifications for this phase
-    await this.schedulePhaseNotifications();
-
+    // Don't schedule notifications immediately after phase change
+    // They will be scheduled by the phase timer when appropriate
+    
     // Update Live Activity with new phase
     await this.updateLiveActivity();
 
@@ -849,8 +884,7 @@ class EnhancedSessionManager {
       await this.backgroundService.resumeBackgroundSession();
     }
 
-    // Reschedule notifications from current point
-    await this.schedulePhaseNotifications();
+    // Don't immediately reschedule notifications - let the phase timer handle it
 
     // Update Live Activity
     await this.updateLiveActivity();
@@ -1320,8 +1354,19 @@ class EnhancedSessionManager {
         });
       }
       
-      // Schedule notifications for current phase
-      await this.schedulePhaseNotifications();
+      // Only schedule notifications if we're resuming mid-phase with enough time left
+      // Calculate how long we've been in the phase
+      const phaseDuration = this.currentPhase === 'ALTITUDE' 
+        ? this.protocolConfig.altitudeDuration 
+        : this.protocolConfig.recoveryDuration;
+      const elapsedInPhase = phaseDuration - this.phaseTimeRemaining;
+      
+      if (elapsedInPhase >= 30 && this.phaseTimeRemaining > 35 && this.currentPhase !== 'TRANSITION') {
+        console.log('📱 Resuming mid-phase - scheduling notifications');
+        await this.schedulePhaseNotifications();
+      } else {
+        console.log('📱 Resuming - will schedule notifications later via timer');
+      }
       
       // Start phase timer
       this.startPhaseTimer();

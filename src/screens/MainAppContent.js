@@ -10,6 +10,7 @@ import PremiumDashboard from './PremiumDashboard';
 import SessionHistoryScreen from './SessionHistoryScreen';
 import SimplifiedSessionSetup from './SimplifiedSessionSetup';
 import IHHTTrainingScreen from './IHHTTrainingScreen';
+import IHHTSessionSimple from './IHHTSessionSimple';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import PremiumProfileScreen from './PremiumProfileScreen';
 import IntegrationsScreen from './IntegrationsScreen';
@@ -110,6 +111,15 @@ const MainStack = ({ onNavigateToSession }) => {
         options={{
           presentation: 'card',
           headerShown: false,  // Hide navigation header to avoid double header
+        }}
+      />
+      
+      <Stack.Screen 
+        name="IHHTSessionSimple" 
+        component={IHHTSessionSimple}
+        options={{
+          presentation: 'card',
+          headerShown: false,
         }}
       />
       

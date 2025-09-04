@@ -18,8 +18,8 @@ import { colors, typography, spacing } from '../../design-system';
 import { Audio } from 'expo-av';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
-const PANEL_HEIGHT = screenHeight * 0.55;
-const AUTO_DISMISS_TIME = 20000; // 20 seconds
+const PANEL_HEIGHT = screenHeight * 0.48; // Reduced height for center positioning
+const AUTO_DISMISS_TIME = 30000; // 30 seconds (increased by 10)
 
 const IntraSessionFeedback = ({ 
   visible, 
@@ -36,7 +36,7 @@ const IntraSessionFeedback = ({
   const [sensations, setSensations] = useState([]);
   
   // Animation values
-  const slideAnim = useRef(new Animated.Value(PANEL_HEIGHT)).current;
+  const slideAnim = useRef(new Animated.Value(screenHeight)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(1)).current;
   
@@ -194,7 +194,7 @@ const IntraSessionFeedback = ({
   if (!visible) return null;
 
   return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+    <View style={[StyleSheet.absoluteFillObject, { zIndex: 1000 }]} pointerEvents="box-none">
       {/* Backdrop */}
       <TouchableWithoutFeedback onPress={handleDismiss}>
         <Animated.View 
@@ -272,7 +272,9 @@ const IntraSessionFeedback = ({
                   </Text>
                 )}
                 <View style={styles.optionsRow}>
-                  {['Very Negative', 'Negative', 'Neutral', 'Positive', 'Very Positive'].map((label, index) => (
+                  {['Very
+Neg', 'Neg', 'Neut', 'Pos', 'Very
+Pos'].map((label, index) => (
                     <FeedbackButton
                       key={index}
                       label={label}
@@ -289,7 +291,9 @@ const IntraSessionFeedback = ({
               <View style={styles.question}>
                 <Text style={styles.questionText}>How is your energy?</Text>
                 <View style={styles.optionsRow}>
-                  {['Very Fatigued', 'Fatigued', 'Neutral', 'Energized', 'Very Energized'].map((label, index) => (
+                  {['Very
+Tired', 'Tired', 'Neut', 'Alert', 'Very
+Alert'].map((label, index) => (
                     <FeedbackButton
                       key={index}
                       label={label}
@@ -306,7 +310,9 @@ const IntraSessionFeedback = ({
               <View style={styles.question}>
                 <Text style={styles.questionText}>How is your mental clarity?</Text>
                 <View style={styles.optionsRow}>
-                  {['Very Foggy', 'Foggy', 'Neutral', 'Clear', 'Very Clear'].map((label, index) => (
+                  {['Very
+Foggy', 'Foggy', 'Neut', 'Clear', 'Very
+Clear'].map((label, index) => (
                     <FeedbackButton
                       key={index}
                       label={label}
@@ -379,13 +385,21 @@ const styles = StyleSheet.create({
   },
   panel: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: '50%',
+    left: 20,
+    right: 20,
     height: PANEL_HEIGHT,
-    borderTopLeftRadius: spacing.radius.xl,
-    borderTopRightRadius: spacing.radius.xl,
+    marginBottom: -(PANEL_HEIGHT / 2), // Center vertically
+    borderRadius: spacing.radius.xl,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 15,
   },
   blurContainer: {
     flex: 1,
