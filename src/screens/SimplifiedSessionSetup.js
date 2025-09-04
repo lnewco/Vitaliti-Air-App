@@ -34,9 +34,9 @@ import SessionIdGenerator from '../utils/sessionIdGenerator';
 import DatabaseService from '../services/DatabaseService';
 import SupabaseService from '../services/SupabaseService';
 import PreSessionSurvey from '../components/feedback/PreSessionSurvey';
+import AltitudeLevelSelector from '../components/altitude/AltitudeLevelSelector';
+import AltitudeProgressionService from '../services/AltitudeProgressionService';
 import Constants from 'expo-constants';
-// TEMPORARY: Import animation for testing
-import PulseOxRingAnimation from '../components/animations/PulseOxRingAnimation';
 
 // Detect if running in Expo Go (demo mode) vs production build
 const IS_EXPO_GO = Constants.appOwnership === 'expo';
@@ -48,6 +48,10 @@ const SimplifiedSessionSetup = ({ navigation }) => {
   const [showPreSessionSurvey, setShowPreSessionSurvey] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState(null);
   const [showConnectionManager, setShowConnectionManager] = useState(false);
+  const [recommendedAltitude, setRecommendedAltitude] = useState(6);
+  const [selectedAltitude, setSelectedAltitude] = useState(6);
+  const [altitudeLoadingState, setAltitudeLoadingState] = useState('loading');
+  const [userAdjustedAltitude, setUserAdjustedAltitude] = useState(false);
   const scale = useSharedValue(1);
 
   // Helper function to determine button title based on state
@@ -64,6 +68,39 @@ const SimplifiedSessionSetup = ({ navigation }) => {
     hypoxicDuration: 7, // 7 minutes
     hyperoxicDuration: 3, // 3 minutes
     // defaultAltitudeLevel removed - will be calculated by progression service
+  };
+
+  // Load recommended altitude on mount
+  useEffect(() => {
+    loadRecommendedAltitude();
+  }, []);
+
+  const loadRecommendedAltitude = async () => {
+    try {
+      setAltitudeLoadingState('loading');
+      // Get user ID (you may need to get this from auth context)
+      const userId = 'default_user'; // TODO: Get from auth context
+      
+      const progressionData = await AltitudeProgressionService.calculateOptimalStartingAltitude(userId);
+      
+      setRecommendedAltitude(progressionData.recommendedLevel);
+      setSelectedAltitude(progressionData.recommendedLevel); // Set initial selection to recommended
+      setAltitudeLoadingState('loaded');
+      
+      console.log(`🎯 Recommended altitude: Level ${progressionData.recommendedLevel}`);
+      console.log(`📊 Reasoning:`, progressionData.reasoning);
+    } catch (error) {
+      console.warn('Failed to calculate recommended altitude:', error);
+      setRecommendedAltitude(6); // Fallback
+      setSelectedAltitude(6);
+      setAltitudeLoadingState('loaded');
+    }
+  };
+
+  const handleAltitudeSelect = (level) => {
+    setSelectedAltitude(level);
+    setUserAdjustedAltitude(level !== recommendedAltitude);
+    console.log(`🎚️ User selected altitude level ${level} (Recommended: ${recommendedAltitude})`);
   };
 
   const handleStartSession = async () => {
@@ -128,7 +165,12 @@ const SimplifiedSessionSetup = ({ navigation }) => {
       // Navigate directly to new simplified training screen
       navigation.navigate('IHHTSessionSimple', { 
         sessionId: sessionId,
-        protocolConfig: protocolConfig,
+        protocolConfig: {
+          ...protocolConfig,
+          manualAltitudeLevel: selectedAltitude,  // Pass user-selected altitude
+          recommendedAltitudeLevel: recommendedAltitude, // Also pass recommended for tracking
+          userAdjustedAltitude: userAdjustedAltitude // Track if user made manual adjustment
+        },
         preSessionData: surveyData // Pass pre-session survey data
       });
     } catch (error) {
@@ -176,20 +218,6 @@ const SimplifiedSessionSetup = ({ navigation }) => {
             </Text>
           </Animated.View>
 
-          {/* TEMPORARY: Pulse Ox Animation Demo */}
-          <Animated.View 
-            entering={FadeInDown.duration(600).delay(150)}
-            style={styles.animationDemoCard}
-          >
-            <Text style={styles.animationTitle}>Pulse Oximeter Setup</Text>
-            <View style={styles.animationContainer}>
-              <PulseOxRingAnimation isPlaying={true} size={200} />
-            </View>
-            <Text style={styles.animationInstruction}>
-              Slide the pulse oximeter onto your left thumb
-            </Text>
-          </Animated.View>
-
           {/* Protocol Overview Card */}
           <Animated.View entering={FadeInDown.duration(600).delay(200)}>
             <PremiumCard style={styles.protocolCard}>
@@ -213,38 +241,28 @@ const SimplifiedSessionSetup = ({ navigation }) => {
                 ))}
               </View>
 
-              {/* Altitude Level */}
+              {/* Altitude Level Selector */}
               <View style={styles.altitudeSection}>
                 <View style={styles.altitudeHeader}>
-                  <Text style={styles.altitudeLabel}>ALTITUDE SIMULATION</Text>
-                  <Text style={styles.altitudeValue}>Adaptive</Text>
+                  <Text style={styles.altitudeLabel}>SELECT STARTING ALTITUDE</Text>
+                  {userAdjustedAltitude && (
+                    <View style={styles.manualBadge}>
+                      <Text style={styles.manualBadgeText}>Manual</Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={styles.altitudeDescription}>
-                  Starting altitude will be calculated based on your progression
-                </Text>
-              </View>
-            </PremiumCard>
-          </Animated.View>
-
-          {/* Adaptive Features Card */}
-          <Animated.View entering={FadeInDown.duration(600).delay(250)}>
-            <PremiumCard style={styles.adaptiveCard}>
-              <View style={styles.adaptiveHeader}>
-                <Text style={styles.adaptiveTitle}>Adaptive Intelligence Enabled</Text>
-              </View>
-              <View style={styles.adaptiveFeatures}>
-                <View style={styles.adaptiveFeatureRow}>
-                  <View style={styles.adaptiveBullet} />
-                  <Text style={styles.adaptiveFeatureText}>Real-time SpO2 monitoring and altitude adjustments</Text>
-                </View>
-                <View style={styles.adaptiveFeatureRow}>
-                  <View style={styles.adaptiveBullet} />
-                  <Text style={styles.adaptiveFeatureText}>Automatic mask lift guidance when needed</Text>
-                </View>
-                <View style={styles.adaptiveFeatureRow}>
-                  <View style={styles.adaptiveBullet} />
-                  <Text style={styles.adaptiveFeatureText}>Personalized training based on your performance</Text>
-                </View>
+                
+                {altitudeLoadingState === 'loading' ? (
+                  <ActivityIndicator size="small" color={colors.brand.accent} style={{ marginVertical: 20 }} />
+                ) : (
+                  <AltitudeLevelSelector
+                    selectedLevel={selectedAltitude}
+                    recommendedLevel={recommendedAltitude}
+                    onLevelSelect={handleAltitudeSelect}
+                    showRecommendation={true}
+                    allowManualSelection={true}
+                  />
+                )}
               </View>
             </PremiumCard>
           </Animated.View>

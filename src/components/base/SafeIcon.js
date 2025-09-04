@@ -56,6 +56,10 @@ const SafeIcon = ({
     'info': 'ℹ️',
     'help': '❓',
     'notification': '🔔',
+    'check-circle': '✅',
+    'alert-triangle': '⚠️',
+    'trending-up': '📈',
+    'trending-down': '📉',
     
     // Data/Analytics
     'chart': '📈',
@@ -78,7 +82,11 @@ const SafeIcon = ({
     'share': '📤',
     'download': '📥',
     'refresh': '🔄',
-    'chevron-right': '→',
+    'chevron-right': '›',
+    'chevron-forward': '›',
+    'chevron-left': '‹',
+    'arrow-back': '←',
+    'arrow-forward': '→',
     
     // Misc
     'star': '⭐',
@@ -90,6 +98,9 @@ const SafeIcon = ({
     'filter': '🔽',
     'sort': '↕️',
     'check': '✓',
+    'person': '👤',
+    'lock-closed': '🔒',
+    'help-circle': '❓',
   };
 
   const iconSize = spacing.iconSize[size] || spacing.iconSize.md;
