@@ -9,17 +9,11 @@ import { colors } from '../design-system';
 import PremiumDashboard from './PremiumDashboard';
 import SessionHistoryScreen from './SessionHistoryScreen';
 import SimplifiedSessionSetup from './SimplifiedSessionSetup';
-import IHHTSessionSetupScreen from './IHHTSessionSetupScreen';
-import IHHTTrainingScreen from './IHHTTrainingScreenSimplified';
-// Using simplified version to avoid crashes
-import IHHTTrainingScreenV2 from './IHHTSessionSimple';
 import IHHTSessionSimple from './IHHTSessionSimple';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
 import PremiumProfileScreen from './PremiumProfileScreen';
 import IntegrationsScreen from './IntegrationsScreen';
 import SettingsScreen from './SettingsScreen';
-import AnimationShowcase from './AnimationShowcase';
-import AnimationPreviewScreen from './AnimationPreviewScreen';
 import SessionRecoveryManager from '../components/SessionRecoveryManager';
 import SafeIcon from '../components/base/SafeIcon';
 import FloatingTabBar from '../design-system/components/FloatingTabBar';
@@ -109,35 +103,7 @@ const MainStack = ({ onNavigateToSession }) => {
           title: 'Training Session Setup',
         }}
       />
-      
-      <Stack.Screen 
-        name="IHHTSessionSetup" 
-        component={IHHTSessionSetupScreen}
-        options={{
-          presentation: 'card',
-          headerShown: false,
-          title: 'Air Session Setup',
-        }}
-      />
 
-      <Stack.Screen 
-        name="AirSession" 
-        component={IHHTTrainingScreen}
-        options={{
-          presentation: 'card',
-          headerShown: false,  // Hide navigation header to avoid double header
-        }}
-      />
-      
-      <Stack.Screen 
-        name="ActiveIHHTSession" 
-        component={IHHTTrainingScreenV2}
-        options={{
-          presentation: 'card',
-          headerShown: false,
-        }}
-      />
-      
       <Stack.Screen 
         name="IHHTSessionSimple" 
         component={IHHTSessionSimple}
@@ -171,26 +137,6 @@ const MainStack = ({ onNavigateToSession }) => {
         options={{
           presentation: 'card',
           headerShown: false,
-        }}
-      />
-      
-      <Stack.Screen 
-        name="AnimationShowcase" 
-        component={AnimationShowcase}
-        options={{
-          presentation: 'card',
-          headerShown: false,
-          title: 'Animation Showcase',
-        }}
-      />
-      
-      <Stack.Screen 
-        name="AnimationPreview" 
-        component={AnimationPreviewScreen}
-        options={{
-          presentation: 'card',
-          headerShown: false,
-          title: 'Animation Preview',
         }}
       />
       

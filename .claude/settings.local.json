@@ -78,7 +78,16 @@
       "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/**)",
       "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/src/services/**)",
       "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/Vitaliti Code/Air/Vitaliti-Air-Analytics/src/lib/**)",
-      "Read(/Users/danyalpanjwani/Desktop/Vitaliti_Air/**)"
+      "Read(//**)",
+      "Bash(git diff-tree:*)",
+      "Bash(source:*)",
+      "Bash(npm ls:*)",
+      "Bash(kill:*)",
+      "Bash(git rm --cached Vitaliti-Air-Analytics Vitaliti-Air-App \"vitaliti-air-website 2\")",
+      "Bash(git reset Vitaliti-Air-Analytics Vitaliti-Air-App \"vitaliti-air-website 2\")",
+      "mcp__linear-server__list_projects",
+      "mcp__linear-server__list_issues",
+      "mcp__linear-server__list_issues"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

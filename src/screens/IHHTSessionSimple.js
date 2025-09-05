@@ -43,19 +43,17 @@ const ALTITUDE_CONVERSION = {
 // EKG Animation Component with Trail Effect
 const EKGWave = ({ heartRate, color = '#FF6B9D' }) => {
   const [trailPoints, setTrailPoints] = useState([]);
-  const animValue = useRef(new Animated.Value(0)).current;
-  const moveAnim = useRef(new Animated.Value(0)).current;
   const trailIndex = useRef(0);
   
   useEffect(() => {
     const beatDuration = 60000 / heartRate; // ms per beat
-    const totalPoints = 40; // Number of trail points
+    const totalPoints = 50; // More points for smoother trail
     
     // Initialize trail points
     const initialTrail = Array.from({ length: totalPoints }, (_, i) => ({
-      x: (i / totalPoints) * 80,
+      x: (i / totalPoints) * 100,
       y: 0,
-      opacity: 1 - (i / totalPoints) * 0.7
+      opacity: 0.3 + (i / totalPoints) * 0.7 // More visible trail
     }));
     setTrailPoints(initialTrail);
     
@@ -93,23 +91,36 @@ const EKGWave = ({ heartRate, color = '#FF6B9D' }) => {
   return (
     <View style={styles.ekgContainer}>
       <View style={styles.ekgBaseline} />
-      {/* Trail points */}
-      {trailPoints.map((point, index) => (
-        <View
-          key={index}
-          style={[
-            styles.ekgTrailPoint,
-            {
-              left: point.x,
-              transform: [{ translateY: point.y }],
-              opacity: point.opacity,
-              backgroundColor: index === trailPoints.length - 1 ? '#FF6B9D' : '#FF6B9D',
-              width: index === trailPoints.length - 1 ? 4 : 2,
-              height: index === trailPoints.length - 1 ? 4 : 2,
-            }
-          ]}
-        />
-      ))}
+      {/* Trail as continuous line segments */}
+      {trailPoints.map((point, index) => {
+        if (index === 0) return null;
+        const prevPoint = trailPoints[index - 1];
+        const distance = Math.sqrt(
+          Math.pow(point.x - prevPoint.x, 2) + 
+          Math.pow(point.y - prevPoint.y, 2)
+        );
+        const angle = Math.atan2(point.y - prevPoint.y, point.x - prevPoint.x);
+        
+        return (
+          <View
+            key={index}
+            style={[
+              styles.ekgLine,
+              {
+                position: 'absolute',
+                left: prevPoint.x,
+                top: 25 + prevPoint.y,
+                width: distance || 2,
+                height: 2,
+                opacity: point.opacity,
+                backgroundColor: '#FF6B9D',
+                transform: [{ rotate: `${angle}rad` }],
+                transformOrigin: 'left center',
+              }
+            ]}
+          />
+        );
+      })}
     </View>
   );
 };
@@ -134,7 +145,6 @@ export default function IHHTSessionSimple() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [totalElapsedTime, setTotalElapsedTime] = useState(0);
   const updateInterval = useRef(null);
-  const elapsedTimeInterval = useRef(null);
   const adaptiveEngineRef = useRef(null);
   
   // UI state
@@ -154,7 +164,7 @@ export default function IHHTSessionSimple() {
   const [showAdaptiveInstruction, setShowAdaptiveInstruction] = useState(false);
   
   // Status animation
-  const glowAnim = useRef(new Animated.Value(0.5)).current;
+  const glowAnim = useRef(new Animated.Value(0.6)).current;
   
   // Get status based on SpO2 and phase
   const getStatus = () => {
@@ -189,31 +199,24 @@ export default function IHHTSessionSimple() {
         // Set up adaptive instruction callback
         EnhancedSessionManager.setAdaptiveInstructionCallback(handleAdaptiveInstruction);
         
+        // Check if there's already an active session and clean it up
+        if (EnhancedSessionManager.isActive) {
+          console.log('⚠️ Cleaning up previous session state');
+          await EnhancedSessionManager.endSession();
+          // Wait a moment for cleanup to complete
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
         // Start session with EnhancedSessionManager
         // Ensure durations are correctly set in seconds
-        // Note: NOT passing defaultAltitudeLevel to enable progression system
         await EnhancedSessionManager.startSession(sessionId, {
           totalCycles: protocolConfig.totalCycles || 5,
           altitudeDuration: (protocolConfig.hypoxicDuration || 7) * 60,  // 7 minutes = 420 seconds
           recoveryDuration: (protocolConfig.hyperoxicDuration || 3) * 60, // 3 minutes = 180 seconds
           hypoxicDuration: (protocolConfig.hypoxicDuration || 7) * 60,   // Also set old naming for compatibility
-          hyperoxicDuration: (protocolConfig.hyperoxicDuration || 3) * 60
-          // defaultAltitudeLevel removed to enable progressive overload
+          hyperoxicDuration: (protocolConfig.hyperoxicDuration || 3) * 60,
+          defaultAltitudeLevel: protocolConfig.defaultAltitudeLevel || 6
         });
-        
-        // Get the initial session info to show altitude level
-        const initialInfo = EnhancedSessionManager.getSessionInfo();
-        if (initialInfo?.currentAltitudeLevel) {
-          console.log(`🏔️ Session starting at altitude level ${initialInfo.currentAltitudeLevel}`);
-          
-          // Show progression notification
-          Alert.alert(
-            'Session Starting',
-            `Starting at altitude level ${initialInfo.currentAltitudeLevel}`,
-            [{ text: 'OK' }],
-            { cancelable: false }
-          );
-        }
         
         setSessionStarted(true);
         setIsInitializing(false);
@@ -224,27 +227,20 @@ export default function IHHTSessionSimple() {
         console.log('✅ Session initialized successfully');
       } catch (error) {
         console.error('❌ Failed to initialize session:', error);
-        console.error('Error details:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        });
         setIsInitializing(false);
         
-        // Create detailed error message
-        const errorDetails = `
-ERROR DETAILS:
-Message: ${error.message || 'Unknown error'}
-
-Stack Trace (first 300 chars):
-${error.stack?.substring(0, 300) || 'No stack trace'}
-
-Please screenshot this error and share it.
-        `.trim();
+        // Ensure session manager is reset on error
+        try {
+          if (EnhancedSessionManager.isActive) {
+            await EnhancedSessionManager.endSession();
+          }
+        } catch (cleanupError) {
+          console.error('Error during cleanup:', cleanupError);
+        }
         
         Alert.alert(
-          'Session Start Failed - Debug Info',
-          errorDetails,
+          'Error',
+          'Failed to start session. Please try again.',
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
       }
@@ -257,9 +253,6 @@ Please screenshot this error and share it.
       deactivateKeepAwake();
       if (updateInterval.current) {
         clearInterval(updateInterval.current);
-      }
-      if (elapsedTimeInterval.current) {
-        clearInterval(elapsedTimeInterval.current);
       }
     };
   }, []);
@@ -274,6 +267,12 @@ Please screenshot this error and share it.
           if (info) {
             setSessionInfo(info);
             
+            // Sync total elapsed time with actual session time
+            if (info.sessionStartTime) {
+              const actualElapsed = Math.floor((Date.now() - new Date(info.sessionStartTime).getTime()) / 1000);
+              setTotalElapsedTime(actualElapsed);
+            }
+            
             // Check if session completed
             if (info.currentPhase === 'COMPLETED' || !info.isActive) {
               handleSessionComplete();
@@ -284,19 +283,10 @@ Please screenshot this error and share it.
         }
       }, 1000);
       
-      // Separate timer for total elapsed time
-      elapsedTimeInterval.current = setInterval(() => {
-        setTotalElapsedTime(prev => prev + 1);
-      }, 1000);
-      
       return () => {
         if (updateInterval.current) {
           clearInterval(updateInterval.current);
           updateInterval.current = null;
-        }
-        if (elapsedTimeInterval.current) {
-          clearInterval(elapsedTimeInterval.current);
-          elapsedTimeInterval.current = null;
         }
       };
     }
@@ -306,10 +296,6 @@ Please screenshot this error and share it.
       if (updateInterval.current) {
         clearInterval(updateInterval.current);
         updateInterval.current = null;
-      }
-      if (elapsedTimeInterval.current) {
-        clearInterval(elapsedTimeInterval.current);
-        elapsedTimeInterval.current = null;
       }
     };
   }, [sessionStarted]);
@@ -404,7 +390,7 @@ Please screenshot this error and share it.
     }, 10000);
   };
   
-  // Handle device disconnection
+  // Handle device disconnection and app state changes
   useEffect(() => {
     if (sessionStarted && !isPulseOxConnected) {
       // Only show warning once
@@ -420,18 +406,36 @@ Please screenshot this error and share it.
     }
   }, [isPulseOxConnected, sessionStarted]);
   
+  // Handle app state changes to sync timers
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState) => {
+      if (nextAppState === 'active' && sessionStarted) {
+        // App came to foreground, sync the timer
+        const info = EnhancedSessionManager.getSessionInfo();
+        if (info && info.sessionStartTime) {
+          const actualElapsed = Math.floor((Date.now() - new Date(info.sessionStartTime).getTime()) / 1000);
+          setTotalElapsedTime(actualElapsed);
+          console.log('⏱️ Synced timer after app resume:', actualElapsed, 'seconds');
+        }
+      }
+    };
+    
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, [sessionStarted]);
+  
   // Glow animation for status
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnim, {
           toValue: 1,
-          duration: 1500,
+          duration: 1200,
           useNativeDriver: true,
         }),
         Animated.timing(glowAnim, {
-          toValue: 0.3,
-          duration: 1500,
+          toValue: 0.5,
+          duration: 1200,
           useNativeDriver: true,
         }),
       ])
@@ -473,10 +477,6 @@ Please screenshot this error and share it.
       clearInterval(updateInterval.current);
       updateInterval.current = null;
     }
-    if (elapsedTimeInterval.current) {
-      clearInterval(elapsedTimeInterval.current);
-      elapsedTimeInterval.current = null;
-    }
     
     try {
       // End session in manager
@@ -503,16 +503,8 @@ Please screenshot this error and share it.
   const handlePauseResume = () => {
     if (sessionInfo?.isPaused) {
       EnhancedSessionManager.resumeSession();
-      // Resume elapsed time counter
-      elapsedTimeInterval.current = setInterval(() => {
-        setTotalElapsedTime(prev => prev + 1);
-      }, 1000);
     } else {
       EnhancedSessionManager.pauseSession();
-      // Pause elapsed time counter
-      if (elapsedTimeInterval.current) {
-        clearInterval(elapsedTimeInterval.current);
-      }
     }
   };
   
@@ -607,7 +599,7 @@ Please screenshot this error and share it.
         {/* Right - Heart Rate */}
         <View style={styles.diamondRight}>
           <Text style={styles.heartRateValue}>{metrics.heartRate}</Text>
-          <Text style={styles.heartRateUnit}>BPM</Text>
+          <Text style={styles.heartRateUnit}>bpm</Text>
           <EKGWave heartRate={metrics.heartRate} />
         </View>
         
@@ -618,12 +610,9 @@ Please screenshot this error and share it.
             { opacity: glowAnim }
           ]}
         >
-          <View style={styles.statusRow}>
-            <Text style={[styles.statusText, { color: getStatusColor() }]}>
-              {getStatus()}
-            </Text>
-            <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
-          </View>
+          <Text style={[styles.statusText, { color: getStatusColor() }]}>
+            {getStatus()}
+          </Text>
         </Animated.View>
       </View>
       
@@ -637,9 +626,19 @@ Please screenshot this error and share it.
       
       {/* Bottom Controls */}
       <View style={styles.controls}>
-        <Text style={styles.controlsText}>
-          Cycle {sessionInfo?.currentCycle || 1} of {protocolConfig.totalCycles}
-        </Text>
+        {/* Left side - Feedback button (replacing any cycle text) */}
+        <TouchableOpacity 
+          style={styles.feedbackButton}
+          onPress={() => {
+            console.log('📝 Manual feedback triggered');
+            setShowIntraSessionFeedback(true);
+          }}
+        >
+          <Icon name="chatbubble-ellipses" size={20} color="#FFF" />
+          <Text style={styles.feedbackButtonText}>Feedback</Text>
+        </TouchableOpacity>
+
+        {/* Right side - Control buttons */}
         <View style={styles.buttons}>
           <TouchableOpacity 
             style={styles.button}
@@ -653,10 +652,16 @@ Please screenshot this error and share it.
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={[styles.button, styles.stopButton]}
-            onPress={handleStop}
+            style={[styles.button, styles.skipButton]}
+            onPress={() => {
+              console.log('⏭️ Skip phase requested');
+              // Skip to next phase
+              if (EnhancedSessionManager.skipToNextPhase) {
+                EnhancedSessionManager.skipToNextPhase();
+              }
+            }}
           >
-            <Icon name="stop" size={24} color="#FFF" />
+            <Icon name="play-skip-forward" size={24} color="#FFF" />
           </TouchableOpacity>
         </View>
       </View>
@@ -777,7 +782,7 @@ const styles = StyleSheet.create({
   
   diamondTop: {
     position: 'absolute',
-    top: '8%',  // Moved higher for better diamond shape
+    top: '5%',  // Moved higher for better visibility
     alignItems: 'center',
     zIndex: 10,
   },
@@ -800,6 +805,7 @@ const styles = StyleSheet.create({
     left: 20,
     top: '42%',  // Centered vertically
     alignItems: 'center',
+    justifyContent: 'center',
   },
   altitudeValue: {
     fontSize: 42,
@@ -824,6 +830,7 @@ const styles = StyleSheet.create({
     right: 20,
     top: '42%',  // Matched with left for symmetry
     alignItems: 'center',
+    justifyContent: 'center',
   },
   heartRateValue: {
     fontSize: 42,
@@ -832,7 +839,7 @@ const styles = StyleSheet.create({
     lineHeight: 42,
   },
   heartRateUnit: {
-    fontSize: 16,
+    fontSize: 14,
     color: 'rgba(255,255,255,0.6)',
     marginTop: 2,
     fontWeight: '400',
@@ -840,19 +847,20 @@ const styles = StyleSheet.create({
   
   // EKG styles
   ekgContainer: {
-    width: 100,
+    width: 120,
     height: 50,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
     position: 'relative',
+    overflow: 'hidden',
   },
   ekgBaseline: {
     position: 'absolute',
-    width: 100,
+    width: 120,
     height: 0.5,
     backgroundColor: '#FF6B9D',
-    opacity: 0.2,
+    opacity: 0.15,
     top: 25,
   },
   ekgTrailPoint: {
@@ -878,30 +886,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10,
   },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 20,
-  },
   statusText: {
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 2.5,
     textTransform: 'uppercase',
-  },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-    elevation: 4,
   },
   
   // Connection warning
@@ -925,15 +914,11 @@ const styles = StyleSheet.create({
   // Controls
   controls: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-between', // Changed to space-between for left/right positioning
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingBottom: 40,
     paddingTop: 20,
-  },
-  controlsText: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.7)',
   },
   buttons: {
     flexDirection: 'row',
@@ -947,8 +932,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  stopButton: {
-    backgroundColor: 'rgba(239,68,68,0.2)',
+  skipButton: {
+    backgroundColor: 'rgba(96,165,250,0.2)', // Blue tint for skip/forward action
+  },
+  feedbackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  feedbackButtonText: {
+    fontSize: 14,
+    color: '#FFF',
+    fontWeight: '500',
   },
   
   // Adaptive instruction overlay

@@ -7,7 +7,6 @@ import {
   Dimensions,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  ScrollView,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,8 +17,8 @@ import { colors, typography, spacing } from '../../design-system';
 import { Audio } from 'expo-av';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
-const PANEL_HEIGHT = screenHeight * 0.55;
-const AUTO_DISMISS_TIME = 20000; // 20 seconds
+const PANEL_HEIGHT = screenHeight * 0.65; // Increased to fit all content without scrolling
+const AUTO_DISMISS_TIME = 30000; // 30 seconds (increased by 10)
 
 const IntraSessionFeedback = ({ 
   visible, 
@@ -36,7 +35,7 @@ const IntraSessionFeedback = ({
   const [sensations, setSensations] = useState([]);
   
   // Animation values
-  const slideAnim = useRef(new Animated.Value(PANEL_HEIGHT)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(1)).current;
   
@@ -84,8 +83,8 @@ const IntraSessionFeedback = ({
 
   const animateIn = () => {
     Animated.parallel([
-      Animated.spring(slideAnim, {
-        toValue: 0,
+      Animated.spring(scaleAnim, {
+        toValue: 1,
         tension: 65,
         friction: 10,
         useNativeDriver: true,
@@ -100,8 +99,8 @@ const IntraSessionFeedback = ({
 
   const animateOut = () => {
     Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: PANEL_HEIGHT,
+      Animated.timing(scaleAnim, {
+        toValue: 0.8,
         duration: 250,
         useNativeDriver: true,
       }),
@@ -194,7 +193,7 @@ const IntraSessionFeedback = ({
   if (!visible) return null;
 
   return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+    <View style={[StyleSheet.absoluteFillObject, { zIndex: 1000 }]} pointerEvents="box-none">
       {/* Backdrop */}
       <TouchableWithoutFeedback onPress={handleDismiss}>
         <Animated.View 
@@ -210,7 +209,7 @@ const IntraSessionFeedback = ({
         style={[
           styles.panel,
           {
-            transform: [{ translateY: slideAnim }],
+            transform: [{ scale: scaleAnim }],
             opacity: fadeAnim,
           }
         ]}
@@ -249,13 +248,25 @@ const IntraSessionFeedback = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView 
-              style={styles.content}
-              showsVerticalScrollIndicator={false}
-              bounces={false}
-            >
-              {/* Question 1: Stress Perception */}
-              <View style={styles.question}>
+            <View style={styles.content}>
+              {/* Question 1: Sensations (Symptoms First) */}
+              <View style={styles.questionCompact}>
+                <Text style={styles.questionText}>Any specific sensations?</Text>
+                <View style={styles.sensationsGrid}>
+                  {sensationOptions.map(sensation => (
+                    <SensationTag
+                      key={sensation.id}
+                      label={sensation.label}
+                      icon={sensation.icon}
+                      selected={sensations.includes(sensation.id)}
+                      onPress={() => toggleSensation(sensation.id)}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              {/* Question 2: Stress Perception */}
+              <View style={styles.questionCompact}>
                 <View style={styles.questionHeader}>
                   <Text style={styles.questionText}>How does the stress feel?</Text>
                   <TouchableOpacity 
@@ -272,7 +283,7 @@ const IntraSessionFeedback = ({
                   </Text>
                 )}
                 <View style={styles.optionsRow}>
-                  {['Very Negative', 'Negative', 'Neutral', 'Positive', 'Very Positive'].map((label, index) => (
+                  {['Very\nNeg', 'Neg', 'Neut', 'Pos', 'Very\nPos'].map((label, index) => (
                     <FeedbackButton
                       key={index}
                       label={label}
@@ -285,11 +296,11 @@ const IntraSessionFeedback = ({
                 </View>
               </View>
 
-              {/* Question 2: Energy */}
-              <View style={styles.question}>
+              {/* Question 3: Energy */}
+              <View style={styles.questionCompact}>
                 <Text style={styles.questionText}>How is your energy?</Text>
                 <View style={styles.optionsRow}>
-                  {['Very Fatigued', 'Fatigued', 'Neutral', 'Energized', 'Very Energized'].map((label, index) => (
+                  {['Very\nTired', 'Tired', 'Neut', 'Alert', 'Very\nAlert'].map((label, index) => (
                     <FeedbackButton
                       key={index}
                       label={label}
@@ -302,11 +313,11 @@ const IntraSessionFeedback = ({
                 </View>
               </View>
 
-              {/* Question 3: Mental Clarity */}
-              <View style={styles.question}>
+              {/* Question 4: Mental Clarity */}
+              <View style={styles.questionCompact}>
                 <Text style={styles.questionText}>How is your mental clarity?</Text>
                 <View style={styles.optionsRow}>
-                  {['Very Foggy', 'Foggy', 'Neutral', 'Clear', 'Very Clear'].map((label, index) => (
+                  {['Very\nFoggy', 'Foggy', 'Neut', 'Clear', 'Very\nClear'].map((label, index) => (
                     <FeedbackButton
                       key={index}
                       label={label}
@@ -318,23 +329,7 @@ const IntraSessionFeedback = ({
                   ))}
                 </View>
               </View>
-
-              {/* Question 4: Sensations */}
-              <View style={styles.question}>
-                <Text style={styles.questionText}>Any specific sensations?</Text>
-                <View style={styles.sensationsGrid}>
-                  {sensationOptions.map(sensation => (
-                    <SensationTag
-                      key={sensation.id}
-                      label={sensation.label}
-                      icon={sensation.icon}
-                      selected={sensations.includes(sensation.id)}
-                      onPress={() => toggleSensation(sensation.id)}
-                    />
-                  ))}
-                </View>
-              </View>
-            </ScrollView>
+            </View>
 
             {/* Footer */}
             <View style={styles.footer}>
@@ -379,20 +374,28 @@ const styles = StyleSheet.create({
   },
   panel: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: PANEL_HEIGHT,
-    borderTopLeftRadius: spacing.radius.xl,
-    borderTopRightRadius: spacing.radius.xl,
+    top: '50%',
+    left: 20,
+    right: 20,
+    marginTop: -(PANEL_HEIGHT / 2), // Center vertically
+    maxHeight: PANEL_HEIGHT,
+    borderRadius: spacing.radius.xl,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 15,
   },
   blurContainer: {
     flex: 1,
   },
   gradient: {
     flex: 1,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
   },
   progressContainer: {
     height: 3,
@@ -411,7 +414,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
   },
   title: {
     ...typography.h3,
@@ -428,9 +431,13 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
   },
   question: {
     marginBottom: spacing.lg,
+  },
+  questionCompact: {
+    marginBottom: spacing.md,
   },
   questionHeader: {
     flexDirection: 'row',
@@ -462,12 +469,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginTop: spacing.xs,
+    gap: spacing.xs,
   },
   footer: {
     flexDirection: 'row',
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border.light,
   },
