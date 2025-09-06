@@ -1,5 +1,0 @@
-[[redirects]]
-  from = "/oauth-callback"
-  to = "vitalitiair://oauth-callback"
-  status = 200
-  query = {code = ":code", state = ":state"}

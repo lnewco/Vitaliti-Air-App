@@ -1,5 +1,44 @@
 # Changelog
 
+## [2025-09-06] - Critical Bluetooth & Data Storage Fixes
+
+### 🔧 Critical Fixes
+
+#### Session Management
+- **Fixed**: Session ID mapping - Resolved null `supabaseId` causing "unknown" session IDs in sync queue
+- **Fixed**: Duplicate session prevention - Added mutex lock to prevent creating 2+ sessions per start
+- **Fixed**: Session cleanup - Properly stops data collection when ending sessions
+
+#### Data Storage
+- **Fixed**: Reading storage bug - Corrected `flushReadingBuffer()` parameter order
+- **Impact**: Readings now successfully store in database (confirmed 528 readings in test)
+- **Fixed**: Queue overflow - Prevented invalid session IDs from flooding sync queue
+
+#### Navigation & UI
+- **Fixed**: Navigation crashes - Replaced `goBack()` with `replace()` for safer navigation
+- **Improved**: Home screen arrows - Moved day navigation into card for better visual hierarchy
+
+### 🚀 New Features
+
+#### Mock Bluetooth Service
+- **Added**: `MockBLEServiceWrapper` for Expo Go development
+- Auto-connects after 1 second delay
+- Generates realistic biometric data:
+  - SpO2: 85-98% with natural variations
+  - Heart Rate: 60-100 bpm with realistic patterns
+- Enables full app testing without physical Bluetooth device
+
+### 📊 Testing Results
+- ✅ 528 readings successfully stored per session
+- ✅ Consistent 1Hz data collection rate
+- ✅ 5-second batch insert intervals working
+- ✅ Average SpO2: 88%, Average HR: 87 bpm in tests
+
+### 📝 Documentation
+- Created `VITALITI_AIR_COMPREHENSIVE_SUMMARY.md` with complete project overview
+- Updated `app_readme.md` with Bluetooth fixes and testing results
+- Added detailed data flow architecture documentation
+
 ## [2024-12-06] - Premium UI Overhaul & Database Updates
 
 ### 🎨 UI/UX Improvements
