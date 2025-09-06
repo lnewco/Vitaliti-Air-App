@@ -7,6 +7,9 @@ import {
   Dimensions,
   TouchableOpacity,
   TouchableWithoutFeedback,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,7 +20,7 @@ import { colors, typography, spacing } from '../../design-system';
 import { Audio } from 'expo-av';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
-const PANEL_HEIGHT = screenHeight * 0.65; // Increased to fit all content without scrolling
+const PANEL_HEIGHT = screenHeight * 0.80; // Increased to show all content
 const AUTO_DISMISS_TIME = 30000; // 30 seconds (increased by 10)
 
 const IntraSessionFeedback = ({ 
@@ -41,7 +44,6 @@ const IntraSessionFeedback = ({
   
   // Timer
   const dismissTimer = useRef(null);
-  const [showTooltip, setShowTooltip] = useState(false);
 
   // Play gentle chime on appearance
   useEffect(() => {
@@ -146,7 +148,6 @@ const IntraSessionFeedback = ({
     setEnergy(null);
     setClarity(null);
     setSensations([]);
-    setShowTooltip(false);
     progressAnim.setValue(1);
   };
 
@@ -183,11 +184,16 @@ const IntraSessionFeedback = ({
   const isComplete = stressPerception && energy && clarity;
 
   const sensationOptions = [
+    // Column 1
+    { id: 'zen', label: 'Zen', icon: 'leaf' },
+    { id: 'euphoria', label: 'Euphoria', icon: 'happy' },
+    { id: 'neck_tension', label: 'Neck tension', icon: 'warning' },
     { id: 'tingling', label: 'Tingling', icon: 'flash' },
-    { id: 'heaviness', label: 'Muscle Heaviness', icon: 'fitness' },
-    { id: 'euphoria', label: 'Calm / Euphoria', icon: 'happy' },
-    { id: 'tension', label: 'Neck/Shoulder Tension', icon: 'warning' },
-    { id: 'lightheaded', label: 'Lightheadedness', icon: 'pulse' },
+    // Column 2
+    { id: 'lightheaded', label: 'Light-headed', icon: 'pulse' },
+    { id: 'sleepy', label: 'Sleepy', icon: 'moon' },
+    { id: 'muscle_fatigue', label: 'Muscle fatigue', icon: 'fitness' },
+    { id: 'trembling', label: 'Trembling', icon: 'hand-left' },
   ];
 
   if (!visible) return null;
@@ -248,7 +254,14 @@ const IntraSessionFeedback = ({
               </TouchableOpacity>
             </View>
 
-            <View style={styles.content}>
+            <ScrollView 
+              style={styles.content} 
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              bounces={true}
+              alwaysBounceVertical={true}
+              keyboardShouldPersistTaps="handled"
+            >
               {/* Question 1: Sensations (Symptoms First) */}
               <View style={styles.questionCompact}>
                 <Text style={styles.questionText}>Any specific sensations?</Text>
@@ -267,79 +280,148 @@ const IntraSessionFeedback = ({
 
               {/* Question 2: Stress Perception */}
               <View style={styles.questionCompact}>
-                <View style={styles.questionHeader}>
-                  <Text style={styles.questionText}>How does the stress feel?</Text>
-                  <TouchableOpacity 
-                    onPress={() => setShowTooltip(!showTooltip)}
-                    style={styles.helpButton}
-                  >
-                    <SafeIcon name="help-circle" size="xs" color={colors.text.tertiary} />
-                  </TouchableOpacity>
-                </View>
-                {showTooltip && (
-                  <Text style={styles.tooltip}>
-                    Positive stress feels challenging but manageable. 
-                    Negative stress feels overwhelming.
-                  </Text>
-                )}
-                <View style={styles.optionsRow}>
-                  {['Very\nNeg', 'Neg', 'Neut', 'Pos', 'Very\nPos'].map((label, index) => (
-                    <FeedbackButton
-                      key={index}
-                      label={label}
-                      selected={stressPerception === index + 1}
-                      onPress={() => setStressPerception(index + 1)}
-                      style={{ flex: 1 }}
-                      compact
-                    />
-                  ))}
+                <Text style={styles.questionText}>How does the stress feel?</Text>
+                <View style={styles.scaleContainer}>
+                  <View style={styles.scaleRow}>
+                    {[1, 2, 3, 4, 5].map((num) => {
+                      const isSelected = stressPerception === num;
+                      let label = '';
+                      if (num === 1) label = 'Unbearable';
+                      else if (num === 3) label = 'No stress';
+                      else if (num === 5) label = 'Challenging';
+                      
+                      return (
+                        <View key={num} style={styles.scaleColumn}>
+                          <TouchableOpacity
+                            style={[
+                              styles.scaleButton,
+                              isSelected && styles.scaleButtonSelected
+                            ]}
+                            onPress={() => setStressPerception(num)}
+                            activeOpacity={0.7}
+                          >
+                            {isSelected && (
+                              <LinearGradient
+                                colors={[colors.brand.accent + '20', colors.brand.accent + '40']}
+                                style={StyleSheet.absoluteFillObject}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                              />
+                            )}
+                            <Text style={[
+                              styles.scaleNumber,
+                              isSelected && styles.scaleNumberSelected
+                            ]}>
+                              {num}
+                            </Text>
+                          </TouchableOpacity>
+                          <Text style={styles.scaleLabel}>
+                            {label}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
                 </View>
               </View>
 
               {/* Question 3: Energy */}
               <View style={styles.questionCompact}>
                 <Text style={styles.questionText}>How is your energy?</Text>
-                <View style={styles.optionsRow}>
-                  {['Very\nTired', 'Tired', 'Neut', 'Alert', 'Very\nAlert'].map((label, index) => (
-                    <FeedbackButton
-                      key={index}
-                      label={label}
-                      selected={energy === index + 1}
-                      onPress={() => setEnergy(index + 1)}
-                      style={{ flex: 1 }}
-                      compact
-                    />
-                  ))}
+                <View style={styles.scaleContainer}>
+                  <View style={styles.scaleRow}>
+                    {[1, 2, 3, 4, 5].map((num) => {
+                      const isSelected = energy === num;
+                      let label = '';
+                      if (num === 1) label = 'Way lower';
+                      else if (num === 3) label = 'No change';
+                      else if (num === 5) label = 'Way higher';
+                      
+                      return (
+                        <View key={num} style={styles.scaleColumn}>
+                          <TouchableOpacity
+                            style={[
+                              styles.scaleButton,
+                              isSelected && styles.scaleButtonSelected
+                            ]}
+                            onPress={() => setEnergy(num)}
+                            activeOpacity={0.7}
+                          >
+                            {isSelected && (
+                              <LinearGradient
+                                colors={[colors.brand.accent + '20', colors.brand.accent + '40']}
+                                style={StyleSheet.absoluteFillObject}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                              />
+                            )}
+                            <Text style={[
+                              styles.scaleNumber,
+                              isSelected && styles.scaleNumberSelected
+                            ]}>
+                              {num}
+                            </Text>
+                          </TouchableOpacity>
+                          <Text style={styles.scaleLabel}>
+                            {label}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
                 </View>
               </View>
 
               {/* Question 4: Mental Clarity */}
               <View style={styles.questionCompact}>
                 <Text style={styles.questionText}>How is your mental clarity?</Text>
-                <View style={styles.optionsRow}>
-                  {['Very\nFoggy', 'Foggy', 'Neut', 'Clear', 'Very\nClear'].map((label, index) => (
-                    <FeedbackButton
-                      key={index}
-                      label={label}
-                      selected={clarity === index + 1}
-                      onPress={() => setClarity(index + 1)}
-                      style={{ flex: 1 }}
-                      compact
-                    />
-                  ))}
+                <View style={styles.scaleContainer}>
+                  <View style={styles.scaleRow}>
+                    {[1, 2, 3, 4, 5].map((num) => {
+                      const isSelected = clarity === num;
+                      let label = '';
+                      if (num === 1) label = 'Way foggier';
+                      else if (num === 3) label = 'No change';
+                      else if (num === 5) label = 'Way clearer';
+                      
+                      return (
+                        <View key={num} style={styles.scaleColumn}>
+                          <TouchableOpacity
+                            style={[
+                              styles.scaleButton,
+                              isSelected && styles.scaleButtonSelected
+                            ]}
+                            onPress={() => setClarity(num)}
+                            activeOpacity={0.7}
+                          >
+                            {isSelected && (
+                              <LinearGradient
+                                colors={[colors.brand.accent + '20', colors.brand.accent + '40']}
+                                style={StyleSheet.absoluteFillObject}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                              />
+                            )}
+                            <Text style={[
+                              styles.scaleNumber,
+                              isSelected && styles.scaleNumberSelected
+                            ]}>
+                              {num}
+                            </Text>
+                          </TouchableOpacity>
+                          <Text style={styles.scaleLabel}>
+                            {label}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
                 </View>
               </View>
-            </View>
+            </ScrollView>
 
             {/* Footer */}
             <View style={styles.footer}>
-              <TouchableOpacity
-                style={styles.skipButton}
-                onPress={handleDismiss}
-              >
-                <Text style={styles.skipText}>Skip</Text>
-              </TouchableOpacity>
-              
               <TouchableOpacity
                 style={[
                   styles.submitButton,
@@ -396,6 +478,7 @@ const styles = StyleSheet.create({
   gradient: {
     flex: 1,
     paddingTop: spacing.sm,
+    maxHeight: '100%',
   },
   progressContainer: {
     height: 3,
@@ -430,8 +513,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    maxHeight: PANEL_HEIGHT - 200, // Reserve space for header and footer
+  },
+  scrollContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
+    paddingBottom: spacing.md, // Reduced padding at bottom
   },
   question: {
     marginBottom: spacing.lg,
@@ -465,6 +552,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs,
   },
+  scaleContainer: {
+    gap: spacing.xs,
+    marginTop: spacing.md, // Add proper spacing from question text
+  },
+  scaleRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 3, // Slightly reduced gap to bring closer
+  },
+  scaleColumn: {
+    alignItems: 'center',
+    width: 63, // Reduced by ~10% to bring numbers closer
+    flex: 0, // No flex - exact width only
+  },
+  scaleButton: {
+    width: 44, // Back to standard size
+    height: 44,
+    borderRadius: spacing.radius.md,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scaleButtonSelected: {
+    borderColor: colors.brand.accent,
+    backgroundColor: 'transparent',
+  },
+  scaleNumber: {
+    ...typography.bodyLarge,
+    color: colors.text.tertiary,
+    fontWeight: '600',
+  },
+  scaleNumberSelected: {
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  scaleLabel: {
+    ...typography.caption,
+    color: colors.text.tertiary,
+    fontSize: 10, // Same size as pre-session survey
+    textAlign: 'center',
+    marginTop: 4,
+    minHeight: 14,
+    // No width constraint - let text size naturally
+  },
   sensationsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -476,8 +610,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
+    paddingBottom: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border.light,
+    backgroundColor: colors.background.elevated + 'f5',
   },
   skipButton: {
     flex: 1,
@@ -494,12 +630,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   submitButton: {
-    flex: 2,
+    flex: 1,
     paddingVertical: spacing.md,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: spacing.radius.md,
     overflow: 'hidden',
+    width: '100%',
   },
   submitButtonDisabled: {
     opacity: 0.5,

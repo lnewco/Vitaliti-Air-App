@@ -101,6 +101,7 @@ const MainStack = ({ onNavigateToSession }) => {
         options={{
           presentation: 'card',
           title: 'Training Session Setup',
+          headerShown: false,
         }}
       />
 
@@ -119,6 +120,7 @@ const MainStack = ({ onNavigateToSession }) => {
         options={{
           presentation: 'card',
           title: 'Post-Session Survey',
+          headerShown: false,
         }}
       />
       

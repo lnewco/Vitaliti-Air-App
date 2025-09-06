@@ -699,7 +699,216 @@ When adding new components or patterns:
 5. Test on both iOS and Android
 6. Consider accessibility (font scaling, VoiceOver/TalkBack)
 
+## Glass Morphism Implementation
+
+### Premium UI Layer
+
+The app implements a sophisticated glass morphism design system for a premium, Apple-quality experience:
+
+#### Blur Effects
+
+```javascript
+import { BlurView } from 'expo-blur';
+
+// Header blur (high intensity)
+<BlurView 
+  intensity={85} 
+  style={styles.header}
+  tint="dark"
+>
+  {/* Header content */}
+</BlurView>
+
+// Card blur (subtle)
+<BlurView 
+  intensity={20} 
+  style={styles.card}
+  tint="dark"
+>
+  {/* Card content */}
+</BlurView>
+```
+
+#### Blur Intensity Guidelines
+
+- **Navigation Headers**: 85 intensity for prominent glass effect
+- **Cards & Panels**: 20 intensity for subtle background blur
+- **Overlays**: 60 intensity for modal backgrounds
+- **Tooltips**: 40 intensity for floating elements
+
+#### Sticky Header Pattern
+
+```javascript
+// Glass morphism sticky header
+const GlassHeader = ({ title, subtitle }) => {
+  return (
+    <View style={styles.fixedHeader}>
+      <BlurView intensity={85} style={styles.blurContainer} tint="dark">
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>{title}</Text>
+          {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        </View>
+      </BlurView>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  fixedHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  blurContainer: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  }
+});
+```
+
+### Premium Visual Effects
+
+#### Deep Shadows
+
+```javascript
+// Premium shadow configuration
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 10 },
+shadowOpacity: 0.3,
+shadowRadius: 30,
+elevation: 20,
+```
+
+#### Gradient Backgrounds
+
+```javascript
+// Dark gradient background
+colors={['#000000', '#0A0B0F', '#14161B']}
+locations={[0, 0.5, 1]}
+style={StyleSheet.absoluteFillObject}
+```
+
+#### Spring Animations
+
+```javascript
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring 
+} from 'react-native-reanimated';
+
+// Spring configuration
+const springConfig = {
+  damping: 15,
+  stiffness: 100,
+  mass: 1,
+};
+
+// Usage
+const animatedStyle = useAnimatedStyle(() => {
+  return {
+    transform: [{ scale: withSpring(scale.value, springConfig) }]
+  };
+});
+```
+
+### Spacing Specifications
+
+#### Consistent Layout Spacing
+
+- **Header to Content**: 12px gap
+- **Between Cards**: 16px spacing  
+- **Card Internal Padding**: 20px
+- **Button Margins**: 20px from edges
+- **Section Separation**: 24px
+
+#### Screen Content Positioning
+
+```javascript
+// For screens with sticky headers
+content: {
+  flex: 1,
+  paddingTop: 138, // Account for glass header height
+}
+
+// For screens with progress bars
+content: {
+  flex: 1,
+  paddingTop: 125, // Slightly less for integrated progress
+}
+```
+
+### Typography Hierarchy
+
+#### Apple-Style Type Scale
+
+```javascript
+// Display
+fontSize: 34,  // Large titles
+fontWeight: '800',
+letterSpacing: -0.5,
+
+// Navigation
+fontSize: 17,  // Standard navigation
+fontWeight: '600',
+letterSpacing: -0.4,
+
+// Body
+fontSize: 15,  // Body text
+fontWeight: '400',
+letterSpacing: -0.2,
+
+// Caption
+fontSize: 13,  // Small text
+fontWeight: '400',
+letterSpacing: -0.1,
+```
+
+### Icon System Migration
+
+#### Ionicons Standardization
+
+All icons have been migrated from SafeIcon to Ionicons for consistency:
+
+```javascript
+import { Ionicons } from '@expo/vector-icons';
+
+// Common icon mappings
+'chevron-forward' // Navigation arrows
+'checkmark-circle' // Success states
+'alert-circle' // Warnings
+'close-circle' // Errors
+'star' / 'star-outline' // Ratings
+'fitness' // Activity/health
+'pulse' // Heart rate
+'water' // SpO2/oxygen
+```
+
+### Color Refinements
+
+#### Glass Morphism Palette
+
+```javascript
+// Border colors for glass effects
+borderColor: 'rgba(255,255,255,0.08)', // Subtle glass borders
+borderColor: 'rgba(255,255,255,0.15)', // Prominent dividers
+
+// Background overlays
+backgroundColor: 'rgba(0,0,0,0.4)', // Dark overlay
+backgroundColor: 'rgba(255,255,255,0.05)', // Light tint
+
+// Interactive states
+activeOpacity: 0.7, // Touch feedback
+pressedScale: 0.98, // Button press effect
+```
+
 ## Version History
 
 - **v1.0.0** - Initial design system with base components and theme support
 - **v1.1.0** - Added light/dark theme toggle and semantic color system
+- **v2.0.0** - Premium UI overhaul with glass morphism, Apple-style typography, and spring animations

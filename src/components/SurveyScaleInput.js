@@ -39,28 +39,24 @@ const SurveyScaleInput = ({
     },
     scaleContainer: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
+      justifyContent: 'center',
+      gap: spacing.sm,
       marginBottom: spacing.xs,
       paddingHorizontal: spacing.xs,
     },
     scaleButton: {
-      width: 42,
-      height: 42,
-      borderRadius: 21,
-      backgroundColor: colors.background.primary,
-      borderWidth: 2,
-      borderColor: colors.border.medium,
+      width: 48,
+      height: 48,
+      borderRadius: spacing.radius.md,
+      backgroundColor: colors.background.tertiary,
+      borderWidth: 1,
+      borderColor: colors.border.default,
       justifyContent: 'center',
       alignItems: 'center',
-      elevation: 2,
-      shadowColor: colors.text.primary,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.2,
-      shadowRadius: 2,
     },
     selectedButton: {
-      backgroundColor: colors.brand.accent,
-      borderColor: colors.brand.secondary,
+      backgroundColor: colors.brand.accent + '20',
+      borderColor: colors.brand.accent,
     },
     disabledButton: {
       backgroundColor: colors.background.secondary,
@@ -132,6 +128,9 @@ const SurveyScaleInput = ({
       <View style={styles.labelsContainer}>
         <Caption color="secondary" style={[styles.scaleLabel, styles.leftLabel]}>
           {safeScaleLabels[1]}
+        </Caption>
+        <Caption color="secondary" style={styles.scaleLabel}>
+          Neutral
         </Caption>
         <Caption color="secondary" style={[styles.scaleLabel, styles.rightLabel]}>
           {safeScaleLabels[5]}

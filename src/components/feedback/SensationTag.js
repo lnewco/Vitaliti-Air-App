@@ -5,7 +5,7 @@ import {
   View,
   StyleSheet,
 } from 'react-native';
-import SafeIcon from '../base/SafeIcon';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing } from '../../design-system';
 
 const SensationTag = ({ 
@@ -23,11 +23,13 @@ const SensationTag = ({
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <SafeIcon 
-        name={icon} 
-        size="xs" 
-        color={selected ? colors.text.primary : colors.text.tertiary} 
-      />
+      {icon && (
+        <Ionicons 
+          name={icon} 
+          size={16} 
+          color={selected ? colors.text.primary : colors.text.tertiary} 
+        />
+      )}
       <Text style={[
         styles.label,
         selected && styles.labelSelected

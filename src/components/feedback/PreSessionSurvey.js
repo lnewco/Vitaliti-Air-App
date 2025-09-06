@@ -49,40 +49,51 @@ const PreSessionSurvey = ({ visible, onComplete, onCancel }) => {
 
   const isComplete = energy && clarity && stress;
 
-  const QuestionRow = ({ question, value, setValue, options }) => {
+  const QuestionRow = ({ question, value, setValue, leftLabel, rightLabel }) => {
     return (
       <View style={styles.questionContainer}>
         <Text style={styles.questionText}>{question}</Text>
-        <View style={styles.optionsRow}>
-          {options.map((option, index) => {
-            const isSelected = value === index + 1;
-            return (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.optionButton,
-                  isSelected && styles.optionButtonSelected
-                ]}
-                onPress={() => setValue(index + 1)}
-                activeOpacity={0.7}
-              >
-                {isSelected && (
-                  <LinearGradient
-                    colors={[colors.brand.accent + '20', colors.brand.accent + '40']}
-                    style={StyleSheet.absoluteFillObject}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                  />
-                )}
-                <Text style={[
-                  styles.optionText,
-                  isSelected && styles.optionTextSelected
-                ]}>
-                  {option}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+        <View style={styles.scaleContainer}>
+          <View style={styles.optionsRow}>
+            {[1, 2, 3, 4, 5].map((num) => {
+              const isSelected = value === num;
+              // Determine label for this number
+              let label = '';
+              if (num === 1) label = leftLabel;
+              else if (num === 5) label = rightLabel;
+              
+              return (
+                <View key={num} style={styles.scaleColumn}>
+                  <TouchableOpacity
+                    style={[
+                      styles.optionButton,
+                      isSelected && styles.optionButtonSelected
+                    ]}
+                    onPress={() => setValue(num)}
+                    activeOpacity={0.7}
+                  >
+                    {isSelected && (
+                      <LinearGradient
+                        colors={[colors.brand.accent + '20', colors.brand.accent + '40']}
+                        style={StyleSheet.absoluteFillObject}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      />
+                    )}
+                    <Text style={[
+                      styles.optionNumber,
+                      isSelected && styles.optionNumberSelected
+                    ]}>
+                      {num}
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={styles.scaleLabel}>
+                    {label}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
       </View>
     );
@@ -134,21 +145,24 @@ const PreSessionSurvey = ({ visible, onComplete, onCancel }) => {
                 question="Current Energy Level"
                 value={energy}
                 setValue={setEnergy}
-                options={['Very Low', 'Low', 'Neutral', 'High', 'Very High']}
+                leftLabel="Low"
+                rightLabel="High"
               />
 
               <QuestionRow
                 question="Current Mental Clarity"
                 value={clarity}
                 setValue={setClarity}
-                options={['Very Foggy', 'Foggy', 'Neutral', 'Clear', 'Very Clear']}
+                leftLabel="Foggy"
+                rightLabel="Sharp"
               />
 
               <QuestionRow
                 question="Current Stress Level"
                 value={stress}
                 setValue={setStress}
-                options={['Very Stressed', 'Stressed', 'Neutral', 'Relaxed', 'Very Relaxed']}
+                leftLabel="Relaxed"
+                rightLabel="Stressed"
               />
             </View>
 
@@ -251,33 +265,48 @@ const styles = StyleSheet.create({
   },
   optionsRow: {
     flexDirection: 'row',
+    justifyContent: 'center',
     gap: spacing.xs,
   },
+  scaleContainer: {
+    gap: spacing.xs,
+  },
+  scaleColumn: {
+    alignItems: 'center',
+    minWidth: 50,
+  },
   optionButton: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
+    width: 44,
+    height: 44,
     borderRadius: spacing.radius.md,
     backgroundColor: colors.background.tertiary,
     borderWidth: 1,
     borderColor: colors.border.default,
     overflow: 'hidden',
-    minHeight: 44,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   optionButtonSelected: {
     borderColor: colors.brand.accent,
     backgroundColor: 'transparent',
   },
-  optionText: {
-    ...typography.caption,
+  optionNumber: {
+    ...typography.bodyLarge,
     color: colors.text.tertiary,
     textAlign: 'center',
-    fontWeight: '500',
-  },
-  optionTextSelected: {
-    color: colors.text.primary,
     fontWeight: '600',
+  },
+  optionNumberSelected: {
+    color: colors.text.primary,
+    fontWeight: '700',
+  },
+  scaleLabel: {
+    ...typography.caption,
+    color: colors.text.tertiary,
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 4,
+    minHeight: 14,  // Ensures consistent spacing even for empty labels
   },
   footer: {
     flexDirection: 'row',

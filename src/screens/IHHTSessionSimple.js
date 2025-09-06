@@ -485,15 +485,21 @@ export default function IHHTSessionSimple() {
       // Deactivate keep awake
       deactivateKeepAwake();
       
-      // Navigate to post-session survey
-      setTimeout(() => {
-        if (navigation && navigation.replace) {
-          navigation.replace('PostSessionSurvey', {
-            sessionId,
-            sessionType: 'IHHT_TRAINING'
-          });
-        }
-      }, 500);
+      // Navigate directly to post-session survey using reset to clear the stack
+      // This prevents the flash of the setup screen
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'MainTabs' },
+          { 
+            name: 'PostSessionSurvey', 
+            params: {
+              sessionId,
+              sessionType: 'IHHT_TRAINING'
+            }
+          }
+        ],
+      });
     } catch (error) {
       console.error('Error completing session:', error);
     }
@@ -634,7 +640,7 @@ export default function IHHTSessionSimple() {
             setShowIntraSessionFeedback(true);
           }}
         >
-          <Icon name="chatbubble-ellipses" size={20} color="#FFF" />
+          <Icon name="chat-bubble" size={20} color="#FFF" />
           <Text style={styles.feedbackButtonText}>Feedback</Text>
         </TouchableOpacity>
 
@@ -661,7 +667,7 @@ export default function IHHTSessionSimple() {
               }
             }}
           >
-            <Icon name="play-skip-forward" size={24} color="#FFF" />
+            <Icon name="skip-forward" size={24} color="#FFF" />
           </TouchableOpacity>
         </View>
       </View>

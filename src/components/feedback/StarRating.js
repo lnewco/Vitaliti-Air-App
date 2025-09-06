@@ -5,7 +5,7 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
-import SafeIcon from '../base/SafeIcon';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing } from '../../design-system';
 
 const StarRating = ({ rating, onRatingChange, size = 'lg' }) => {
@@ -14,47 +14,65 @@ const StarRating = ({ rating, onRatingChange, size = 'lg' }) => {
   );
 
   const handlePress = (value) => {
-    // Animate the pressed star
-    Animated.sequence([
-      Animated.timing(animations[value - 1], {
-        toValue: 1.3,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-      Animated.timing(animations[value - 1], {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    // Animate all stars up to the selected one
+    const animationPromises = [];
+    for (let i = 0; i < value; i++) {
+      animationPromises.push(
+        Animated.sequence([
+          Animated.timing(animations[i], {
+            toValue: 1.4,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+          Animated.spring(animations[i], {
+            toValue: 1,
+            speed: 14,
+            bounciness: 8,
+            useNativeDriver: true,
+          }),
+        ]).start
+      );
+    }
+    
+    // Run animations with slight delay between each star
+    animationPromises.forEach((anim, index) => {
+      setTimeout(() => anim(), index * 50);
+    });
 
     onRatingChange(value);
   };
 
-  const iconSize = size === 'lg' ? 32 : 24;
+  const starSize = size === 'lg' ? 40 : 28;
 
   return (
     <View style={styles.container}>
-      {[1, 2, 3, 4, 5].map((value) => (
-        <Animated.View
-          key={value}
-          style={{
-            transform: [{ scale: animations[value - 1] }],
-          }}
-        >
-          <TouchableOpacity
-            onPress={() => handlePress(value)}
-            activeOpacity={0.7}
-            style={styles.starButton}
+      {[1, 2, 3, 4, 5].map((value) => {
+        const isSelected = rating >= value;
+        return (
+          <Animated.View
+            key={value}
+            style={{
+              transform: [{ scale: animations[value - 1] }],
+            }}
           >
-            <SafeIcon
-              name={rating >= value ? 'star-filled' : 'star'}
-              size={size}
-              color={rating >= value ? colors.brand.accent : colors.text.quaternary}
-            />
-          </TouchableOpacity>
-        </Animated.View>
-      ))}
+            <TouchableOpacity
+              onPress={() => handlePress(value)}
+              activeOpacity={0.7}
+              style={[
+                styles.starButton,
+                size === 'lg' && styles.starButtonLarge
+              ]}
+            >
+              <Ionicons
+                name={isSelected ? 'star' : 'star-outline'}
+                size={starSize}
+                color={isSelected ? colors.brand.accent : 'rgba(255, 255, 255, 0.3)'}
+                style={isSelected ? styles.starIconSelected : styles.starIcon}
+              />
+            </TouchableOpacity>
+          </Animated.View>
+        );
+      })}
     </View>
   );
 };
@@ -64,10 +82,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   starButton: {
     padding: spacing.xs,
+  },
+  starButtonLarge: {
+    padding: spacing.sm,
+  },
+  starIcon: {
+    // No shadow for unselected stars
+  },
+  starIconSelected: {
+    shadowColor: colors.brand.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
 });
 
