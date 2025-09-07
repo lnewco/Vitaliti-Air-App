@@ -1,4 +1,38 @@
-# Wearables Integration Testing Checklist
+# Testing Checklist - Vitaliti Air App
+
+## Progressive Overload Testing (VIT-68 through VIT-73)
+
+### Setup Mock Bluetooth
+1. Ensure mock service is enabled (check BluetoothContext)
+2. Mock service automatically connects on app launch
+3. Data alternates between cycles:
+   - Cycle 1: SpO2 90-95% (triggers dial increase)
+   - Cycle 2: SpO2 80-85% (triggers dial decrease and mask lifts)
+
+### Mask Lift Instructions (VIT-70)
+- [ ] SpO2 drops below 83% triggers mask lift instruction
+- [ ] Instruction appears as center-screen overlay (not notification)
+- [ ] Shows title "Mask Lift Required"
+- [ ] Auto-dismisses after 10 seconds
+- [ ] 15-second cooldown prevents repeated instructions
+- [ ] Cooldown timer visible in logs
+
+### Dial Adjustments (VIT-71, VIT-72)
+- [ ] End of altitude phase triggers calculation
+- [ ] avgSpO2 > 90% recommends dial increase
+- [ ] avgSpO2 < 85% recommends dial decrease
+- [ ] Instruction shows as center overlay with title "Dial Adjustment"
+- [ ] User must press "Got it" to confirm (no auto-dismiss)
+- [ ] Confirmed level persists in subsequent phases
+- [ ] Check logs for "DIAL ADJUSTMENT CONFIRMED"
+
+### Data Persistence (VIT-73)
+- [ ] Altitude level changes are saved to database
+- [ ] Intra-session surveys save responses
+- [ ] Adaptive events are logged (may show RLS errors)
+- [ ] Session data syncs when online
+
+## Wearables Integration Testing Checklist
 
 ## Pre-Test Setup
 

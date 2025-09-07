@@ -444,13 +444,22 @@ Vitaliti Air is an advanced React Native application for Intermittent Hypoxic-Hy
 
 ## CRITICAL: Features NOT Implemented (Despite Documentation)
 
-### Progressive Overload System ❌
-**Status**: Completely missing
-- NO automatic dial progression
-- NO session-to-session memory  
-- NO detraining detection
-- NO performance-based adjustments
-- Hardcoded to altitude level 6 always
+### Progressive Overload System ✅
+**Status**: Fully Implemented (VIT-68 through VIT-73)
+
+#### Adaptive Instructions
+- **Mask Lift Instructions**: Triggered at SpO2 < 83% with 15-second cooldown
+- **Dial Adjustments**: Automatic recommendations based on average SpO2
+  - Increase dial when avgSpO2 > 90% (user under-challenged)
+  - Decrease dial when avgSpO2 < 85% (user over-challenged)
+- **User Confirmation**: Dial adjustments require user confirmation
+- **Altitude Persistence**: Confirmed adjustments are saved and persist
+
+#### Implementation Details
+- `AdaptiveInstructionEngine`: Core logic for thresholds and calculations
+- `EnhancedSessionManager.confirmDialAdjustment()`: Persists user-confirmed changes
+- Center-screen overlays for instructions (not notifications)
+- Comprehensive event logging for all adaptive actions
 
 ### Database Tables ❌
 **Status**: Not created

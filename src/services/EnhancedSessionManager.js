@@ -471,6 +471,18 @@ class EnhancedSessionManager {
       this.phaseTimeRemaining = this.protocolConfig.altitudeDuration;
       this.phaseStartTime = Date.now();
       this.readingBuffer = [];
+      
+      // Update mock service with initial cycle and phase
+      if (global.bluetoothService) {
+        if (global.bluetoothService.setCycle) {
+          console.log('🔄 Setting initial cycle to 1 for mock service');
+          global.bluetoothService.setCycle(1);
+        }
+        if (global.bluetoothService.setPhase) {
+          console.log('🔄 Setting initial phase to altitude for mock service');
+          global.bluetoothService.setPhase('altitude');
+        }
+      }
 
       // Keep screen awake during session
       try {
@@ -846,6 +858,13 @@ class EnhancedSessionManager {
         ? this.protocolConfig.recoveryDuration 
         : this.protocolConfig.altitudeDuration;
       this.phaseStartTime = Date.now();
+      
+      // Update mock service with new phase
+      if (global.bluetoothService?.setPhase) {
+        const mockPhase = this.currentPhase === 'RECOVERY' ? 'recovery' : 'altitude';
+        console.log(`🔄 Setting mock service phase to: ${mockPhase}`);
+        global.bluetoothService.setPhase(mockPhase);
+      }
       
       console.log(`🔄 Transition complete - starting ${this.currentPhase} phase`);
       
@@ -1599,6 +1618,56 @@ class EnhancedSessionManager {
         adjustment: level - previousLevel 
       });
     }
+  }
+
+  // Confirm dial adjustment from user interaction
+  confirmDialAdjustment(newLevel) {
+    console.log('\n🎯🎯🎯 DIAL ADJUSTMENT CONFIRMED 🎯🎯🎯');
+    console.log('📊 Previous Level:', this.currentAltitudeLevel);
+    console.log('📊 New Level:', newLevel);
+    console.log('⏰ Time:', new Date().toLocaleTimeString());
+    
+    // Update the adaptive engine's tracked level
+    if (this.adaptiveEngine) {
+      this.adaptiveEngine.confirmDialAdjustment(newLevel);
+    }
+    
+    // Update our tracked altitude level
+    const previousLevel = this.currentAltitudeLevel;
+    this.currentAltitudeLevel = newLevel;
+    
+    // Record the adjustment event
+    if (this.currentSession?.id) {
+      const adjustmentEvent = {
+        sessionId: this.currentSession.id,
+        event_type: 'dial_adjustment_confirmed',
+        event_data: {
+          previousLevel,
+          newLevel,
+          adjustment: newLevel - previousLevel,
+          timestamp: new Date().toISOString()
+        },
+        timestamp: new Date().toISOString()
+      };
+      
+      DatabaseService.saveAdaptiveEvent(adjustmentEvent)
+        .then(() => console.log('✅ Dial adjustment event saved'))
+        .catch(error => console.error('❌ Failed to save dial adjustment event:', error));
+      
+      // Also update the session's current altitude level
+      DatabaseService.updateSessionAltitudeLevel(this.currentSession.id, newLevel)
+        .catch(error => console.warn('Failed to update altitude level in database:', error));
+    }
+    
+    console.log('🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯\n');
+    
+    // Notify listeners
+    this.notify('altitudeLevelChanged', { 
+      level: newLevel, 
+      previousLevel,
+      adjustment: newLevel - previousLevel,
+      confirmed: true
+    });
   }
 
   // Set protocol configuration (called before starting session)

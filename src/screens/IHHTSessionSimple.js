@@ -417,16 +417,41 @@ export default function IHHTSessionSimple() {
   // Handle adaptive instructions
   const handleAdaptiveInstruction = (instruction) => {
     console.log('🎯 Received adaptive instruction:', instruction);
-    setAdaptiveInstruction(instruction);
+    
+    // Format instruction with title and message if not already formatted
+    let formattedInstruction = { ...instruction };
+    
+    if (instruction.type === 'mask_lift') {
+      formattedInstruction.title = 'Mask Lift Required';
+      if (!formattedInstruction.message) {
+        formattedInstruction.message = instruction.message || 'Lift mask 1mm, small breath';
+      }
+    } else if (instruction.type === 'dial_adjustment' || instruction.type === 'altitude_adjustment') {
+      formattedInstruction.title = 'Dial Adjustment';
+      formattedInstruction.type = 'dial_adjustment'; // Standardize type
+      if (!formattedInstruction.message) {
+        if (instruction.adjustment > 0) {
+          formattedInstruction.message = `Increase dial to level ${instruction.newLevel}`;
+        } else if (instruction.adjustment < 0) {
+          formattedInstruction.message = `Decrease dial to level ${instruction.newLevel}`;
+        } else {
+          formattedInstruction.message = instruction.message || 'Adjust dial as needed';
+        }
+      }
+    }
+    
+    setAdaptiveInstruction(formattedInstruction);
     setShowAdaptiveInstruction(true);
     
     // Vibrate to get user attention
     Vibration.vibrate([0, 300, 100, 300]);
     
-    // Auto-dismiss after 10 seconds
-    setTimeout(() => {
-      setShowAdaptiveInstruction(false);
-    }, 10000);
+    // Auto-dismiss after 10 seconds for mask lift, no auto-dismiss for dial adjustments
+    if (instruction.type === 'mask_lift') {
+      setTimeout(() => {
+        setShowAdaptiveInstruction(false);
+      }, 10000);
+    }
   };
   
   // Handle device disconnection and app state changes
@@ -757,7 +782,14 @@ export default function IHHTSessionSimple() {
               {adaptiveInstruction.message}
             </Text>
             <TouchableOpacity 
-              onPress={() => setShowAdaptiveInstruction(false)}
+              onPress={() => {
+                // If this is a dial adjustment, confirm it with the engine
+                if (adaptiveInstruction.type === 'dial_adjustment' && adaptiveInstruction.newLevel !== undefined) {
+                  console.log('✅ User confirmed dial adjustment to level', adaptiveInstruction.newLevel);
+                  EnhancedSessionManager.confirmDialAdjustment(adaptiveInstruction.newLevel);
+                }
+                setShowAdaptiveInstruction(false);
+              }}
               style={styles.dismissButton}
             >
               <Text style={styles.dismissText}>Got it</Text>
