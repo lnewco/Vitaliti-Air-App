@@ -170,8 +170,8 @@ class AdaptiveInstructionEngine {
       this.currentPhaseMaxSpO2 = currentSpO2;
     }
 
-    const targets = AdaptiveInstructionEngine.getTargetRanges(sessionType);
-    const maskLiftThreshold = targets.min - 2; // 83% for training, 86% for calibration
+    // Fixed thresholds regardless of session type
+    const maskLiftThreshold = 83; // Single breath threshold
     
     // Check if we're in cooldown period
     if (this.maskLiftState.isInCooldown) {
@@ -203,7 +203,7 @@ class AdaptiveInstructionEngine {
         let message = 'Lift mask and take one breath';
         
         if (currentSpO2 < 80) {
-          // SpO2 dropped below 80% - escalate to 2 breaths
+          // SpO2 below 80% - escalate to 2 breaths
           breaths = 2;
           message = 'Lift mask and take two deep breaths';
           
@@ -262,7 +262,7 @@ class AdaptiveInstructionEngine {
     if (currentSpO2 <= maskLiftThreshold) {
       // Determine number of breaths based on SpO2 level
       let breaths = 1;
-      let message = 'Lift mask and take one breath';
+      let message = 'Lift mask 1mm, small breath';
       
       if (currentSpO2 < 80) {
         breaths = 2;
@@ -373,23 +373,23 @@ class AdaptiveInstructionEngine {
   calculateDialAdjustment(phaseStats, currentLevel) {
     const { avgSpO2, maskLifts } = phaseStats;
     
-    // Check for increase condition
-    if (avgSpO2 > 90 && maskLifts < 2) {
+    // Check for increase condition - simplified logic
+    if (avgSpO2 > 90) {
       const newLevel = Math.min(11, currentLevel + 1);
       return { 
         action: 'increase', 
         newLevel,
-        reason: 'SpO2 too high, can handle more altitude'
+        reason: `SpO2 too high (${avgSpO2.toFixed(1)}%), can handle more altitude`
       };
     }
     
-    // Check for decrease condition
-    if (avgSpO2 < 85 || maskLifts > 2) {
+    // Check for decrease condition - simplified logic
+    if (avgSpO2 < 85) {
       const newLevel = Math.max(0, currentLevel - 1);
       return { 
         action: 'decrease', 
         newLevel,
-        reason: avgSpO2 < 85 ? 'SpO2 too low' : 'Too many mask lifts'
+        reason: `SpO2 too low (${avgSpO2.toFixed(1)}%)`
       };
     }
     
@@ -487,7 +487,7 @@ class AdaptiveInstructionEngine {
       adjustmentReason = `Minimum SpO2 (${minSpO2}%) was above target maximum (${targetMaxSpO2}%)`;
     }
     
-    // Apply bounds checking (0-11 range per VIT-70)
+    // Apply bounds checking (0-11 range)
     const newAltitudeLevel = Math.max(0, Math.min(11, altitudeLevel + altitudeAdjustment));
     const actualAdjustment = newAltitudeLevel - altitudeLevel;
     const hitBounds = actualAdjustment !== altitudeAdjustment;

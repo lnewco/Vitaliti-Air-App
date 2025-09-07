@@ -23,6 +23,7 @@ const ALTITUDE_LEVELS = [
   { level: 8, oxygen: 10.8, feet: 20500, meters: 6248, label: 'Hard' },
   { level: 9, oxygen: 9.9, feet: 23000, meters: 7010, label: 'Very Hard' },
   { level: 10, oxygen: 9.0, feet: 26500, meters: 8077, label: 'Extreme' },
+  { level: 11, oxygen: 8.0, feet: 27000, meters: 8230, label: 'Max' },
 ];
 
 const AltitudeLevelSelector = ({
@@ -47,8 +48,11 @@ const AltitudeLevelSelector = ({
     if (recommendedLevel === 0) {
       // Show 0, 1, 2 with 0 on the left
       return 0;
+    } else if (recommendedLevel === 11) {
+      // Show 9, 10, 11 with 11 on the right
+      return 9 * actualCardWidth;
     } else if (recommendedLevel === 10) {
-      // Show 8, 9, 10 with 10 on the right
+      // Show 8, 9, 10 with 10 in the middle
       return 8 * actualCardWidth;
     } else {
       // Show prev, recommended (centered), next
