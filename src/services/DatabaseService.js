@@ -1392,6 +1392,11 @@ class DatabaseService {
         throw new Error('Survey values must be integers between 1 and 5');
       }
 
+      console.log('\n📝📝📝 PRE-SESSION SURVEY SAVING TO DATABASE 📝📝📝');
+      console.log('🆔 Session ID:', sessionId);
+      console.log('🧠 Clarity:', clarityPre);
+      console.log('⚡ Energy:', energyPre);
+      console.log('😰 Stress:', stressPre);
       log.info(`Saving pre-session survey for: ${sessionId}`);
       
       // Use INSERT OR IGNORE followed by UPDATE to preserve existing data
@@ -1409,6 +1414,8 @@ class DatabaseService {
       await this.db.runAsync(insertQuery, [sessionId, clarityPre, energyPre, stressPre]);
       await this.db.runAsync(updateQuery, [clarityPre, energyPre, stressPre, sessionId]);
       
+      console.log('✅ PRE-SESSION SURVEY SAVED TO DATABASE');
+      console.log('📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝📝\n');
       log.info(`Pre-session survey saved: clarity=${clarityPre}, energy=${energyPre}, stress=${stressPre}`);
       
       return { success: true };
@@ -1432,6 +1439,7 @@ class DatabaseService {
         throw new Error('Overall rating must be an integer between 1 and 5');
       }
 
+      console.log('\n🎯🎯🎯 POST-SESSION SURVEY SAVING TO DATABASE 🎯🎯🎯');
       log.info(`Saving post-session survey for: ${sessionId}`);
       
       // Convert symptoms array to JSON string for SQLite
@@ -1455,6 +1463,13 @@ class DatabaseService {
       await this.db.runAsync(insertQuery, [sessionId, clarityPost, energyPost, stressPost, notesPost, symptomsJson, overallRating]);
       await this.db.runAsync(updateQuery, [clarityPost, energyPost, stressPost, notesPost, symptomsJson, overallRating, sessionId]);
       
+      console.log('\n🎯🎯🎯 POST-SESSION SURVEY SAVED TO DATABASE 🎯🎯🎯');
+      console.log('🆔 Session ID:', sessionId);
+      console.log('🧠 Clarity:', clarityPost);
+      console.log('⚡ Energy:', energyPost);
+      console.log('😰 Stress:', stressPost);
+      console.log('⭐ Overall Rating:', overallRating);
+      console.log('🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯🎯\n');
       log.info(`Post-session survey saved: clarity=${clarityPost}, energy=${energyPost}, stress=${stressPost}, rating=${overallRating}`);
       
       return { success: true };
@@ -1474,6 +1489,13 @@ class DatabaseService {
         throw new Error('Survey values must be integers between 1 and 5');
       }
 
+      console.log('\n📋📋📋 INTRA-SESSION RESPONSE SAVING TO DATABASE 📋📋📋');
+      console.log('🆔 Session ID:', sessionId);
+      console.log('🔄 Phase Number:', phaseNumber);
+      console.log('🧠 Clarity:', clarity);
+      console.log('⚡ Energy:', energy);
+      console.log('😰 Stress:', stressPerception);
+      console.log('📊 SpO2:', spo2, '| HR:', heartRate);
       log.info(`Saving intra-session response for: ${sessionId}, phase: ${phaseNumber}`);
       
       // Convert sensations array to JSON string for SQLite
@@ -1492,6 +1514,8 @@ class DatabaseService {
         sensationsJson, spo2, heartRate, timestamp
       ]);
       
+      console.log('✅ INTRA-SESSION RESPONSE SAVED TO DATABASE');
+      console.log('📋📋📋📋📋📋📋📋📋📋📋📋📋📋📋📋📋📋\n');
       log.info(`Intra-session response saved: phase=${phaseNumber}, clarity=${clarity}, energy=${energy}, stress=${stressPerception}`);
       
       return { success: true };

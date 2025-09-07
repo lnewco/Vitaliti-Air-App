@@ -276,12 +276,13 @@ class AdaptiveInstructionEngine {
       this.maskLiftState.spo2AtInstruction = currentSpO2;
       this.maskLiftState.pendingEvaluation = true;
       
-      log.info(`Mask lift instruction triggered with cooldown`, {
-        spo2: currentSpO2,
-        threshold: maskLiftThreshold,
-        breaths,
-        cooldownDuration: this.MASK_LIFT_COOLDOWN
-      });
+      console.log('\n🚨🚨🚨 MASK LIFT INSTRUCTION TRIGGERED 🚨🚨🚨');
+      console.log(`📊 SpO2: ${currentSpO2}%`);
+      console.log(`📝 Message: ${message}`);
+      console.log(`🎯 Threshold: ${maskLiftThreshold}%`);
+      console.log(`💨 Breaths: ${breaths}`);
+      console.log(`⏱️ Cooldown: ${this.MASK_LIFT_COOLDOWN}ms`);
+      console.log('🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨\n');
       
       // Record mask lift event
       this.recordAdaptiveEvent('mask_lift', {
@@ -408,9 +409,13 @@ class AdaptiveInstructionEngine {
       this.pendingDialAdjustment = adjustment;
       
       // Log the recommendation
-      log.info(`📊 Dial adjustment recommended: ${adjustment.action} to level ${adjustment.newLevel}`);
-      log.info(`   Reason: ${adjustment.reason}`);
-      log.info(`   Based on: avgSpO2=${stats.avgSpO2}%, maskLifts=${stats.maskLifts}`);
+      console.log('\n🎛️🎛️🎛️ DIAL ADJUSTMENT RECOMMENDED 🎛️🎛️🎛️');
+      console.log(`📊 Action: ${adjustment.action.toUpperCase()} dial to level ${adjustment.newLevel}`);
+      console.log(`📝 Reason: ${adjustment.reason}`);
+      console.log(`📈 Avg SpO2: ${stats.avgSpO2}%`);
+      console.log(`🎭 Mask Lifts: ${stats.maskLifts}`);
+      console.log(`🔄 Cycle: ${cycleNumber}`);
+      console.log('🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️\n');
       
       // Save as adaptive event
       DatabaseService.saveAdaptiveEvent({

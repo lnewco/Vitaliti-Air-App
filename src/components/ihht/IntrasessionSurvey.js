@@ -65,6 +65,15 @@ export default function IntrasessionSurvey({
       clarityScore: responses.clarity,
       energyScore: responses.energy,
     };
+    
+    console.log('\n📋📋📋 INTRA-SESSION SURVEY SUBMITTED 📋📋📋');
+    console.log('🔢 Feeling Score:', responses.feeling);
+    console.log('💨 Breathlessness:', responses.breathlessness);
+    console.log('🧠 Mental Clarity:', responses.clarity);
+    console.log('⚡ Energy Level:', responses.energy);
+    console.log('⏰ Time:', new Date().toLocaleTimeString());
+    console.log('📋📋📋📋📋📋📋📋📋📋📋📋📋📋📋📋📋📋\n');
+    
     onComplete(surveyData);
     // Reset for next time
     setResponses({
