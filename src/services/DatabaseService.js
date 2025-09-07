@@ -821,6 +821,23 @@ class DatabaseService {
     return id;
   }
 
+  // Get adaptive events for a session (for syncing)
+  async getAdaptiveEvents(sessionId) {
+    try {
+      await this.init();
+      const query = `
+        SELECT * FROM session_adaptive_events 
+        WHERE session_id = ? 
+        ORDER BY event_timestamp ASC
+      `;
+      const events = await this.db.getAllAsync(query, [sessionId]);
+      return events || [];
+    } catch (error) {
+      log.error('Error fetching adaptive events:', error);
+      return [];
+    }
+  }
+
   // Update session with adaptive data
   async updateSessionAdaptive(sessionId, adaptiveData) {
     const query = `

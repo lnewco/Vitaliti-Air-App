@@ -1,0 +1,87 @@
+{
+  "cli": {
+    "version": ">= 16.17.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "ihht-v2": {
+      "distribution": "internal",
+      "ios": {
+        "autoIncrement": true
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://yhbywcawiothhoqaurgy.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InloYnl3Y2F3aW90aGhvcWF1cmd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMyMjA5MTQsImV4cCI6MjA2ODc5NjkxNH0.QbUE7ddPa1KiHRY0_i4LHHu3iKt7Ol_MKdB2WzbhAes",
+        "EXPO_PUBLIC_BRANCH": "ihht-v2",
+        "EXPO_PUBLIC_WHOOP_CLIENT_ID": "ef01edf8-b61c-4cac-99a0-d0825098dace",
+        "EXPO_PUBLIC_WHOOP_CLIENT_SECRET": "1529284de2cde1574018824932aeec53222eee78487bd3ea63f87ae44d716aeb",
+        "EXPO_PUBLIC_OURA_CLIENT_ID": "E6B2T5RUOWXZQUBJ",
+        "EXPO_PUBLIC_OURA_CLIENT_SECRET": "J2T5CLS4NEFUYPTJEQEMILZD4QT67WKO",
+        "EXPO_PUBLIC_ANALYTICS_API_URL": "https://vitaliti-air-analytics.onrender.com",
+        "EXPO_PUBLIC_APP_SCHEME": "vitalitiair",
+        "EXPO_PUBLIC_REDIRECT_BASE_URL": "vitalitiair://integrations",
+        "EXPO_PUBLIC_INTEGRATION_DEBUG": "true"
+      }
+    },
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://yhbywcawiothhoqaurgy.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InloYnl3Y2F3aW90aGhvcWF1cmd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMyMjA5MTQsImV4cCI6MjA2ODc5NjkxNH0.QbUE7ddPa1KiHRY0_i4LHHu3iKt7Ol_MKdB2WzbhAes",
+        "EXPO_PUBLIC_BRANCH": "ihht-v2",
+        "EXPO_PUBLIC_WHOOP_CLIENT_ID": "ef01edf8-b61c-4cac-99a0-d0825098dace",
+        "EXPO_PUBLIC_WHOOP_CLIENT_SECRET": "1529284de2cde1574018824932aeec53222eee78487bd3ea63f87ae44d716aeb",
+        "EXPO_PUBLIC_OURA_CLIENT_ID": "E6B2T5RUOWXZQUBJ",
+        "EXPO_PUBLIC_OURA_CLIENT_SECRET": "J2T5CLS4NEFUYPTJEQEMILZD4QT67WKO",
+        "EXPO_PUBLIC_ANALYTICS_API_URL": "https://vitaliti-air-analytics.onrender.com",
+        "EXPO_PUBLIC_APP_SCHEME": "vitalitiair",
+        "EXPO_PUBLIC_REDIRECT_BASE_URL": "vitalitiair://integrations",
+        "EXPO_PUBLIC_INTEGRATION_DEBUG": "true"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "autoIncrement": true
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://yhbywcawiothhoqaurgy.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InloYnl3Y2F3aW90aGhvcWF1cmd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMyMjA5MTQsImV4cCI6MjA2ODc5NjkxNH0.QbUE7ddPa1KiHRY0_i4LHHu3iKt7Ol_MKdB2WzbhAes",
+        "EXPO_PUBLIC_BRANCH": "ihht-v2",
+        "EXPO_PUBLIC_WHOOP_CLIENT_ID": "ef01edf8-b61c-4cac-99a0-d0825098dace",
+        "EXPO_PUBLIC_WHOOP_CLIENT_SECRET": "1529284de2cde1574018824932aeec53222eee78487bd3ea63f87ae44d716aeb",
+        "EXPO_PUBLIC_OURA_CLIENT_ID": "E6B2T5RUOWXZQUBJ",
+        "EXPO_PUBLIC_OURA_CLIENT_SECRET": "J2T5CLS4NEFUYPTJEQEMILZD4QT67WKO",
+        "EXPO_PUBLIC_ANALYTICS_API_URL": "https://vitaliti-air-analytics.onrender.com",
+        "EXPO_PUBLIC_APP_SCHEME": "vitalitiair",
+        "EXPO_PUBLIC_REDIRECT_BASE_URL": "vitalitiair://integrations",
+        "EXPO_PUBLIC_INTEGRATION_DEBUG": "true"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://yhbywcawiothhoqaurgy.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InloYnl3Y2F3aW90aGhvcWF1cmd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMyMjA5MTQsImV4cCI6MjA2ODc5NjkxNH0.QbUE7ddPa1KiHRY0_i4LHHu3iKt7Ol_MKdB2WzbhAes",
+        "EXPO_PUBLIC_BRANCH": "ihht-v2",
+        "EXPO_PUBLIC_WHOOP_CLIENT_ID": "ef01edf8-b61c-4cac-99a0-d0825098dace",
+        "EXPO_PUBLIC_WHOOP_CLIENT_SECRET": "1529284de2cde1574018824932aeec53222eee78487bd3ea63f87ae44d716aeb",
+        "EXPO_PUBLIC_OURA_CLIENT_ID": "E6B2T5RUOWXZQUBJ",
+        "EXPO_PUBLIC_OURA_CLIENT_SECRET": "J2T5CLS4NEFUYPTJEQEMILZD4QT67WKO",
+        "EXPO_PUBLIC_ANALYTICS_API_URL": "https://vitaliti-air-analytics.onrender.com",
+        "EXPO_PUBLIC_APP_SCHEME": "vitalitiair",
+        "EXPO_PUBLIC_REDIRECT_BASE_URL": "vitalitiair://integrations",
+        "EXPO_PUBLIC_INTEGRATION_DEBUG": "true"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6740038959",
+        "appleTeamId": "2726NBK599"
+      }
+    }
+  }
+}

@@ -1,0 +1,725 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  AppState,
+  Vibration,
+  ScrollView,
+  TouchableOpacity,
+  Modal,
+} from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { BlurView } from 'expo-blur';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import AppleMetricsDisplay from '../components/ihht/AppleMetricsDisplay';
+import SessionControlBar from '../components/ihht/SessionControlBar';
+import MaskLiftInstruction from '../components/ihht/MaskLiftInstruction';
+import IntrasessionSurvey from '../components/ihht/IntrasessionSurvey';
+import EmergencyProtocol from '../components/ihht/EmergencyProtocol';
+import PhaseMetricsTracker from '../services/PhaseMetricsTracker';
+import IHHTAdaptiveService from '../services/IHHTAdaptiveService';
+import { mockBLEService } from '../services/MockBLEService';
+import { supabase } from '../config/supabase';
+
+// Constants
+const ALTITUDE_DURATION = 420; // 7 minutes
+const RECOVERY_DURATION = 180; // 3 minutes
+const TOTAL_CYCLES = 5;
+const INTRASESSION_SURVEY_DELAY = 30; // 30 seconds into recovery
+const MASK_SWITCH_BUFFER = 10; // 10 seconds to switch mask
+const PRE_SESSION_BUFFER = 10; // 10 seconds before starting
+
+// Pre-session survey questions
+const PRE_SESSION_QUESTIONS = [
+  {
+    id: 'sleep_quality',
+    question: 'How was your sleep last night?',
+    options: ['Poor', 'Fair', 'Good', 'Excellent']
+  },
+  {
+    id: 'energy_level',
+    question: 'How is your energy level today?',
+    options: ['Very Low', 'Low', 'Normal', 'High']
+  },
+  {
+    id: 'stress_level',
+    question: 'How stressed are you feeling?',
+    options: ['Very Stressed', 'Somewhat Stressed', 'Neutral', 'Relaxed']
+  }
+];
+
+export default function IHHTTrainingScreenV2Fixed() {
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { dialPosition: initialDial = 6, sessionType = 'IHHT' } = route.params || {};
+
+  // Session state
+  const [currentPhase, setCurrentPhase] = useState('altitude');
+  const [currentCycle, setCurrentCycle] = useState(1);
+  const [phaseTimeElapsed, setPhaseTimeElapsed] = useState(0);
+  const [totalSessionTime, setTotalSessionTime] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isSessionActive, setIsSessionActive] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
+
+  // Pre-session and buffer states
+  const [showPreSessionSurvey, setShowPreSessionSurvey] = useState(true);
+  const [preSessionData, setPreSessionData] = useState({});
+  const [showMaskBuffer, setShowMaskBuffer] = useState(false);
+  const [maskBufferCountdown, setMaskBufferCountdown] = useState(MASK_SWITCH_BUFFER);
+  const [showInitialBuffer, setShowInitialBuffer] = useState(false);
+  const [initialBufferCountdown, setInitialBufferCountdown] = useState(PRE_SESSION_BUFFER);
+
+  // Metrics
+  const [currentSpO2, setCurrentSpO2] = useState(99);
+  const [currentHeartRate, setCurrentHeartRate] = useState(72);
+  const [currentDialPosition, setCurrentDialPosition] = useState(initialDial);
+
+  // Safety & Instructions
+  const [showMaskLift, setShowMaskLift] = useState(false);
+  const [maskLiftType, setMaskLiftType] = useState('single');
+  const [isEmergency, setIsEmergency] = useState(false);
+  const [emergencyReason, setEmergencyReason] = useState('');
+
+  // Surveys
+  const [showIntrasessionSurvey, setShowIntrasessionSurvey] = useState(false);
+  const [surveyScheduled, setSurveyScheduled] = useState(false);
+  const [previousHypoxicData, setPreviousHypoxicData] = useState(null);
+
+  // Refs
+  const phaseTimerRef = useRef(null);
+  const sessionTimerRef = useRef(null);
+  const metricsIntervalRef = useRef(null);
+  const maskBufferTimerRef = useRef(null);
+  const initialBufferTimerRef = useRef(null);
+
+  // Initialize session
+  useEffect(() => {
+    if (!showPreSessionSurvey && !isSessionActive) {
+      initializeSession();
+    }
+    return () => cleanup();
+  }, [showPreSessionSurvey]);
+
+  const initializeSession = async () => {
+    try {
+      // Create session in database
+      const { data: session, error } = await supabase
+        .from('sessions')
+        .insert({
+          session_id: `IHHT_${Date.now()}`,
+          session_type: sessionType,
+          starting_dial_position: initialDial,
+        })
+        .select()
+        .single();
+
+      if (!error && session) {
+        setSessionId(session.id);
+        await PhaseMetricsTracker.initialize(session.id);
+        IHHTAdaptiveService.initialize(initialDial);
+        
+        // Start with initial buffer
+        setShowInitialBuffer(true);
+        startInitialBuffer();
+      }
+    } catch (error) {
+      console.error('Failed to initialize session:', error);
+    }
+  };
+
+  const startInitialBuffer = () => {
+    setInitialBufferCountdown(PRE_SESSION_BUFFER);
+    initialBufferTimerRef.current = setInterval(() => {
+      setInitialBufferCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(initialBufferTimerRef.current);
+          setShowInitialBuffer(false);
+          startSession();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const startSession = () => {
+    setIsSessionActive(true);
+    PhaseMetricsTracker.startPhase('altitude', currentDialPosition);
+    startMetricsMonitoring();
+    startTimers();
+  };
+
+  const startMaskSwitchBuffer = () => {
+    setShowMaskBuffer(true);
+    setMaskBufferCountdown(MASK_SWITCH_BUFFER);
+    setIsPaused(true);
+    
+    maskBufferTimerRef.current = setInterval(() => {
+      setMaskBufferCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(maskBufferTimerRef.current);
+          setShowMaskBuffer(false);
+          setIsPaused(false);
+          continueAfterMaskSwitch();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const continueAfterMaskSwitch = () => {
+    // Continue with the phase transition
+    if (currentPhase === 'altitude') {
+      setCurrentPhase('recovery');
+      PhaseMetricsTracker.startPhase('recovery', currentDialPosition);
+    } else {
+      if (currentCycle < TOTAL_CYCLES) {
+        setCurrentCycle(prev => prev + 1);
+        setCurrentPhase('altitude');
+        PhaseMetricsTracker.startPhase('altitude', currentDialPosition);
+      } else {
+        completeSession();
+      }
+    }
+    setSurveyScheduled(false);
+  };
+
+  const startTimers = () => {
+    // Phase timer
+    phaseTimerRef.current = setInterval(() => {
+      if (!isPaused && !isEmergency && !showMaskBuffer) {
+        setPhaseTimeElapsed(prev => {
+          const newTime = prev + 1;
+          const phaseDuration = currentPhase === 'altitude' ? ALTITUDE_DURATION : RECOVERY_DURATION;
+          
+          // Check for intrasession survey
+          if (currentPhase === 'recovery' && 
+              newTime === INTRASESSION_SURVEY_DELAY && 
+              !surveyScheduled &&
+              currentCycle <= TOTAL_CYCLES) {
+            triggerIntrasessionSurvey();
+          }
+          
+          if (newTime >= phaseDuration) {
+            handlePhaseComplete();
+            return 0;
+          }
+          return newTime;
+        });
+      }
+    }, 1000);
+
+    // Total session timer
+    sessionTimerRef.current = setInterval(() => {
+      if (!isPaused && !isEmergency && isSessionActive) {
+        setTotalSessionTime(prev => prev + 1);
+      }
+    }, 1000);
+  };
+
+  const handlePhaseComplete = async () => {
+    // End current phase
+    const phaseData = PhaseMetricsTracker.endCurrentPhase();
+
+    if (currentPhase === 'altitude') {
+      // Save data for intrasession survey
+      setPreviousHypoxicData({
+        avgSpO2: phaseData?.avg_spo2,
+        minSpO2: phaseData?.min_spo2,
+        timeBelow85: phaseData?.time_below_85,
+      });
+
+      // Calculate dial adjustment
+      const adjustment = await IHHTAdaptiveService.calculateDialAdjustment(
+        currentSpO2,
+        phaseData?.avg_spo2,
+        phaseData?.mask_lift_count || 0
+      );
+
+      if (adjustment !== 0) {
+        const newDial = Math.max(0, Math.min(11, currentDialPosition + adjustment));
+        setCurrentDialPosition(newDial);
+        
+        await supabase
+          .from('dial_adjustments')
+          .insert({
+            session_id: sessionId,
+            cycle_number: currentCycle,
+            previous_dial: currentDialPosition,
+            new_dial: newDial,
+            adjustment_reason: adjustment > 0 ? 'SpO2 too high' : 'SpO2 too low',
+          });
+      }
+    }
+
+    // Show mask switch buffer
+    setPhaseTimeElapsed(0);
+    startMaskSwitchBuffer();
+  };
+
+  const triggerIntrasessionSurvey = () => {
+    setSurveyScheduled(true);
+    setIsPaused(true);
+    setShowIntrasessionSurvey(true);
+  };
+
+  const handleIntrasessionSurveyComplete = async (surveyData) => {
+    setShowIntrasessionSurvey(false);
+    setIsPaused(false);
+    
+    // Save survey with previous hypoxic data
+    await supabase
+      .from('intrasession_surveys')
+      .insert({
+        session_id: sessionId,
+        cycle_number: currentCycle,
+        survey_data: surveyData,
+        previous_hypoxic_avg_spo2: previousHypoxicData?.avgSpO2,
+        previous_hypoxic_min_spo2: previousHypoxicData?.minSpO2,
+        previous_hypoxic_time_below_85: previousHypoxicData?.timeBelow85,
+      });
+  };
+
+  const handlePreSessionSurvey = (responses) => {
+    setPreSessionData(responses);
+    setShowPreSessionSurvey(false);
+  };
+
+  const startMetricsMonitoring = () => {
+    mockBLEService.startSimulation();
+    
+    metricsIntervalRef.current = setInterval(() => {
+      const metrics = mockBLEService.getCurrentMetrics();
+      setCurrentSpO2(metrics.spo2);
+      setCurrentHeartRate(metrics.heartRate);
+
+      // Check for mask lift
+      if (metrics.spo2 < 83 && !showMaskLift && currentPhase === 'altitude') {
+        const liftType = metrics.spo2 < 80 ? 'double' : 'single';
+        setMaskLiftType(liftType);
+        setShowMaskLift(true);
+        Vibration.vibrate([0, 500, 200, 500]);
+      }
+
+      // Check for emergency
+      if (metrics.spo2 < 75 || metrics.heartRate > 180 || metrics.heartRate < 40) {
+        triggerEmergency(metrics);
+      }
+
+      // Track metrics
+      PhaseMetricsTracker.recordReading(metrics.spo2, metrics.heartRate);
+    }, 1000);
+  };
+
+  const triggerEmergency = (metrics) => {
+    setIsEmergency(true);
+    setIsPaused(true);
+    
+    if (metrics.spo2 < 75) setEmergencyReason('Critical SpO2');
+    else if (metrics.heartRate > 180) setEmergencyReason('High Heart Rate');
+    else if (metrics.heartRate < 40) setEmergencyReason('Low Heart Rate');
+    
+    Vibration.vibrate([0, 1000, 500, 1000, 500, 1000]);
+  };
+
+  const handleSkipPhase = () => {
+    Alert.alert(
+      'Skip Phase',
+      'Are you sure you want to skip the current phase?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Skip', 
+          onPress: () => {
+            setPhaseTimeElapsed(0);
+            handlePhaseComplete();
+          }
+        },
+      ]
+    );
+  };
+
+  const handleEndSession = () => {
+    Alert.alert(
+      'End Session',
+      'Are you sure you want to end the session?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'End Session', 
+          style: 'destructive',
+          onPress: () => completeSession()
+        },
+      ]
+    );
+  };
+
+  const completeSession = async () => {
+    cleanup();
+    
+    // Save session completion
+    if (sessionId) {
+      await supabase
+        .from('sessions')
+        .update({
+          ended_at: new Date().toISOString(),
+          ending_dial_position: currentDialPosition,
+          total_mask_lifts: PhaseMetricsTracker.getTotalMaskLifts(),
+        })
+        .eq('id', sessionId);
+    }
+
+    // Navigate to post-session survey
+    navigation.navigate('PostSessionSurvey', {
+      sessionId,
+      sessionData: {
+        totalTime: totalSessionTime,
+        cyclesCompleted: currentCycle,
+        finalDial: currentDialPosition,
+        preSessionData,
+      }
+    });
+  };
+
+  const cleanup = () => {
+    clearInterval(phaseTimerRef.current);
+    clearInterval(sessionTimerRef.current);
+    clearInterval(metricsIntervalRef.current);
+    clearInterval(maskBufferTimerRef.current);
+    clearInterval(initialBufferTimerRef.current);
+    mockBLEService.disconnect();
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getPhaseProgress = () => {
+    const duration = currentPhase === 'altitude' ? ALTITUDE_DURATION : RECOVERY_DURATION;
+    return phaseTimeElapsed / duration;
+  };
+
+  // Pre-session Survey Modal
+  if (showPreSessionSurvey) {
+    return (
+      <Modal visible={true} animationType="slide">
+        <View style={styles.surveyContainer}>
+          <Text style={styles.surveyTitle}>Pre-Session Check-In</Text>
+          <ScrollView style={styles.surveyContent}>
+            {PRE_SESSION_QUESTIONS.map((q) => (
+              <View key={q.id} style={styles.questionContainer}>
+                <Text style={styles.questionText}>{q.question}</Text>
+                <View style={styles.optionsContainer}>
+                  {q.options.map((option) => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.optionButton,
+                        preSessionData[q.id] === option && styles.optionSelected
+                      ]}
+                      onPress={() => setPreSessionData({...preSessionData, [q.id]: option})}
+                    >
+                      <Text style={[
+                        styles.optionText,
+                        preSessionData[q.id] === option && styles.optionTextSelected
+                      ]}>{option}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+          <TouchableOpacity
+            style={[styles.startButton, Object.keys(preSessionData).length < 3 && styles.buttonDisabled]}
+            onPress={() => Object.keys(preSessionData).length === 3 && handlePreSessionSurvey(preSessionData)}
+            disabled={Object.keys(preSessionData).length < 3}
+          >
+            <Text style={styles.startButtonText}>Start Session</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    );
+  }
+
+  // Initial Buffer Screen
+  if (showInitialBuffer) {
+    return (
+      <View style={styles.bufferContainer}>
+        <Text style={styles.bufferCountdown}>{initialBufferCountdown}</Text>
+        <Text style={styles.bufferTitle}>Prepare to Begin</Text>
+        <Text style={styles.bufferText}>Put on your altitude mask</Text>
+      </View>
+    );
+  }
+
+  // Mask Switch Buffer Screen
+  if (showMaskBuffer) {
+    return (
+      <View style={styles.bufferContainer}>
+        <Text style={styles.bufferCountdown}>{maskBufferCountdown}</Text>
+        <Text style={styles.bufferTitle}>Switch Mask</Text>
+        <Text style={styles.bufferText}>
+          {currentPhase === 'altitude' ? 'Change to recovery mask' : 'Change to altitude mask'}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleEndSession} style={styles.closeButton}>
+          <Text style={styles.closeButtonText}>×</Text>
+        </TouchableOpacity>
+        <View style={styles.headerInfo}>
+          <Text style={styles.cycleIndicator}>CYCLE {currentCycle}/{TOTAL_CYCLES}</Text>
+          <Text style={styles.totalTime}>{formatTime(totalSessionTime)}</Text>
+        </View>
+      </View>
+
+      {/* Phase Display */}
+      <View style={styles.phaseContainer}>
+        <Text style={[styles.phaseLabel, currentPhase === 'recovery' && styles.recoveryPhaseLabel]}>
+          {currentPhase === 'altitude' ? 'ALTITUDE' : 'RECOVERY'}
+        </Text>
+        <Text style={styles.phaseTimer}>
+          {formatTime((currentPhase === 'altitude' ? ALTITUDE_DURATION : RECOVERY_DURATION) - phaseTimeElapsed)}
+        </Text>
+      </View>
+
+      {/* Metrics Display */}
+      <AppleMetricsDisplay
+        spo2={currentSpO2}
+        heartRate={currentHeartRate}
+        dialPosition={currentDialPosition}
+        phaseProgress={getPhaseProgress()}
+        currentPhase={currentPhase}
+      />
+
+      {/* Control Bar */}
+      <SessionControlBar
+        isPaused={isPaused}
+        onPause={() => setIsPaused(!isPaused)}
+        onSkip={handleSkipPhase}
+        onEnd={handleEndSession}
+        currentCycle={currentCycle}
+        totalCycles={TOTAL_CYCLES}
+        currentPhase={currentPhase}
+        totalSessionTime={totalSessionTime}
+      />
+
+      {/* Mask Lift Instruction */}
+      <MaskLiftInstruction
+        visible={showMaskLift}
+        type={maskLiftType}
+        onComplete={() => {
+          setShowMaskLift(false);
+          PhaseMetricsTracker.recordMaskLift(currentSpO2, currentHeartRate, maskLiftType);
+        }}
+      />
+
+      {/* Intrasession Survey */}
+      <IntrasessionSurvey
+        visible={showIntrasessionSurvey}
+        cycleNumber={currentCycle}
+        previousHypoxicData={previousHypoxicData}
+        onComplete={handleIntrasessionSurveyComplete}
+      />
+
+      {/* Emergency Protocol */}
+      <EmergencyProtocol
+        visible={isEmergency}
+        reason={emergencyReason}
+        currentSpO2={currentSpO2}
+        currentHeartRate={currentHeartRate}
+        onResolve={() => {
+          setIsEmergency(false);
+          setIsPaused(false);
+        }}
+        onEndSession={completeSession}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  header: {
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '300',
+    marginTop: -2,
+  },
+  headerInfo: {
+    alignItems: 'center',
+  },
+  cycleIndicator: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginBottom: 4,
+  },
+  totalTime: {
+    fontSize: 32,
+    fontWeight: '200',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  phaseContainer: {
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 40,
+  },
+  phaseLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 1.5,
+    color: 'rgba(255, 255, 255, 0.4)',
+    marginBottom: 8,
+  },
+  recoveryPhaseLabel: {
+    color: 'rgba(96, 165, 250, 0.6)',
+  },
+  phaseTimer: {
+    fontSize: 48,
+    fontWeight: '100',
+    color: '#FFFFFF',
+    letterSpacing: -1,
+  },
+  bufferContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bufferCountdown: {
+    fontSize: 120,
+    fontWeight: '100',
+    color: '#FFFFFF',
+    letterSpacing: -4,
+    marginBottom: 20,
+  },
+  bufferTitle: {
+    fontSize: 28,
+    fontWeight: '300',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  bufferText: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: 'rgba(255, 255, 255, 0.6)',
+    letterSpacing: 0.5,
+  },
+  surveyContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    paddingTop: 80,
+    paddingHorizontal: 24,
+  },
+  surveyTitle: {
+    color: '#FFFFFF',
+    fontSize: 32,
+    fontWeight: '700',
+    marginBottom: 40,
+    textAlign: 'center',
+    letterSpacing: -0.5,
+  },
+  surveyContent: {
+    flex: 1,
+  },
+  questionContainer: {
+    marginBottom: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  questionText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    marginBottom: 16,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+  },
+  optionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  optionButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginRight: 10,
+    marginBottom: 10,
+  },
+  optionSelected: {
+    borderColor: '#60A5FA',
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderWidth: 2,
+  },
+  optionText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 15,
+    fontWeight: '400',
+  },
+  optionTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  startButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 20,
+    borderRadius: 16,
+    marginBottom: 40,
+    marginTop: 20,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  startButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+});

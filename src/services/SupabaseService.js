@@ -349,6 +349,49 @@ class SupabaseService {
         // Don't throw - allow session to complete even if survey sync fails
       }
       
+      // Sync adaptive events
+      try {
+        const adaptiveEvents = await DatabaseService.getAdaptiveEvents(sessionId);
+        
+        if (adaptiveEvents && adaptiveEvents.length > 0) {
+          log.info(`📤 Syncing ${adaptiveEvents.length} adaptive events`);
+          
+          for (const event of adaptiveEvents) {
+            // Parse additional data if it's a string
+            let additionalData = event.additional_data;
+            if (typeof additionalData === 'string') {
+              try {
+                additionalData = JSON.parse(additionalData);
+              } catch (e) {
+                additionalData = {};
+              }
+            }
+            
+            const { error: syncError } = await supabase
+              .from('session_adaptive_events')
+              .insert({
+                session_id: supabaseSessionId,
+                event_type: event.event_type,
+                event_timestamp: new Date(event.event_timestamp).toISOString(),
+                altitude_phase_number: event.altitude_phase_number,
+                recovery_phase_number: event.recovery_phase_number,
+                current_altitude_level: event.current_altitude_level,
+                spo2_value: event.spo2_value,
+                additional_data: additionalData
+              });
+            
+            if (syncError) {
+              log.error('Failed to sync adaptive event:', syncError);
+            }
+          }
+          
+          log.info('✅ Adaptive events synced');
+        }
+      } catch (error) {
+        log.error('Error syncing adaptive events:', error);
+        // Don't throw - allow session to complete
+      }
+      
       return data[0];
     } catch (error) {
       log.error('❌ Error ending session in Supabase:', error);
