@@ -914,6 +914,11 @@ class EnhancedSessionManager {
       // Move to next cycle via transition
       this.currentCycle++;
       this.currentPhase = 'TRANSITION';
+      
+      // Update mock service if available
+      if (global.bluetoothService?.setCycle) {
+        global.bluetoothService.setCycle(this.currentCycle);
+      }
       this.nextPhaseAfterTransition = 'ALTITUDE';
       this.phaseTimeRemaining = 10; // 10 seconds
       this.phaseStartTime = Date.now();

@@ -6,6 +6,7 @@ class MockBLEService {
     this.baseSpO2 = 96;
     this.baseHR = 72;
     this.currentPhase = 'altitude';
+    this.currentCycle = 1;
   }
 
   async connect() {
@@ -42,14 +43,23 @@ class MockBLEService {
     let spo2, heartRate;
     
     if (this.currentPhase === 'altitude') {
-      spo2 = Math.round(this.baseSpO2 - 8 + waveform * 2);
+      // Cycle 1: High SpO2 (90-95%) to trigger dial increase
+      // Cycle 2: Low SpO2 (80-85%) to trigger dial decrease and mask lifts
+      if (this.currentCycle === 1) {
+        // First hypoxic phase: 90-95%
+        spo2 = Math.round(92.5 + waveform * 2.5);
+      } else {
+        // Second hypoxic phase: 80-85%
+        spo2 = Math.round(82.5 + waveform * 2.5);
+      }
       heartRate = Math.round(this.baseHR + 15 + waveform * 5);
     } else {
+      // Recovery phase: normal high SpO2
       spo2 = Math.round(this.baseSpO2 - 2 + waveform);
       heartRate = Math.round(this.baseHR + 5 + waveform * 3);
     }
     
-    spo2 = Math.max(80, Math.min(100, spo2));
+    spo2 = Math.max(75, Math.min(100, spo2));
     heartRate = Math.max(50, Math.min(120, heartRate));
     
     return {
@@ -62,6 +72,11 @@ class MockBLEService {
 
   setPhase(phase) {
     this.currentPhase = phase;
+  }
+
+  setCycle(cycle) {
+    this.currentCycle = cycle;
+    console.log(`📊 MockBLE: Cycle updated to ${cycle}`);
   }
 
   onData(callback) {

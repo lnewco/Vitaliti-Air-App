@@ -33,6 +33,13 @@ class MockBLEServiceWrapper {
     console.log(`📱 MockBLE: Reference released (count: ${this.referenceCount})`);
   }
   
+  // Update current cycle for mock data generation
+  setCycle(cycle) {
+    if (this.mockService.setCycle) {
+      this.mockService.setCycle(cycle);
+    }
+  }
+  
   // Device discovery
   setOnDeviceFound(callback) {
     this.deviceFoundCallback = callback;
