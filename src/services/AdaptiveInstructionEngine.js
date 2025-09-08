@@ -198,6 +198,7 @@ class AdaptiveInstructionEngine {
         this.maskLiftState.hasTriggeredFirst = true;
         this.maskLiftState.firstTriggerTime = timestamp;
         this.maskLiftState.lastInstructionTime = timestamp;
+        this.currentPhaseMaskLifts++; // Track total mask lifts for this phase
         
         console.log('\n🎭 FIRST MASK LIFT (83% threshold)');
         console.log(`📊 SpO2: ${currentSpO2}%`);
@@ -236,6 +237,7 @@ class AdaptiveInstructionEngine {
           this.maskLiftState.hasTriggeredSecond = true;
           this.maskLiftState.secondTriggerTime = timestamp;
           this.maskLiftState.lastInstructionTime = timestamp;
+          this.currentPhaseMaskLifts++; // Track total mask lifts for this phase
           
           console.log('\n🎭 SECOND MASK LIFT (<=80% during cooldown)');
           console.log(`📊 SpO2: ${currentSpO2}%`);
@@ -269,6 +271,7 @@ class AdaptiveInstructionEngine {
           this.maskLiftState.hasTriggeredFirst = true;
           this.maskLiftState.firstTriggerTime = timestamp;
           this.maskLiftState.lastInstructionTime = timestamp;
+          this.currentPhaseMaskLifts++; // Track total mask lifts
           
           console.log('\n🎭 NEW FIRST MASK LIFT (after cooldown expired)');
           console.log(`📊 SpO2: ${currentSpO2}%`);
@@ -644,22 +647,29 @@ class AdaptiveInstructionEngine {
     
     console.log('🎯 Calculating next altitude level from current level:', currentLevel);
     console.log(`   Min SpO2: ${minSpO2}%, Avg SpO2: ${avgSpO2}%`);
+    console.log(`   Mask lifts this phase: ${this.currentPhaseMaskLifts}`);
+    console.log(`   Target range: ${targets.min}% - ${targets.max}%`);
 
     // Rule 1: INCREASE altitude if average SpO2 > 90% (too easy)
     if (avgSpO2 !== null && avgSpO2 > targets.max) {
-      const newLevel = Math.min(10, currentLevel + 1); // Cap at level 10
-      return {
-        adjustment: +1,
-        newLevel,
-        reason: `Average SpO2 (${avgSpO2.toFixed(1)}%) > ${targets.max}% - increase altitude`,
-        avgSpO2,
-        targetMax: targets.max
-      };
+      const newLevel = Math.min(11, currentLevel + 1); // Cap at level 11 (maximum)
+      // Don't suggest increase if already at max
+      if (currentLevel >= 11) {
+        console.log('   Already at maximum altitude level 11, cannot increase');
+      } else {
+        return {
+          adjustment: +1,
+          newLevel,
+          reason: `Average SpO2 (${avgSpO2.toFixed(1)}%) > ${targets.max}% - increase altitude`,
+          avgSpO2,
+          targetMax: targets.max
+        };
+      }
     }
 
     // Rule 2: DECREASE altitude if average SpO2 < 85% (too hard)
     if (avgSpO2 !== null && avgSpO2 < targets.min) {
-      const newLevel = Math.max(0, currentLevel - 1); // Floor at level 0
+      const newLevel = Math.max(5, currentLevel - 1); // Floor at level 5 (minimum safe level)
       return {
         adjustment: -1,
         newLevel,
@@ -670,13 +680,14 @@ class AdaptiveInstructionEngine {
     }
 
     // Rule 3: DECREASE altitude if 2+ mask lifts triggered (safety concern)
-    if (this.maskLiftState.hasTriggeredSecond) {
-      const newLevel = Math.max(0, currentLevel - 1); // Floor at level 0
+    // Use the persistent counter, not the resetting flag
+    if (this.currentPhaseMaskLifts >= 2) {
+      const newLevel = Math.max(5, currentLevel - 1); // Floor at level 5 (minimum safe level)
       return {
         adjustment: -1,
         newLevel,
-        reason: `Two or more mask lift instructions triggered - decrease altitude`,
-        maskLiftsTriggered: 2
+        reason: `${this.currentPhaseMaskLifts} mask lift instructions triggered - decrease altitude`,
+        maskLiftsTriggered: this.currentPhaseMaskLifts
       };
     }
 
