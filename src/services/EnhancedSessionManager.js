@@ -428,8 +428,31 @@ class EnhancedSessionManager {
       const baselineHRV = protocolConfig.baselineHRV || null;
       console.log('✅ Adaptive engine initialized');
       
+      // Check for existing active session first
+      console.log('📝 Step 4: Checking for existing active sessions...');
+      try {
+        const existingActive = await AsyncStorage.getItem('activeSession');
+        if (existingActive) {
+          const activeData = JSON.parse(existingActive);
+          console.warn('⚠️ Found existing active session:', activeData.id);
+          // Clear it if it's old (> 2 hours)
+          const sessionAge = Date.now() - activeData.startTime;
+          if (sessionAge > 2 * 60 * 60 * 1000) {
+            console.log('🗑️ Clearing old active session');
+            await AsyncStorage.removeItem('activeSession');
+          } else {
+            throw new Error(`Active session already exists: ${activeData.id}`);
+          }
+        }
+      } catch (error) {
+        if (error.message?.includes('Active session already exists')) {
+          throw error;
+        }
+        console.log('No active session found, proceeding...');
+      }
+      
       // Create session in LOCAL DATABASE FIRST
-      console.log('📝 Step 4: Creating session in local database...');
+      console.log('📝 Step 4b: Creating session in local database...');
       await DatabaseService.init();
       await DatabaseService.createSession(sessionId, defaultAltitudeLevel, this.protocolConfig);
       console.log('✅ Session created in local database:', sessionId);
@@ -823,6 +846,13 @@ class EnhancedSessionManager {
       
       this.phaseTimeRemaining = Math.max(0, phaseDuration - elapsed);
       
+      // Track total time in each phase type
+      if (this.currentPhase === 'ALTITUDE') {
+        this.totalAltitudeTime = (this.totalAltitudeTime || 0) + 1;
+      } else if (this.currentPhase === 'RECOVERY') {
+        this.totalRecoveryTime = (this.totalRecoveryTime || 0) + 1;
+      }
+      
       // Log every 5 seconds for debugging
       if (elapsed % 5 === 0) {
         console.log(`⏱️ Phase timer: ${this.currentPhase} - ${this.phaseTimeRemaining}s remaining`);
@@ -1207,13 +1237,10 @@ class EnhancedSessionManager {
       );
       console.log('✅ Session ended in local database:', this.currentSession.id, 'Duration:', duration, 'seconds');
       
-      // Then update in Supabase
+      // Then update in Supabase with ALL stats
       await SupabaseService.endSession(
         this.currentSession.id, 
-        {
-          avgSpO2: stats.avgSpO2,
-          avgHeartRate: stats.avgHeartRate
-        },
+        stats,  // Pass ALL stats, not just avgSpO2 and avgHeartRate
         this.startTime
       );
     }
@@ -1317,6 +1344,9 @@ class EnhancedSessionManager {
     this.phaseStartTime = null;
     this.readingBuffer = [];
     this.hasActiveLiveActivity = false;
+    this.totalAltitudeTime = 0;
+    this.totalRecoveryTime = 0;
+    this.totalAltitudeAdjustments = 0;
     
     // Stop HKWorkout if running
     if (this.isUsingHKWorkout) {
@@ -1423,9 +1453,62 @@ class EnhancedSessionManager {
     if (!this.currentSession) return { avgSpO2: null, avgHeartRate: null };
 
     try {
-      // For now, return default stats - this would normally calculate from readings
-      // TODO: Implement actual stats calculation from session readings
-      return { avgSpO2: 95, avgHeartRate: 72 };
+      // Calculate actual stats from readings
+      const readings = this.readings || [];
+      const validSpO2Readings = readings.filter(r => r.spo2 && r.spo2 > 0);
+      const validHRReadings = readings.filter(r => r.heartRate && r.heartRate > 0);
+      
+      const avgSpO2 = validSpO2Readings.length > 0 
+        ? Math.round(validSpO2Readings.reduce((sum, r) => sum + r.spo2, 0) / validSpO2Readings.length)
+        : null;
+      
+      const avgHeartRate = validHRReadings.length > 0
+        ? Math.round(validHRReadings.reduce((sum, r) => sum + r.heartRate, 0) / validHRReadings.length)
+        : null;
+      
+      const minSpO2 = validSpO2Readings.length > 0
+        ? Math.min(...validSpO2Readings.map(r => r.spo2))
+        : null;
+      
+      const maxSpO2 = validSpO2Readings.length > 0
+        ? Math.max(...validSpO2Readings.map(r => r.spo2))
+        : null;
+      
+      const minHeartRate = validHRReadings.length > 0
+        ? Math.min(...validHRReadings.map(r => r.heartRate))
+        : null;
+      
+      const maxHeartRate = validHRReadings.length > 0
+        ? Math.max(...validHRReadings.map(r => r.heartRate))
+        : null;
+      
+      // Get altitude progression data
+      const currentAltitudeLevel = this.currentAltitudeLevel || this.startingAltitudeLevel || 6;
+      const totalMaskLifts = this.adaptiveEngine?.getTotalMaskLifts() || 0;
+      const totalAltitudeAdjustments = this.totalAltitudeAdjustments || 0;
+      const actualCyclesCompleted = this.currentCycle - 1; // Current cycle minus 1 since we start at 1
+      const actualHypoxicTime = Math.floor(this.totalAltitudeTime || 0);
+      const actualHyperoxicTime = Math.floor(this.totalRecoveryTime || 0);
+      const completionPercentage = Math.round((actualCyclesCompleted / this.totalCycles) * 100);
+      
+      return { 
+        avgSpO2,
+        avgHeartRate,
+        minSpO2,
+        maxSpO2,
+        minHeartRate,
+        maxHeartRate,
+        totalReadings: readings.length,
+        currentAltitudeLevel,
+        startingAltitudeLevel: this.startingAltitudeLevel || 6,
+        totalMaskLifts,
+        totalAltitudeAdjustments,
+        actualCyclesCompleted,
+        actualHypoxicTime,
+        actualHyperoxicTime,
+        completionPercentage,
+        cyclesCompleted: actualCyclesCompleted
+      };
     } catch (error) {
       console.error('❌ Failed to calculate session stats:', error);
       return { avgSpO2: null, avgHeartRate: null };
@@ -1723,6 +1806,12 @@ class EnhancedSessionManager {
       const previousLevel = this.currentAltitudeLevel;
       this.currentAltitudeLevel = level;
       
+      // Track altitude adjustments
+      if (previousLevel !== level) {
+        this.totalAltitudeAdjustments = (this.totalAltitudeAdjustments || 0) + 1;
+        console.log(`📊 Altitude adjustment #${this.totalAltitudeAdjustments}: ${previousLevel} → ${level}`);
+      }
+      
       // Update database with new altitude level
       if (this.currentSession?.id) {
         DatabaseService.updateSessionAltitudeLevel(this.currentSession.id, level)
@@ -1755,7 +1844,11 @@ class EnhancedSessionManager {
     
     // CRITICAL FIX: Apply altitude immediately if in altitude phase
     if (this.currentPhase === 'ALTITUDE') {
+      const previousLevel = this.currentAltitudeLevel;
       this.currentAltitudeLevel = newLevel;
+      if (previousLevel !== newLevel) {
+        this.totalAltitudeAdjustments = (this.totalAltitudeAdjustments || 0) + 1;
+      }
       console.log('🏔️ Applied altitude level immediately: ' + newLevel);
     } else {
       // Store as pending if in recovery/transition
