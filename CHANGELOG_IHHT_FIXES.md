@@ -338,4 +338,164 @@ Pending tasks for future development:
 
 ---
 
-*Last updated: 2025-01-09 (Session 3)*
+## 🔧 Comprehensive Session Data Fixes
+
+### Date: 2025-01-09 (Session 4)
+
+### Fixed Multiple Critical Session Issues
+
+#### 1. Duration Showing as 0:00
+**Files:** `src/services/EnhancedSessionManager.js`
+
+**Problem:**
+- Session duration displayed as "0:00" in session history
+- `total_duration_seconds` field was 0 or NULL in database
+- Stats calculation was returning mock data (avgSpO2: 95, avgHeartRate: 72)
+
+**Root Causes:**
+- `calculateSessionStats()` was returning hardcoded values instead of actual data
+- Only partial stats (avgSpO2, avgHeartRate) were passed to `SupabaseService.endSession()`
+- Missing tracking for actual time spent in altitude/recovery phases
+
+**Fix:**
+```javascript
+// Before: Mock data
+return { avgSpO2: 95, avgHeartRate: 72 };
+
+// After: Actual calculation from readings
+const avgSpO2 = validSpO2Readings.length > 0 
+  ? Math.round(validSpO2Readings.reduce((sum, r) => sum + r.spo2, 0) / validSpO2Readings.length)
+  : null;
+```
+
+**Complete Stats Now Tracked:**
+- avgSpO2, minSpO2, maxSpO2 (calculated from actual readings)
+- avgHeartRate, minHeartRate, maxHeartRate
+- totalReadings count
+- actualHypoxicTime and actualHyperoxicTime (tracked per second)
+- actualCyclesCompleted and completionPercentage
+- currentAltitudeLevel and totalAltitudeAdjustments
+- totalMaskLifts from adaptive engine
+
+#### 2. Multiple Duplicate Sessions
+**Files:** `src/services/EnhancedSessionManager.js`
+
+**Problem:**
+- Multiple sessions created at exactly same timestamp (e.g., 5+ sessions at 12:43 PM)
+- Sessions showing with identical stats (95% SpO2, 72 HR)
+- App screenshot showed repeated duplicate entries
+
+**Root Causes:**
+- No check for existing active session before creating new one
+- Multiple session start calls without proper cleanup
+- Abandoned sessions from app crashes not handled
+
+**Fix Implementation:**
+```javascript
+// Check for existing active session first
+const existingActive = await AsyncStorage.getItem('activeSession');
+if (existingActive) {
+  const activeData = JSON.parse(existingActive);
+  const sessionAge = Date.now() - activeData.startTime;
+  if (sessionAge > 2 * 60 * 60 * 1000) {
+    // Clear old session (>2 hours)
+    await AsyncStorage.removeItem('activeSession');
+  } else {
+    throw new Error(`Active session already exists: ${activeData.id}`);
+  }
+}
+```
+
+**Duplicate Prevention Measures:**
+- Session start lock mechanism (`sessionStartInProgress` flag)
+- Active session check in AsyncStorage
+- Automatic cleanup of abandoned sessions >2 hours old
+- Single promise for concurrent start attempts
+
+#### 3. Missing Phase Time Tracking
+**Files:** `src/services/EnhancedSessionManager.js`
+
+**Problem:**
+- `actualHypoxicTime` and `actualHyperoxicTime` always 0
+- No tracking of time spent in each phase type
+- Completion percentage couldn't be calculated
+
+**Fix:**
+```javascript
+// Track total time in each phase type (in timer interval)
+if (this.currentPhase === 'ALTITUDE') {
+  this.totalAltitudeTime = (this.totalAltitudeTime || 0) + 1;
+} else if (this.currentPhase === 'RECOVERY') {
+  this.totalRecoveryTime = (this.totalRecoveryTime || 0) + 1;
+}
+```
+
+**Now Tracking:**
+- Increments totalAltitudeTime every second during altitude phases
+- Increments totalRecoveryTime every second during recovery phases
+- Properly resets counters in `resetSessionState()`
+- Includes actual times in session stats for database storage
+
+#### 4. Altitude Adjustments Not Counted
+**Files:** `src/services/EnhancedSessionManager.js`
+
+**Problem:**
+- `total_altitude_adjustments` always 0 in database
+- No tracking when altitude level changed during session
+- Progressive overload analysis missing adjustment data
+
+**Fix:**
+```javascript
+// Track altitude adjustments in setAltitudeLevel()
+if (previousLevel !== level) {
+  this.totalAltitudeAdjustments = (this.totalAltitudeAdjustments || 0) + 1;
+  console.log(`📊 Altitude adjustment #${this.totalAltitudeAdjustments}: ${previousLevel} → ${level}`);
+}
+```
+
+**Tracking Added To:**
+- `setAltitudeLevel()` method
+- `applyPendingAltitudeAdjustment()` method
+- Included in final session stats
+- Reset in `resetSessionState()`
+
+#### 5. User ID Mismatch
+**Investigation Results:**
+- Sessions being created with user_id: `da754dc4-e0bb-45f3-8547-71c2a6f2786c`
+- This is the correct authenticated user from Supabase
+- Last sign-in: 2025-09-08 15:56:22
+- User ID comes from `supabase.auth.getUser()` which is working correctly
+
+### Database Query Results
+
+**Your Recent Session Statistics:**
+```sql
+Session ID: 6fde62be-a8c7-40f0-a9e9-6b172a70e21d
+Duration: 15 minutes (12:17 PM - 12:32 PM)
+Total Readings: 1787
+Average SpO2: 94.8% (should have triggered dial increase)
+Min SpO2: 89%
+Max SpO2: 99%
+Average HR: 73 bpm
+```
+
+### Verification Checklist
+- ✅ Duration now calculated from (end_time - start_time)
+- ✅ Complete stats object passed to SupabaseService
+- ✅ Actual metrics calculated from session readings
+- ✅ Duplicate session prevention implemented
+- ✅ Active session tracking in AsyncStorage
+- ✅ Phase time tracking (altitude/recovery)
+- ✅ Altitude adjustment counting
+- ✅ All metrics properly saved to database
+
+### Impact
+- Users will see correct session duration in history
+- No more duplicate sessions at same timestamp
+- Accurate SpO2/HR statistics from actual readings
+- Complete data for progressive overload analysis
+- Proper altitude adjustment tracking for IHHT protocol
+
+---
+
+*Last updated: 2025-01-09 (Session 4)*
