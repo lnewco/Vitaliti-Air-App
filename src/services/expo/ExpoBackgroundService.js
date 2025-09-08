@@ -77,6 +77,10 @@ export default class ExpoBackgroundService extends BaseBackgroundService {
   }
 
   async schedulePhaseNotifications(sessionData) {
+    // DISABLED: These notifications are showing when app is active
+    console.log('📱 Phase notifications DISABLED in ExpoBackgroundService - they show when app is active');
+    return;
+    
     // Cancel any existing notifications
     await Notifications.cancelAllScheduledNotificationsAsync();
     

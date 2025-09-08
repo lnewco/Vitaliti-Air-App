@@ -355,11 +355,25 @@ class EnhancedSessionManager {
       
       // Update protocol configuration
       console.log('📝 Step 1: Updating protocol configuration...');
-      this.protocolConfig = {
-        totalCycles: protocolConfig.totalCycles || this.protocolConfig.totalCycles,
-        altitudeDuration: protocolConfig.hypoxicDuration || this.protocolConfig.altitudeDuration,
-        recoveryDuration: protocolConfig.hyperoxicDuration || this.protocolConfig.recoveryDuration
-      };
+      // Check if running in Expo Go for testing mode
+      const isExpoGo = Constants.appOwnership === 'expo';
+      
+      if (isExpoGo) {
+        // Override with testing durations for Expo Go
+        console.log('🧪 EXPO GO DETECTED - Overriding with test durations');
+        this.protocolConfig = {
+          totalCycles: 3,           // 3 cycles for testing dial adjustments
+          altitudeDuration: 30,     // 30 seconds altitude
+          recoveryDuration: 20      // 20 seconds recovery
+        };
+      } else {
+        // Apply normal protocol configuration for EAS/production builds
+        this.protocolConfig = {
+          totalCycles: protocolConfig.totalCycles || this.protocolConfig.totalCycles,
+          altitudeDuration: protocolConfig.hypoxicDuration || this.protocolConfig.altitudeDuration,
+          recoveryDuration: protocolConfig.hyperoxicDuration || this.protocolConfig.recoveryDuration
+        };
+      }
       console.log('✅ Protocol config updated:', this.protocolConfig);
 
       // Determine session type (calibration vs training)
@@ -474,6 +488,11 @@ class EnhancedSessionManager {
       
       // Update mock service with initial cycle and phase
       if (global.bluetoothService) {
+        // Start the mock session
+        if (global.bluetoothService.startSession) {
+          console.log('🚀 Starting mock BLE session');
+          global.bluetoothService.startSession();
+        }
         if (global.bluetoothService.setCycle) {
           console.log('🔄 Setting initial cycle to 1 for mock service');
           global.bluetoothService.setCycle(1);
@@ -710,6 +729,18 @@ class EnhancedSessionManager {
 
   async schedulePhaseNotifications() {
     try {
+      // Only send notifications if app is backgrounded
+      if (this.appState === 'active') {
+        console.log('📱 App is active, skipping notification scheduling');
+        return;
+      }
+      
+      // Don't schedule notifications during transition phase
+      if (this.currentPhase === 'TRANSITION') {
+        console.log('📱 Skipping notifications during transition phase');
+        return;
+      }
+      
       // Aggressively cancel all existing notifications multiple times to ensure cleanup
       await Notifications.cancelAllScheduledNotificationsAsync();
       // Wait a moment then cancel again to ensure cleanup
@@ -739,12 +770,9 @@ class EnhancedSessionManager {
       }
       
       if (warningTime > 0) {
-        const nextPhase = this.currentPhase === 'ALTITUDE' ? 'Recovery' : 'Altitude';
-        
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: `⏰ ${nextPhase} Phase Coming Up`,
-            body: `Get ready to switch in 30 seconds`,
+            title: `Switching masks in 30 seconds!`,
             data: { type: 'phaseWarning' }
           },
           trigger: {
@@ -753,19 +781,17 @@ class EnhancedSessionManager {
         });
       }
       
-      // Schedule phase change notification
-      const changeTime = this.phaseTimeRemaining * 1000;
-      const nextPhase = this.currentPhase === 'ALTITUDE' ? 'Recovery' : 'Altitude';
-      const instruction = nextPhase === 'Altitude' ? 'Put ON mask' : 'Take OFF mask';
+      // Schedule mask switch notification for when TRANSITION starts
+      // This is when the current phase ends and user needs to switch masks
+      const transitionStartTime = this.phaseTimeRemaining * 1000;
       
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: `${nextPhase === 'Altitude' ? '🔴' : '🔵'} ${nextPhase} Phase Now`,
-          body: instruction,
-          data: { type: 'phaseChange' }
+          title: `Switch Your Mask Now`,
+          data: { type: 'maskSwitch' }
         },
         trigger: {
-          seconds: Math.max(1, Math.floor(changeTime / 1000))
+          seconds: Math.max(1, Math.floor(transitionStartTime / 1000))
         }
       });
       
@@ -859,6 +885,35 @@ class EnhancedSessionManager {
         : this.protocolConfig.altitudeDuration;
       this.phaseStartTime = Date.now();
       
+      // Apply pending altitude level when transitioning to altitude phase
+      if (this.currentPhase === 'ALTITUDE' && this.pendingAltitudeLevel !== undefined) {
+        console.log(`🏔️ Applying pending altitude level: ${this.pendingAltitudeLevel} (was ${this.currentAltitudeLevel})`);
+        this.currentAltitudeLevel = this.pendingAltitudeLevel;
+        this.pendingAltitudeLevel = undefined;
+        
+        // Start altitude phase in adaptive engine with new level
+        if (this.adaptiveEngine) {
+          console.log(`📊 Starting altitude phase ${this.currentCycle} at level ${this.currentAltitudeLevel}`);
+          this.adaptiveEngine.startAltitudePhase(
+            this.currentSession?.id,
+            this.currentCycle,
+            this.currentAltitudeLevel,
+            this.currentSessionType
+          );
+        }
+      } else if (this.currentPhase === 'ALTITUDE') {
+        // No pending adjustment, start with current level
+        if (this.adaptiveEngine) {
+          console.log(`📊 Starting altitude phase ${this.currentCycle} at current level ${this.currentAltitudeLevel}`);
+          this.adaptiveEngine.startAltitudePhase(
+            this.currentSession?.id,
+            this.currentCycle,
+            this.currentAltitudeLevel,
+            this.currentSessionType
+          );
+        }
+      }
+      
       // Update mock service with new phase
       if (global.bluetoothService?.setPhase) {
         const mockPhase = this.currentPhase === 'RECOVERY' ? 'recovery' : 'altitude';
@@ -868,8 +923,7 @@ class EnhancedSessionManager {
       
       console.log(`🔄 Transition complete - starting ${this.currentPhase} phase`);
       
-      // Send notification for actual phase start
-      await this.sendPhaseStartNotification(this.currentPhase);
+      // Don't send immediate notification - user already switched masks during transition
       this.nextPhaseAfterTransition = null;
       return;
     }
@@ -914,6 +968,16 @@ class EnhancedSessionManager {
       
       console.log('⚠️ Entering mask switch transition → Take OFF mask for Recovery phase');
       
+      // Send in-app mask switch instruction if app is active
+      if (this.appState === 'active' && this.adaptiveEngine) {
+        this.adaptiveEngine.sendInstruction({
+          type: 'mask_switch',
+          title: 'Switch Your Mask Now',
+          message: 'Take OFF mask - switching to Recovery',
+          priority: 'high'
+        });
+      }
+      
     } else if (this.currentPhase === 'RECOVERY') {
       // Track recovery phase completion
       await this.recordAdaptiveEvent('recovery_complete', {
@@ -946,6 +1010,16 @@ class EnhancedSessionManager {
       await this.updateSessionCycle();
       
       console.log(`⚠️ Entering mask switch transition → PUT ON mask for Hypoxic phase (Cycle ${this.currentCycle})`);
+      
+      // Send in-app mask switch instruction if app is active
+      if (this.appState === 'active' && this.adaptiveEngine) {
+        this.adaptiveEngine.sendInstruction({
+          type: 'mask_switch',
+          title: 'Switch Your Mask Now',
+          message: 'Put ON mask - switching to Altitude',
+          priority: 'high'
+        });
+      }
     }
 
     // Schedule new notifications for this phase
@@ -1108,6 +1182,12 @@ class EnhancedSessionManager {
       );
     }
 
+    // End mock session if available
+    if (global.bluetoothService?.endSession) {
+      console.log('🛑 Ending mock BLE session');
+      global.bluetoothService.endSession();
+    }
+
     // Clear session state
     const sessionId = this.currentSession?.id;
     this.resetSessionState();
@@ -1137,8 +1217,9 @@ class EnhancedSessionManager {
       console.log('🎉 Session completed with', this.currentCycle, 'cycles');
     }
 
-    // Set phase to COMPLETED so UI can detect it
+    // Set phase to COMPLETED and time to 0 immediately so UI can detect it
     this.currentPhase = 'COMPLETED';
+    this.phaseTimeRemaining = 0;
     
     // Notify listeners that session is complete
     this.notify('sessionCompleted', {
@@ -1147,11 +1228,8 @@ class EnhancedSessionManager {
       totalCycles: this.protocolConfig?.totalCycles
     });
 
-    // Give UI time to detect completion before stopping
-    setTimeout(async () => {
-      // Stop the session
-      await this.stopSession('completed');
-    }, 2000); // 2 seconds for UI to handle completion
+    // Stop the session immediately - UI should handle the transition
+    await this.stopSession('completed');
   }
 
   // Alias for stopSession to maintain compatibility with IHHTTrainingScreen
@@ -1241,7 +1319,11 @@ class EnhancedSessionManager {
       phase: this.currentPhase,
       cycle: this.currentCycle,
       phase_time_remaining: this.phaseTimeRemaining,
-      data_source: dataSource  // Track whether this is mock or real data
+      data_source: dataSource,  // Track whether this is mock or real data
+      // Add proper field mappings for Supabase
+      phase_type: this.currentPhase,  // Maps to phase_type column
+      cycle_number: this.currentCycle,  // Maps to cycle_number column
+      fio2_level: this.currentAltitudeLevel  // Maps to fio2_level (altitude level)
     };
 
     this.readingBuffer.push(enhancedReading);
@@ -1626,28 +1708,31 @@ class EnhancedSessionManager {
     console.log('📊 Previous Level:', this.currentAltitudeLevel);
     console.log('📊 New Level:', newLevel);
     console.log('⏰ Time:', new Date().toLocaleTimeString());
+    console.log('📌 Will apply at next altitude phase');
     
     // Update the adaptive engine's tracked level
     if (this.adaptiveEngine) {
       this.adaptiveEngine.confirmDialAdjustment(newLevel);
     }
     
-    // Update our tracked altitude level
+    // Store the pending altitude level for next altitude phase
+    // Don't update currentAltitudeLevel yet - it will be applied when transitioning to altitude
     const previousLevel = this.currentAltitudeLevel;
-    this.currentAltitudeLevel = newLevel;
+    this.pendingAltitudeLevel = newLevel;
     
     // Record the adjustment event
     if (this.currentSession?.id) {
       const adjustmentEvent = {
         sessionId: this.currentSession.id,
         event_type: 'dial_adjustment_confirmed',
-        event_data: {
+        event_timestamp: new Date().toISOString(),
+        current_altitude_level: newLevel,
+        additionalData: {
           previousLevel,
           newLevel,
           adjustment: newLevel - previousLevel,
           timestamp: new Date().toISOString()
-        },
-        timestamp: new Date().toISOString()
+        }
       };
       
       DatabaseService.saveAdaptiveEvent(adjustmentEvent)
@@ -1673,11 +1758,29 @@ class EnhancedSessionManager {
   // Set protocol configuration (called before starting session)
   setProtocol(config) {
     console.log('🔧 Setting protocol configuration:', config);
-    this.protocolConfig = {
-      totalCycles: config.totalCycles || 3,
-      altitudeDuration: config.hypoxicDuration || 420,
-      recoveryDuration: config.hyperoxicDuration || 180
-    };
+    
+    // Check if running in Expo Go for testing mode
+    const isExpoGo = Constants.appOwnership === 'expo';
+    
+    if (isExpoGo) {
+      // Expo Go testing mode - shortened durations for rapid testing
+      console.log('🧪 EXPO GO TESTING MODE - Using shortened durations (2.5 min total)');
+      this.protocolConfig = {
+        totalCycles: 3,           // 3 cycles for testing dial adjustments
+        altitudeDuration: 30,     // 30 seconds altitude
+        recoveryDuration: 20      // 20 seconds recovery
+      };
+    } else {
+      // EAS builds, development builds, production - full durations
+      console.log('🏥 FULL SESSION MODE - Using standard durations (30+ min total)');
+      this.protocolConfig = {
+        totalCycles: config.totalCycles || 3,
+        altitudeDuration: config.hypoxicDuration || 420,    // 7 minutes
+        recoveryDuration: config.hyperoxicDuration || 180   // 3 minutes
+      };
+    }
+    
+    console.log('📊 Final protocol config:', this.protocolConfig);
   }
 
   // Get protocol configuration

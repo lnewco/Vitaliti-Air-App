@@ -112,6 +112,9 @@ export const BluetoothProvider = ({ children }) => {
     // Acquire reference to BluetoothService
     BluetoothService.acquireReference();
     
+    // Make service globally available for EnhancedSessionManager
+    global.bluetoothService = BluetoothService;
+    
     // Set up event handler for pulse oximeter
     BluetoothService.setOnDeviceFound((device) => {
       log.info('Context: Device found callback triggered:', device.name || device.localName);
@@ -168,6 +171,21 @@ export const BluetoothProvider = ({ children }) => {
     };
   }, [throttledUIUpdate]);
 
+  // ===== SESSION CONTROL =====
+  const startSession = useCallback(() => {
+    console.log('🚀 BluetoothContext: Starting session');
+    if (BluetoothService.startSession) {
+      BluetoothService.startSession();
+    }
+  }, []);
+  
+  const endSession = useCallback(() => {
+    console.log('🛑 BluetoothContext: Ending session');
+    if (BluetoothService.endSession) {
+      BluetoothService.endSession();
+    }
+  }, []);
+  
   // ===== SCANNING =====
   const startScan = useCallback(async () => {
     try {
@@ -281,7 +299,11 @@ export const BluetoothProvider = ({ children }) => {
     
     // Actions
     connectToDevice,
-    disconnect
+    disconnect,
+    
+    // Session control
+    startSession,
+    endSession
   }), [
     isScanning,
     startScan,
@@ -291,7 +313,9 @@ export const BluetoothProvider = ({ children }) => {
     discoveredDevices,
     connectedPulseOxDevice,
     connectToDevice,
-    disconnect
+    disconnect,
+    startSession,
+    endSession
   ]);
 
   const dataValue = useMemo(() => ({

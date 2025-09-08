@@ -245,6 +245,10 @@ export default class AggressiveBackgroundService {
   }
 
   async scheduleKeepAliveNotifications() {
+    // DISABLED: These notifications are showing when app is active
+    console.log('📱 Keep-alive notifications DISABLED - they show when app is active');
+    return;
+    
     // Schedule silent local notifications to wake up the app
     try {
       const now = Date.now();
@@ -342,6 +346,10 @@ export default class AggressiveBackgroundService {
   }
 
   async scheduleEmergencyNotifications() {
+    // DISABLED: These notifications are showing when app is active
+    console.log('📱 Emergency notifications DISABLED - they show when app is active');
+    return;
+    
     // Schedule only a few critical notifications to wake up the app
     const criticalIntervals = [60, 120]; // Just 2 notifications: 1 minute and 2 minutes
     

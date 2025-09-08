@@ -205,6 +205,21 @@ class MockBLEServiceWrapper {
   setPhase(phase) {
     this.mockService.setPhase(phase);
   }
+  
+  // Session control - important for starting mock data generation
+  startSession() {
+    console.log('🚀 MockBLEWrapper: Starting session - activating mock data generation');
+    if (this.mockService.startSession) {
+      this.mockService.startSession();
+    }
+  }
+  
+  endSession() {
+    console.log('🛑 MockBLEWrapper: Ending session - stopping mock data generation');
+    if (this.mockService.endSession) {
+      this.mockService.endSession();
+    }
+  }
 }
 
 export default new MockBLEServiceWrapper();

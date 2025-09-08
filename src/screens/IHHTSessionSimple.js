@@ -14,6 +14,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import * as Haptics from 'expo-haptics';
+import Constants from 'expo-constants';
 import { useBluetooth } from '../context/BluetoothContext';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import AdaptiveInstructionEngine from '../services/AdaptiveInstructionEngine';
@@ -21,11 +23,12 @@ import SessionIdGenerator from '../utils/sessionIdGenerator';
 import DatabaseService from '../services/DatabaseService';
 import SupabaseService from '../services/SupabaseService';
 import IntraSessionFeedback from '../components/feedback/IntraSessionFeedback';
+import AltitudeSlotMachine from '../components/AltitudeSlotMachine';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // Altitude conversion table
-const ALTITUDE_CONVERSION = {
+export const ALTITUDE_CONVERSION = {
   0: { fio2: 18.0, altitude: 4000, meters: 1219 },
   1: { fio2: 17.1, altitude: 5500, meters: 1676 },
   2: { fio2: 16.2, altitude: 7500, meters: 2286 },
@@ -128,7 +131,7 @@ const EKGWave = ({ heartRate, color = '#FF6B9D' }) => {
 export default function IHHTSessionSimple() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { pulseOximeterData, isPulseOxConnected } = useBluetooth();
+  const { pulseOximeterData, isPulseOxConnected, startSession, endSession } = useBluetooth();
   
   // Get params from navigation
   const sessionId = route.params?.sessionId || SessionIdGenerator.generate('IHHT');
@@ -146,6 +149,7 @@ export default function IHHTSessionSimple() {
   const [totalElapsedTime, setTotalElapsedTime] = useState(0);
   const updateInterval = useRef(null);
   const adaptiveEngineRef = useRef(null);
+  const hasShownTransitionInstruction = useRef(false);
   
   // UI state
   const [metrics, setMetrics] = useState({
@@ -156,15 +160,52 @@ export default function IHHTSessionSimple() {
   
   // Survey state
   const [showIntraSessionFeedback, setShowIntraSessionFeedback] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionFromLevel, setTransitionFromLevel] = useState(0);
+  const [transitionToLevel, setTransitionToLevel] = useState(0);
   const [hasShownFeedbackForCycle, setHasShownFeedbackForCycle] = useState({});
   const [lastKnownCycle, setLastKnownCycle] = useState(0);
   
   // Adaptive instruction state
   const [adaptiveInstruction, setAdaptiveInstruction] = useState(null);
   const [showAdaptiveInstruction, setShowAdaptiveInstruction] = useState(false);
+  const pendingInstructions = useRef([]); // Queue for pending instructions
+  const pendingDialAdjustment = useRef(null); // Store dial adjustment to show after switch masks
+  
+  // Helper function to show notification with buzz and fade-in
+  const showNotificationWithAnimation = (instruction) => {
+    console.log('📢 Showing notification with animation:', instruction);
+    
+    // Set the instruction first
+    setAdaptiveInstruction(instruction);
+    setShowAdaptiveInstruction(true);
+    
+    // Start with opacity 0 for fade-in effect
+    notificationOpacity.setValue(0);
+    
+    // Trigger double buzz
+    if (Haptics) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      setTimeout(() => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }, 200);
+    }
+    
+    // After buzzes complete, fade in the notification
+    setTimeout(() => {
+      Animated.timing(notificationOpacity, {
+        toValue: 1,
+        duration: 500, // Half second fade-in
+        useNativeDriver: true,
+      }).start();
+    }, 400); // Wait for double buzz to complete
+  };
   
   // Status animation
   const glowAnim = useRef(new Animated.Value(0.6)).current;
+  
+  // Notification fade-in animation
+  const notificationOpacity = useRef(new Animated.Value(0)).current;
   
   // Get status based on SpO2 and phase
   const getStatus = () => {
@@ -215,6 +256,10 @@ export default function IHHTSessionSimple() {
         if (EnhancedSessionManager.isActive) {
           console.log('⚠️ Cleaning up previous session state');
           await EnhancedSessionManager.endSession();
+          // Also end mock BLE session
+          if (endSession) {
+            endSession();
+          }
           // Wait a moment for cleanup to complete
           await new Promise(resolve => setTimeout(resolve, 500));
         }
@@ -227,18 +272,31 @@ export default function IHHTSessionSimple() {
         
         // Start session with EnhancedSessionManager
         // Ensure durations are correctly set in seconds
+        // Handle both manualAltitudeLevel (from SimplifiedSessionSetup) and defaultAltitudeLevel (legacy)
+        const altitudeLevel = protocolConfig.manualAltitudeLevel || protocolConfig.defaultAltitudeLevel || 6;
+        console.log('🏔️ Using altitude level:', altitudeLevel, 'from', {
+          manual: protocolConfig.manualAltitudeLevel,
+          default: protocolConfig.defaultAltitudeLevel
+        });
+        
         await EnhancedSessionManager.startSession(sessionId, {
           totalCycles: protocolConfig.totalCycles || 5,
           altitudeDuration: (protocolConfig.hypoxicDuration || 7) * 60,  // 7 minutes = 420 seconds
           recoveryDuration: (protocolConfig.hyperoxicDuration || 3) * 60, // 3 minutes = 180 seconds
           hypoxicDuration: (protocolConfig.hypoxicDuration || 7) * 60,   // Also set old naming for compatibility
           hyperoxicDuration: (protocolConfig.hyperoxicDuration || 3) * 60,
-          defaultAltitudeLevel: protocolConfig.defaultAltitudeLevel || 6
+          defaultAltitudeLevel: altitudeLevel
         });
         
         if (!isCancelled) {
           setSessionStarted(true);
           setIsInitializing(false);
+          
+          // Start mock BLE session for data generation
+          if (startSession) {
+            console.log('🚀 IHHTSessionSimple: Starting mock BLE session');
+            startSession();
+          }
         }
         
         // Keep screen awake
@@ -253,6 +311,10 @@ export default function IHHTSessionSimple() {
         try {
           if (EnhancedSessionManager.isActive) {
             await EnhancedSessionManager.endSession();
+            // Also end mock BLE session
+            if (endSession) {
+              endSession();
+            }
           }
         } catch (cleanupError) {
           console.error('Error during cleanup:', cleanupError);
@@ -282,6 +344,10 @@ export default function IHHTSessionSimple() {
         EnhancedSessionManager.endSession().catch(error => {
           console.error('Error ending session on unmount:', error);
         });
+        // Also end mock BLE session
+        if (endSession) {
+          endSession();
+        }
       }
     };
   }, []);
@@ -300,6 +366,62 @@ export default function IHHTSessionSimple() {
             if (info.sessionStartTime) {
               const actualElapsed = Math.floor((Date.now() - new Date(info.sessionStartTime).getTime()) / 1000);
               setTotalElapsedTime(actualElapsed);
+            }
+            
+            // Check for transition phase
+            if (info.currentPhase === 'TRANSITION') {
+              if (!isTransitioning && !hasShownTransitionInstruction.current) {
+                // Starting transition - determine direction based on what's next
+                // If we have a nextPhaseAfterTransition, use that to determine direction
+                const isGoingToRecovery = info.nextPhaseAfterTransition === 'RECOVERY';
+                
+                // Check if we have a pending dial adjustment to apply to the altitude level
+                let adjustedLevel = info.currentAltitudeLevel || metrics.dialLevel;
+                if (pendingDialAdjustment.current && !isGoingToRecovery) {
+                  // Apply the pending dial adjustment to the altitude level
+                  adjustedLevel = pendingDialAdjustment.current.newLevel || adjustedLevel;
+                  console.log(`🎯 Applying pending dial adjustment: ${adjustedLevel}`);
+                }
+                
+                const fromLevel = isGoingToRecovery ? adjustedLevel : 0;
+                const toLevel = isGoingToRecovery ? 0 : adjustedLevel;
+                
+                // Mark that we've shown the instruction for this transition
+                hasShownTransitionInstruction.current = true;
+                
+                // Show Switch Masks instruction
+                const instruction = {
+                  type: 'SWITCH_MASKS',
+                  title: isGoingToRecovery ? '🔵 Switch to Recovery' : '🔴 Switch to Altitude',
+                  message: isGoingToRecovery ? 
+                    'Remove mask and breathe normally' : 
+                    'Put on mask and continue breathing',
+                  priority: 'high',
+                  countdown: 5
+                };
+                
+                showNotificationWithAnimation(instruction);
+                
+                console.log(`🎰 Showing switch masks instruction: ${fromLevel} → ${toLevel} (next phase: ${info.nextPhaseAfterTransition})`);
+                console.log(`📋 Pending dial adjustment:`, pendingDialAdjustment.current);
+                
+                // Store transition details but don't start animation yet
+                setTransitionFromLevel(fromLevel);
+                setTransitionToLevel(toLevel);
+                // Don't set isTransitioning yet - wait for user confirmation
+              }
+            } else if (info.currentPhase !== 'TRANSITION') {
+              // Phase changed away from transition - reset the flag
+              if (hasShownTransitionInstruction.current) {
+                hasShownTransitionInstruction.current = false;
+                console.log('🔄 Reset transition instruction flag');
+              }
+              
+              if (isTransitioning) {
+                // Transition animation ended
+                console.log('🎰 Transition animation complete');
+                setIsTransitioning(false);
+              }
             }
             
             // Check if session completed
@@ -414,17 +536,55 @@ export default function IHHTSessionSimple() {
     }
   }, [sessionInfo?.currentPhase, sessionInfo?.currentCycle]);
   
+  // Process next instruction from queue
+  const processNextInstruction = () => {
+    if (pendingInstructions.current.length > 0 && !showAdaptiveInstruction) {
+      const nextInstruction = pendingInstructions.current.shift();
+      console.log('📋 Processing queued instruction:', nextInstruction);
+      handleAdaptiveInstruction(nextInstruction, true); // true = from queue
+    }
+  };
+
   // Handle adaptive instructions
-  const handleAdaptiveInstruction = (instruction) => {
-    console.log('🎯 Received adaptive instruction:', instruction);
+  const handleAdaptiveInstruction = (instruction, fromQueue = false) => {
+    console.log('🎯 Received adaptive instruction:', instruction, fromQueue ? '(from queue)' : '');
+    
+    // Special handling for dial adjustments during transitions
+    if ((instruction.type === 'dial_adjustment' || instruction.type === 'altitude_adjustment') && 
+        instruction.showDuringTransition && !fromQueue) {
+      console.log('📋 Storing dial adjustment to show after switch masks:', instruction);
+      pendingDialAdjustment.current = instruction;
+      return; // Don't show it yet
+    }
+    
+    // If we're already showing an instruction and this is a dial adjustment, queue it
+    if (!fromQueue && showAdaptiveInstruction && 
+        (instruction.type === 'dial_adjustment' || instruction.type === 'altitude_adjustment')) {
+      console.log('📋 Queueing dial adjustment instruction');
+      pendingInstructions.current.push(instruction);
+      return;
+    }
     
     // Format instruction with title and message if not already formatted
     let formattedInstruction = { ...instruction };
     
     if (instruction.type === 'mask_lift') {
-      formattedInstruction.title = 'Mask Lift Required';
+      formattedInstruction.title = instruction.title || 'Mask Lift Required';
       if (!formattedInstruction.message) {
         formattedInstruction.message = instruction.message || 'Lift mask 1mm, small breath';
+      }
+    } else if (instruction.type === 'mask_remove') {
+      // Emergency mask removal
+      formattedInstruction.title = instruction.title || 'Remove Mask Immediately';
+      formattedInstruction.type = 'mask_remove';
+      if (!formattedInstruction.message) {
+        formattedInstruction.message = instruction.message || 'Take off your mask completely';
+      }
+    } else if (instruction.type === 'mask_switch') {
+      // Mask switch instruction (for transitions)
+      formattedInstruction.title = instruction.title || 'Switch Your Mask Now';
+      if (!formattedInstruction.message) {
+        formattedInstruction.message = instruction.message || 'Switch masks for next phase';
       }
     } else if (instruction.type === 'dial_adjustment' || instruction.type === 'altitude_adjustment') {
       formattedInstruction.title = 'Dial Adjustment';
@@ -438,13 +598,19 @@ export default function IHHTSessionSimple() {
           formattedInstruction.message = instruction.message || 'Adjust dial as needed';
         }
       }
+      
+      // Actually update the dial level when adjustment is made
+      if (instruction.newLevel !== undefined) {
+        console.log(`🎛️ Adjusting dial level to: ${instruction.newLevel}`);
+        setMetrics(prev => ({
+          ...prev,
+          dialLevel: instruction.newLevel
+        }));
+      }
     }
     
-    setAdaptiveInstruction(formattedInstruction);
-    setShowAdaptiveInstruction(true);
-    
-    // Vibrate to get user attention
-    Vibration.vibrate([0, 300, 100, 300]);
+    // Use the animation function for all notifications
+    showNotificationWithAnimation(formattedInstruction);
     
     // Auto-dismiss after 10 seconds for mask lift, no auto-dismiss for dial adjustments
     if (instruction.type === 'mask_lift') {
@@ -476,24 +642,21 @@ export default function IHHTSessionSimple() {
       console.log('📱 App state changed to:', nextAppState);
       
       if (nextAppState === 'active' && sessionStarted) {
-        // App came to foreground, sync the timer
+        // App came to foreground - sync timers with background state
         const info = EnhancedSessionManager.getSessionInfo();
         if (info && info.sessionStartTime) {
           const actualElapsed = Math.floor((Date.now() - new Date(info.sessionStartTime).getTime()) / 1000);
           setTotalElapsedTime(actualElapsed);
           console.log('⏱️ Synced timer after app resume:', actualElapsed, 'seconds');
         }
-      } else if ((nextAppState === 'background' || nextAppState === 'inactive') && sessionStarted) {
-        // App going to background - pause the session to preserve state
-        console.log('⏸️ App going to background, pausing session');
-        try {
-          if (EnhancedSessionManager.isActive && !EnhancedSessionManager.isPaused) {
-            await EnhancedSessionManager.pauseSession();
-          }
-        } catch (error) {
-          console.error('Error pausing session on background:', error);
+        
+        // Force a session info update to refresh all timers
+        const currentInfo = EnhancedSessionManager.getSessionInfo();
+        if (currentInfo) {
+          setSessionInfo(currentInfo);
         }
       }
+      // DO NOT pause when going to background - let it keep running
     };
     
     const subscription = AppState.addEventListener('change', handleAppStateChange);
@@ -564,6 +727,12 @@ export default function IHHTSessionSimple() {
       // End session in manager
       await EnhancedSessionManager.endSession();
       
+      // End mock BLE session
+      if (endSession) {
+        console.log('🛑 IHHTSessionSimple: Ending mock BLE session');
+        endSession();
+      }
+      
       // Deactivate keep awake
       deactivateKeepAwake();
       
@@ -617,6 +786,12 @@ export default function IHHTSessionSimple() {
             
             // End the session
             await EnhancedSessionManager.endSession();
+            
+            // End mock BLE session
+            if (endSession) {
+              endSession();
+            }
+            
             deactivateKeepAwake();
             
             // Use replace instead of goBack to avoid navigation errors
@@ -633,8 +808,9 @@ export default function IHHTSessionSimple() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
   
-  // Get altitude data
-  const altitudeData = ALTITUDE_CONVERSION[metrics.dialLevel] || ALTITUDE_CONVERSION[6];
+  // Get altitude data - show 0 during recovery phase
+  const displayAltitudeLevel = sessionInfo?.phaseType === 'RECOVERY' ? 0 : metrics.dialLevel;
+  const altitudeData = ALTITUDE_CONVERSION[displayAltitudeLevel] || ALTITUDE_CONVERSION[6];
   
   // Loading state
   if (isInitializing || !sessionInfo) {
@@ -656,6 +832,10 @@ export default function IHHTSessionSimple() {
           <Text style={styles.totalTime}>
             {formatTime(totalElapsedTime)}
           </Text>
+          {/* Testing Mode Badge - Only show in Expo Go */}
+          {Constants.appOwnership === 'expo' && (
+            <Text style={styles.testingBadgeText}>🧪 TESTING MODE</Text>
+          )}
         </View>
         <TouchableOpacity onPress={handleStop} style={styles.closeButton}>
           <Icon name="close" size={24} color="rgba(255,255,255,0.7)" />
@@ -686,15 +866,29 @@ export default function IHHTSessionSimple() {
         </View>
         
         {/* Left - Altitude */}
-        <View style={styles.diamondLeft}>
-          <Text style={styles.altitudeValue}>
-            {altitudeData.altitude.toLocaleString()}
-          </Text>
-          <Text style={styles.altitudeUnit}>ft</Text>
-          <Text style={styles.altitudeMeters}>
-            {altitudeData.meters.toLocaleString()}m
-          </Text>
-        </View>
+        {isTransitioning ? (
+          <View style={styles.diamondLeft}>
+            <AltitudeSlotMachine
+              fromLevel={transitionFromLevel}
+              toLevel={transitionToLevel}
+              duration={3000}
+              isActive={isTransitioning}
+              onComplete={() => {
+                console.log('🎰 Altitude transition completed');
+              }}
+            />
+          </View>
+        ) : (
+          <View style={styles.diamondLeft}>
+            <Text style={styles.altitudeValue}>
+              {altitudeData.altitude.toLocaleString()}
+            </Text>
+            <Text style={styles.altitudeUnit}>ft</Text>
+            <Text style={styles.altitudeMeters}>
+              {altitudeData.meters.toLocaleString()}m
+            </Text>
+          </View>
+        )}
         
         {/* Right - Heart Rate */}
         <View style={styles.diamondRight}>
@@ -768,12 +962,17 @@ export default function IHHTSessionSimple() {
       
       {/* Adaptive Instruction Overlay */}
       {showAdaptiveInstruction && adaptiveInstruction && (
-        <View style={styles.adaptiveInstructionOverlay}>
+        <Animated.View style={[styles.adaptiveInstructionOverlay, { opacity: notificationOpacity }]}>
           <View style={styles.instructionCard}>
             <Icon 
-              name={adaptiveInstruction.type === 'mask_lift' ? 'air' : 'trending-up'} 
+              name={
+                adaptiveInstruction.type === 'mask_lift' ? 'air' : 
+                adaptiveInstruction.type === 'mask_remove' ? 'warning' :
+                adaptiveInstruction.type === 'mask_switch' ? 'swap-horiz' :
+                'trending-up'
+              } 
               size={24} 
-              color="#60A5FA" 
+              color={adaptiveInstruction.type === 'mask_remove' ? '#FF6B6B' : '#60A5FA'} 
             />
             <Text style={styles.instructionTitle}>
               {adaptiveInstruction.title}
@@ -788,14 +987,51 @@ export default function IHHTSessionSimple() {
                   console.log('✅ User confirmed dial adjustment to level', adaptiveInstruction.newLevel);
                   EnhancedSessionManager.confirmDialAdjustment(adaptiveInstruction.newLevel);
                 }
+                
+                // If this is a switch masks instruction, check for dial adjustment first
+                if (adaptiveInstruction.type === 'SWITCH_MASKS') {
+                  console.log('✅ User confirmed switch masks');
+                  
+                  // Check if there's a pending dial adjustment to show FIRST
+                  if (pendingDialAdjustment.current) {
+                    console.log('📋 Showing pending dial adjustment before altitude animation:', pendingDialAdjustment.current);
+                    const dialInstruction = pendingDialAdjustment.current;
+                    pendingDialAdjustment.current = null;
+                    
+                    // Show dial adjustment immediately
+                    setTimeout(() => {
+                      handleAdaptiveInstruction(dialInstruction, true); // Pass true to bypass the check
+                    }, 500);
+                  } else {
+                    // No dial adjustment, start animation immediately
+                    setTimeout(() => {
+                      setIsTransitioning(true);
+                    }, 500);
+                  }
+                }
+                
+                // If this is a dial adjustment confirmation, NOW start the altitude animation
+                if (adaptiveInstruction.type === 'dial_adjustment') {
+                  // Start altitude animation after dial adjustment is confirmed
+                  setTimeout(() => {
+                    console.log('🎰 Starting altitude animation after dial adjustment');
+                    setIsTransitioning(true);
+                  }, 500);
+                }
+                
                 setShowAdaptiveInstruction(false);
+                
+                // Process next instruction from queue after a short delay
+                setTimeout(() => {
+                  processNextInstruction();
+                }, 500);
               }}
               style={styles.dismissButton}
             >
               <Text style={styles.dismissText}>Got it</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       )}
       
       {/* Intra-Session Feedback */}
@@ -851,6 +1087,17 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     color: '#FFF',
     marginTop: 4,
+  },
+  testingBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFD700',
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginTop: 5,
+    letterSpacing: 1,
   },
   closeButton: {
     position: 'absolute',
@@ -913,12 +1160,15 @@ const styles = StyleSheet.create({
     top: '42%',  // Centered vertically
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 150,  // Ensure consistent width for alignment
   },
   altitudeValue: {
     fontSize: 42,
     fontWeight: '300',
     color: '#FFF',
     lineHeight: 42,
+    textAlign: 'center',  // Center the text within its container
+    minWidth: 150,  // Match parent width to prevent shifting
   },
   altitudeUnit: {
     fontSize: 16,
@@ -1070,6 +1320,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    zIndex: 9999,
+    elevation: 9999, // For Android
   },
   instructionCard: {
     backgroundColor: '#1A1D23',

@@ -11,6 +11,7 @@ import SafeIcon from '../base/SafeIcon';
 import { colors, typography, spacing } from '../../design-system';
 
 // Altitude level data with oxygen percentages and equivalent altitudes
+// Based on official flow meter settings and simulated altitudes
 const ALTITUDE_LEVELS = [
   { level: 0, oxygen: 18.0, feet: 4000, meters: 1219, label: 'Easiest' },
   { level: 1, oxygen: 17.1, feet: 5500, meters: 1676, label: 'Very Easy' },
@@ -18,11 +19,11 @@ const ALTITUDE_LEVELS = [
   { level: 3, oxygen: 15.3, feet: 9500, meters: 2896, label: 'Mild' },
   { level: 4, oxygen: 14.4, feet: 11500, meters: 3505, label: 'Moderate' },
   { level: 5, oxygen: 13.5, feet: 13500, meters: 4115, label: 'Moderate+' },
-  { level: 6, oxygen: 12.6, feet: 15500, meters: 4724, label: 'Standard' },
-  { level: 7, oxygen: 11.7, feet: 18000, meters: 5486, label: 'Challenging' },
-  { level: 8, oxygen: 10.8, feet: 20500, meters: 6248, label: 'Hard' },
-  { level: 9, oxygen: 9.9, feet: 23000, meters: 7010, label: 'Very Hard' },
-  { level: 10, oxygen: 9.0, feet: 26500, meters: 8077, label: 'Extreme' },
+  { level: 6, oxygen: 12.5, feet: 16000, meters: 4877, label: 'Standard' },
+  { level: 7, oxygen: 11.6, feet: 18500, meters: 5639, label: 'Challenging' },
+  { level: 8, oxygen: 10.7, feet: 21000, meters: 6401, label: 'Hard' },
+  { level: 9, oxygen: 9.8, feet: 23500, meters: 7163, label: 'Very Hard' },
+  { level: 10, oxygen: 8.9, feet: 26500, meters: 8077, label: 'Extreme' },
   { level: 11, oxygen: 8.0, feet: 27000, meters: 8230, label: 'Max' },
 ];
 

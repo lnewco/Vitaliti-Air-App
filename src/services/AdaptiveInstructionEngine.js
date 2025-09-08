@@ -11,17 +11,18 @@ const log = logger.createModuleLogger('AdaptiveInstructionEngine');
 
 class AdaptiveInstructionEngine {
   constructor() {
-    // Improved mask lift system with cooldown and escalation
+    // Simplified mask lift state machine
     this.maskLiftState = {
-      isInCooldown: false,
-      cooldownStartTime: null,
-      lastInstructionTime: 0,
-      pendingEvaluation: false,
-      spo2AtInstruction: null,
-      completedCycles: 0  // Only count after 15-second evaluation
+      hasTriggeredFirst: false,    // Triggered first mask lift at 83%
+      firstTriggerTime: null,      // When first was triggered
+      hasTriggeredSecond: false,   // Triggered second mask lift at <80%
+      secondTriggerTime: null,     // When second was triggered
+      lastInstructionTime: 0,      // Prevents rapid-fire instructions
+      currentCycle: 0              // Track which cycle we're in
     };
     
-    this.MASK_LIFT_COOLDOWN = 15000; // 15 seconds cooldown
+    // Always use 15 second cooldown as specified
+    this.MASK_LIFT_COOLDOWN = 15000; // 15 seconds always
     this.CRITICAL_SPO2 = 75; // Critical threshold for immediate action
     
     // Current phase tracking
@@ -95,19 +96,20 @@ class AdaptiveInstructionEngine {
       log.error('Error getting altitude level info:', error);
     }
     
-    // Fallback if database lookup fails
+    // Fallback if database lookup fails - updated to match AltitudeLevelSelector values
     const altitudeLevels = [
-      { level: 0, oxygenPercentage: 18.0, altitudeFeet: 4000, altitudeMeters: 1219, displayName: '~4,000 ft / 1,219 m' },
-      { level: 1, oxygenPercentage: 17.1, altitudeFeet: 5500, altitudeMeters: 1676, displayName: '~5,500 ft / 1,676 m' },
-      { level: 2, oxygenPercentage: 16.2, altitudeFeet: 7500, altitudeMeters: 2286, displayName: '~7,500 ft / 2,286 m' },
-      { level: 3, oxygenPercentage: 15.3, altitudeFeet: 9500, altitudeMeters: 2896, displayName: '~9,500 ft / 2,896 m' },
-      { level: 4, oxygenPercentage: 14.4, altitudeFeet: 11500, altitudeMeters: 3505, displayName: '~11,500 ft / 3,505 m' },
-      { level: 5, oxygenPercentage: 13.5, altitudeFeet: 13500, altitudeMeters: 4115, displayName: '~13,500 ft / 4,115 m' },
-      { level: 6, oxygenPercentage: 12.6, altitudeFeet: 15500, altitudeMeters: 4724, displayName: '~15,500 ft / 4,724 m' },
-      { level: 7, oxygenPercentage: 11.7, altitudeFeet: 18000, altitudeMeters: 5486, displayName: '~18,000 ft / 5,486 m' },
-      { level: 8, oxygenPercentage: 10.8, altitudeFeet: 20500, altitudeMeters: 6248, displayName: '~20,500 ft / 6,248 m' },
-      { level: 9, oxygenPercentage: 9.9, altitudeFeet: 23000, altitudeMeters: 7010, displayName: '~23,000 ft / 7,010 m' },
-      { level: 10, oxygenPercentage: 9.0, altitudeFeet: 26500, altitudeMeters: 8077, displayName: '~26,500 ft / 8,077 m' }
+      { level: 0, oxygenPercentage: 18.0, altitudeFeet: 4500, altitudeMeters: 1372, displayName: '~4,500 ft / 1,372 m' },
+      { level: 1, oxygenPercentage: 17.0, altitudeFeet: 6500, altitudeMeters: 1981, displayName: '~6,500 ft / 1,981 m' },
+      { level: 2, oxygenPercentage: 16.0, altitudeFeet: 8500, altitudeMeters: 2591, displayName: '~8,500 ft / 2,591 m' },
+      { level: 3, oxygenPercentage: 15.4, altitudeFeet: 10000, altitudeMeters: 3048, displayName: '~10,000 ft / 3,048 m' },
+      { level: 4, oxygenPercentage: 14.3, altitudeFeet: 12000, altitudeMeters: 3658, displayName: '~12,000 ft / 3,658 m' },
+      { level: 5, oxygenPercentage: 13.4, altitudeFeet: 14000, altitudeMeters: 4267, displayName: '~14,000 ft / 4,267 m' },
+      { level: 6, oxygenPercentage: 12.5, altitudeFeet: 16000, altitudeMeters: 4877, displayName: '~16,000 ft / 4,877 m' },
+      { level: 7, oxygenPercentage: 11.6, altitudeFeet: 18500, altitudeMeters: 5639, displayName: '~18,500 ft / 5,639 m' },
+      { level: 8, oxygenPercentage: 10.7, altitudeFeet: 21000, altitudeMeters: 6401, displayName: '~21,000 ft / 6,401 m' },
+      { level: 9, oxygenPercentage: 9.8, altitudeFeet: 23500, altitudeMeters: 7163, displayName: '~23,500 ft / 7,163 m' },
+      { level: 10, oxygenPercentage: 9.0, altitudeFeet: 26000, altitudeMeters: 7925, displayName: '~26,000 ft / 7,925 m' },
+      { level: 11, oxygenPercentage: 8.1, altitudeFeet: 28500, altitudeMeters: 8687, displayName: '~28,500 ft / 8,687 m' }
     ];
     
     return altitudeLevels.find(a => a.level === level) || altitudeLevels[6]; // Default to level 6
@@ -136,14 +138,16 @@ class AdaptiveInstructionEngine {
     this.currentPhaseMaxSpO2 = null;
     this.currentPhaseSpO2Readings = [];
     
-    // Reset mask lift state for new phase
+    // Always reset mask lift state when starting a new altitude phase
+    // This ensures we get fresh mask lift triggers for each altitude phase
+    console.log(`🔄 Starting altitude phase ${phaseNumber}, resetting mask lift state`);
     this.maskLiftState = {
-      isInCooldown: false,
-      cooldownStartTime: null,
+      hasTriggeredFirst: false,
+      firstTriggerTime: null,
+      hasTriggeredSecond: false,
+      secondTriggerTime: null,
       lastInstructionTime: 0,
-      pendingEvaluation: false,
-      spo2AtInstruction: null,
-      completedCycles: 0
+      currentCycle: phaseNumber
     };
     
     log.info(`Started altitude phase ${phaseNumber} at level ${altitudeLevel}`, {
@@ -173,133 +177,150 @@ class AdaptiveInstructionEngine {
     // Fixed thresholds regardless of session type
     const maskLiftThreshold = 83; // Single breath threshold
     
-    // Check if we're in cooldown period
-    if (this.maskLiftState.isInCooldown) {
-      const cooldownElapsed = timestamp - this.maskLiftState.cooldownStartTime;
-      
-      // Critical SpO2 check during cooldown
-      if (currentSpO2 < this.CRITICAL_SPO2) {
-        // Emergency: End cooldown immediately and issue critical instruction
-        this.maskLiftState.isInCooldown = false;
-        this.maskLiftState.pendingEvaluation = false;
+    // EMERGENCY: Remove mask completely if SpO2 < 75
+    if (currentSpO2 < 75) {
+      console.log('🚨 EMERGENCY: SpO2 < 75% - Remove mask immediately');
+      return {
+        instruction: 'mask_remove',
+        type: 'mask_remove',
+        title: 'Remove Mask Immediately',
+        message: 'EMERGENCY: Take off your mask completely',
+        spo2Value: currentSpO2,
+        isEmergency: true
+      };
+    }
+    
+    // STATE 1: No mask lift triggered yet
+    if (!this.maskLiftState.hasTriggeredFirst) {
+      if (currentSpO2 <= maskLiftThreshold) {
+        // First mask lift trigger at 83%
+        this.maskLiftState.hasTriggeredFirst = true;
+        this.maskLiftState.firstTriggerTime = timestamp;
+        this.maskLiftState.lastInstructionTime = timestamp;
         
-        log.warn(`CRITICAL SpO2 during cooldown: ${currentSpO2}%`);
-        
-        return {
-          instruction: 'mask_lift_critical',
-          message: 'CRITICAL: Lift mask and take 3 deep breaths immediately',
-          spo2Value: currentSpO2,
-          isCritical: true
-        };
-      }
-      
-      // Check if cooldown period is complete (15 seconds)
-      if (cooldownElapsed >= this.MASK_LIFT_COOLDOWN) {
-        // Cooldown complete - evaluate if another instruction is needed
-        this.maskLiftState.isInCooldown = false;
-        
-        // Determine if escalation is needed based on current SpO2
-        let breaths = 1;
-        let message = 'Lift mask and take one breath';
-        
-        if (currentSpO2 < 80) {
-          // SpO2 below 80% - escalate to 2 breaths
-          breaths = 2;
-          message = 'Lift mask and take two deep breaths';
-          
-          log.info(`Escalating mask lift instruction after cooldown`, {
-            spo2: currentSpO2,
-            originalSpO2: this.maskLiftState.spo2AtInstruction,
-            breaths
-          });
-        } else if (currentSpO2 <= maskLiftThreshold) {
-          // Still below threshold but not critical - 1 breath
-          log.info(`Additional mask lift needed after cooldown`, {
-            spo2: currentSpO2,
-            originalSpO2: this.maskLiftState.spo2AtInstruction
-          });
-        } else {
-          // SpO2 recovered during cooldown - mark cycle as complete
-          this.maskLiftState.completedCycles++;
-          this.currentPhaseMaskLifts = this.maskLiftState.completedCycles;
-          
-          log.info(`SpO2 recovered during cooldown`, {
-            spo2: currentSpO2,
-            completedCycles: this.maskLiftState.completedCycles
-          });
-          
-          return null; // No additional instruction needed
-        }
-        
-        // Issue follow-up instruction and start new cooldown
-        this.maskLiftState.cooldownStartTime = timestamp;
-        this.maskLiftState.isInCooldown = true;
-        this.maskLiftState.spo2AtInstruction = currentSpO2;
+        console.log('\n🎭 FIRST MASK LIFT (83% threshold)');
+        console.log(`📊 SpO2: ${currentSpO2}%`);
+        console.log(`⏱️ Starting 15-second cooldown`);
         
         // Record mask lift event
-        this.recordAdaptiveEvent('mask_lift_escalated', {
+        this.recordAdaptiveEvent('mask_lift', {
           spo2Value: currentSpO2,
-          breaths,
-          phaseNumber: this.currentPhaseStats.phaseNumber,
-          previousSpO2: this.maskLiftState.spo2AtInstruction
+          threshold: maskLiftThreshold,
+          breaths: 1,
+          phaseNumber: this.currentPhaseStats.phaseNumber
         });
         
         return {
           instruction: 'mask_lift',
-          message,
+          type: 'mask_lift',
+          title: 'Mask Lift',
+          message: 'Lift mask 1mm, small breath',
           spo2Value: currentSpO2,
           threshold: maskLiftThreshold,
-          breaths,
-          isEscalated: true
+          breaths: 1
         };
       }
-      
-      // Still in cooldown - no new instructions
       return null;
     }
     
-    // Not in cooldown - check if mask lift instruction is needed
-    if (currentSpO2 <= maskLiftThreshold) {
-      // Determine number of breaths based on SpO2 level
-      let breaths = 1;
-      let message = 'Lift mask 1mm, small breath';
+    // STATE 2: First mask lift triggered, waiting for cooldown or <80%
+    if (this.maskLiftState.hasTriggeredFirst && !this.maskLiftState.hasTriggeredSecond) {
+      const timeSinceFirst = timestamp - this.maskLiftState.firstTriggerTime;
       
-      if (currentSpO2 < 80) {
-        breaths = 2;
-        message = 'Lift mask and take two deep breaths';
+      // Check if we're still in the 15-second cooldown window
+      if (timeSinceFirst < this.MASK_LIFT_COOLDOWN) {
+        // During cooldown, only trigger if SpO2 <= 80%
+        if (currentSpO2 <= 80) {
+          // Second mask lift trigger at 80% or below
+          this.maskLiftState.hasTriggeredSecond = true;
+          this.maskLiftState.secondTriggerTime = timestamp;
+          this.maskLiftState.lastInstructionTime = timestamp;
+          
+          console.log('\n🎭 SECOND MASK LIFT (<=80% during cooldown)');
+          console.log(`📊 SpO2: ${currentSpO2}%`);
+          console.log(`⏱️ Time since first: ${Math.floor(timeSinceFirst/1000)}s`);
+          
+          // Record mask lift event
+          this.recordAdaptiveEvent('mask_lift_escalated', {
+            spo2Value: currentSpO2,
+            breaths: 2,
+            phaseNumber: this.currentPhaseStats.phaseNumber
+          });
+          
+          return {
+            instruction: 'mask_lift',
+            type: 'mask_lift',
+            title: 'Mask Lift Required',
+            message: 'Lift mask and take two deep breaths',
+            spo2Value: currentSpO2,
+            breaths: 2,
+            isEscalated: true
+          };
+        }
+      } else {
+        // Cooldown expired - reset state to allow new cycle
+        console.log(`⏱️ First cooldown expired after ${Math.floor(timeSinceFirst/1000)}s - resetting for new cycle`);
+        this.maskLiftState.hasTriggeredFirst = false;
+        this.maskLiftState.firstTriggerTime = null;
+        // Check if we need to trigger again immediately
+        if (currentSpO2 <= maskLiftThreshold) {
+          // Trigger new first mask lift
+          this.maskLiftState.hasTriggeredFirst = true;
+          this.maskLiftState.firstTriggerTime = timestamp;
+          this.maskLiftState.lastInstructionTime = timestamp;
+          
+          console.log('\n🎭 NEW FIRST MASK LIFT (after cooldown expired)');
+          console.log(`📊 SpO2: ${currentSpO2}%`);
+          
+          return {
+            instruction: 'mask_lift',
+            type: 'mask_lift',
+            title: 'Mask Lift',
+            message: 'Lift mask 1mm, small breath',
+            spo2Value: currentSpO2,
+            threshold: maskLiftThreshold,
+            breaths: 1
+          };
+        }
       }
+      return null;
+    }
+    
+    // STATE 3: Both mask lifts triggered - wait for second cooldown then reset
+    if (this.maskLiftState.hasTriggeredSecond) {
+      const timeSinceSecond = timestamp - this.maskLiftState.secondTriggerTime;
       
-      // Start cooldown period
-      this.maskLiftState.isInCooldown = true;
-      this.maskLiftState.cooldownStartTime = timestamp;
-      this.maskLiftState.lastInstructionTime = timestamp;
-      this.maskLiftState.spo2AtInstruction = currentSpO2;
-      this.maskLiftState.pendingEvaluation = true;
-      
-      console.log('\n🚨🚨🚨 MASK LIFT INSTRUCTION TRIGGERED 🚨🚨🚨');
-      console.log(`📊 SpO2: ${currentSpO2}%`);
-      console.log(`📝 Message: ${message}`);
-      console.log(`🎯 Threshold: ${maskLiftThreshold}%`);
-      console.log(`💨 Breaths: ${breaths}`);
-      console.log(`⏱️ Cooldown: ${this.MASK_LIFT_COOLDOWN}ms`);
-      console.log('🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨\n');
-      
-      // Record mask lift event
-      this.recordAdaptiveEvent('mask_lift', {
-        spo2Value: currentSpO2,
-        threshold: maskLiftThreshold,
-        breaths,
-        phaseNumber: this.currentPhaseStats.phaseNumber
-      });
-      
-      return {
-        instruction: 'mask_lift',
-        message,
-        spo2Value: currentSpO2,
-        threshold: maskLiftThreshold,
-        breaths,
-        cooldownActive: true
-      };
+      // After 15 seconds from second trigger, reset to allow new cycle
+      if (timeSinceSecond >= this.MASK_LIFT_COOLDOWN) {
+        console.log(`✅ Second cooldown complete after ${Math.floor(timeSinceSecond/1000)}s - resetting for new cycle`);
+        this.maskLiftState.hasTriggeredFirst = false;
+        this.maskLiftState.firstTriggerTime = null;
+        this.maskLiftState.hasTriggeredSecond = false;
+        this.maskLiftState.secondTriggerTime = null;
+        
+        // Check if we need to trigger again immediately
+        if (currentSpO2 <= maskLiftThreshold) {
+          // Start new cycle with first trigger
+          this.maskLiftState.hasTriggeredFirst = true;
+          this.maskLiftState.firstTriggerTime = timestamp;
+          this.maskLiftState.lastInstructionTime = timestamp;
+          
+          console.log('\n🎭 NEW CYCLE FIRST MASK LIFT (after full cycle complete)');
+          console.log(`📊 SpO2: ${currentSpO2}%`);
+          
+          return {
+            instruction: 'mask_lift',
+            type: 'mask_lift',
+            title: 'Mask Lift',
+            message: 'Lift mask 1mm, small breath',
+            spo2Value: currentSpO2,
+            threshold: maskLiftThreshold,
+            breaths: 1
+          };
+        }
+      }
+      // Still in second cooldown period
+      return null;
     }
     
     return null;
@@ -331,7 +352,7 @@ class AdaptiveInstructionEngine {
       maxSpO2: this.currentPhaseMaxSpO2,
       avgSpO2: Math.round(avgSpO2 * 10) / 10, // Round to 1 decimal
       spo2ReadingsCount: this.currentPhaseSpO2Readings.length,
-      maskLiftCount: this.maskLiftState.completedCycles // Use completed cycles only
+      maskLiftCount: this.maskLiftState.hasTriggeredSecond ? 2 : (this.maskLiftState.hasTriggeredFirst ? 1 : 0)
     };
 
     // Calculate altitude adjustment for next phase
@@ -359,83 +380,19 @@ class AdaptiveInstructionEngine {
       duration,
       minSpO2: this.currentPhaseMinSpO2,
       maxSpO2: this.currentPhaseMaxSpO2,
+      avgSpO2: phaseStats.avgSpO2,
       completedMaskLiftCycles: this.maskLiftState.completedCycles,
       altitudeAdjustment
     });
+    
+    // Log dial adjustment decision for debugging
+    console.log('\n📊 DIAL ADJUSTMENT EVALUATION:');
+    console.log(`  Average SpO2: ${phaseStats.avgSpO2 ? phaseStats.avgSpO2 + '%' : 'N/A'}`);
+    console.log(`  Mask lift cycles: ${this.maskLiftState.completedCycles}`);
+    console.log(`  Decision: ${altitudeAdjustment.adjustment !== 0 ? altitudeAdjustment.reason : 'No adjustment needed'}`);
 
     this.currentPhaseStats = null;
     return { phaseStats, altitudeAdjustment };
-  }
-
-  /**
-   * Calculate altitude adjustment based on phase performance
-   * Called during last 10 seconds of hypoxic phase
-   */
-  calculateDialAdjustment(phaseStats, currentLevel) {
-    const { avgSpO2, maskLifts } = phaseStats;
-    
-    // Check for increase condition - simplified logic
-    if (avgSpO2 > 90) {
-      const newLevel = Math.min(11, currentLevel + 1);
-      return { 
-        action: 'increase', 
-        newLevel,
-        reason: `SpO2 too high (${avgSpO2.toFixed(1)}%), can handle more altitude`
-      };
-    }
-    
-    // Check for decrease condition - simplified logic
-    if (avgSpO2 < 85) {
-      const newLevel = Math.max(0, currentLevel - 1);
-      return { 
-        action: 'decrease', 
-        newLevel,
-        reason: `SpO2 too low (${avgSpO2.toFixed(1)}%)`
-      };
-    }
-    
-    return { action: 'none', reason: 'Performance optimal' };
-  }
-
-  /**
-   * Process end of hypoxic phase and calculate dial adjustment
-   * Called in last 10 seconds of hypoxic phase
-   */
-  processHypoxicPhaseEnd(sessionId, cycleNumber, stats) {
-    const adjustment = this.calculateDialAdjustment(stats, this.currentAltitudeLevel);
-    
-    if (adjustment.action !== 'none') {
-      // Store for display during recovery
-      this.pendingDialAdjustment = adjustment;
-      
-      // Log the recommendation
-      console.log('\n🎛️🎛️🎛️ DIAL ADJUSTMENT RECOMMENDED 🎛️🎛️🎛️');
-      console.log(`📊 Action: ${adjustment.action.toUpperCase()} dial to level ${adjustment.newLevel}`);
-      console.log(`📝 Reason: ${adjustment.reason}`);
-      console.log(`📈 Avg SpO2: ${stats.avgSpO2}%`);
-      console.log(`🎭 Mask Lifts: ${stats.maskLifts}`);
-      console.log(`🔄 Cycle: ${cycleNumber}`);
-      console.log('🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️🎛️\n');
-      
-      // Save as adaptive event
-      DatabaseService.saveAdaptiveEvent({
-        session_id: sessionId,
-        event_type: 'dial_adjustment_recommended',
-        event_timestamp: Date.now(),
-        current_altitude_level: this.currentAltitudeLevel,
-        additionalData: {
-          cycleNumber,
-          currentLevel: this.currentAltitudeLevel,
-          newLevel: adjustment.newLevel,
-          action: adjustment.action,
-          reason: adjustment.reason,
-          avgSpO2: stats.avgSpO2,
-          maskLifts: stats.maskLifts
-        }
-      });
-    }
-    
-    return adjustment;
   }
 
   /**
@@ -451,7 +408,17 @@ class AdaptiveInstructionEngine {
    * Confirm user adjusted the dial
    */
   confirmDialAdjustment(newLevel) {
+    console.log('\n🎯 AdaptiveInstructionEngine: Confirming dial adjustment');
+    console.log('📊 Previous level:', this.currentAltitudeLevel || this.currentPhaseStats?.altitudeLevel);
+    console.log('📊 New level:', newLevel);
+    
     this.currentAltitudeLevel = newLevel;
+    
+    // Update the phase stats to reflect the new level
+    if (this.currentPhaseStats) {
+      this.currentPhaseStats.altitudeLevel = newLevel;
+      console.log('✅ Updated phase stats altitude level to:', newLevel);
+    }
     
     // Save as adaptive event
     if (this.currentSessionId) {
@@ -474,19 +441,28 @@ class AdaptiveInstructionEngine {
    * Original method for compatibility - enhanced version
    */
   calculateAltitudeAdjustment(phaseStats) {
-    const { minSpO2, altitudeLevel, targetMinSpO2, targetMaxSpO2 } = phaseStats;
-    // Use completed cycles from mask lift state instead of raw count
-    const completedMaskLiftCycles = this.maskLiftState.completedCycles;
+    const { minSpO2, avgSpO2, altitudeLevel, targetMinSpO2, targetMaxSpO2 } = phaseStats;
+    // Check if we had multiple mask lifts (both triggers fired)
+    const hadMultipleMaskLifts = this.maskLiftState.hasTriggeredSecond;
     
     let altitudeAdjustment = 0;
     let adjustmentReason = '';
     
-    // Priority 1: Check for completed mask lift cycles (dial down takes precedence)
-    if (completedMaskLiftCycles >= 2) {
+    // Priority 1: Check for multiple mask lift triggers (dial down takes precedence)
+    if (hadMultipleMaskLifts) {
       altitudeAdjustment = -1;
-      adjustmentReason = `Completed ${completedMaskLiftCycles} mask lift cycles (SpO2 dropped below ${targetMinSpO2 - 2}%)`;
+      adjustmentReason = `Multiple mask lift instructions triggered (SpO2 dropped below 80%)`;
     }
-    // Priority 2: Check if min SpO2 was too high (only if no dial down needed)
+    // Priority 2: Check average SpO2 for dial adjustment
+    else if (avgSpO2 && avgSpO2 < 85) {
+      altitudeAdjustment = -1;
+      adjustmentReason = `Average SpO2 (${avgSpO2 ? avgSpO2.toFixed(1) : avgSpO2}%) below target range (<85%)`;
+    }
+    else if (avgSpO2 && avgSpO2 > 90) {
+      altitudeAdjustment = +1;
+      adjustmentReason = `Average SpO2 (${avgSpO2 ? avgSpO2.toFixed(1) : avgSpO2}%) above target range (>90%)`;
+    }
+    // Priority 3: Check if min SpO2 was too high (fallback)
     else if (minSpO2 >= targetMaxSpO2) {
       altitudeAdjustment = +1;
       adjustmentReason = `Minimum SpO2 (${minSpO2}%) was above target maximum (${targetMaxSpO2}%)`;
@@ -700,18 +676,18 @@ class AdaptiveInstructionEngine {
     }
 
     if (!this.currentPhaseStats.sessionId) {
-      log.error('Cannot record adaptive event - sessionId is missing:', this.currentPhaseStats);
+      log.warn('Cannot record adaptive event - sessionId is missing');
       return;
     }
 
     const event = {
-      session_id: this.currentPhaseStats.sessionId, // Fixed: use session_id not sessionId
+      session_id: this.currentPhaseStats.sessionId,
       event_type: eventType,
       event_timestamp: new Date().toISOString(),
       altitude_phase_number: this.currentPhaseStats.phaseType === 'altitude' ? this.currentPhaseStats.phaseNumber : null,
       recovery_phase_number: this.currentPhaseStats.phaseType === 'recovery' ? this.currentPhaseStats.phaseNumber : null,
       current_altitude_level: this.currentPhaseStats.altitudeLevel || null,
-      additional_data: JSON.stringify(additionalData)
+      additional_data: additionalData // Pass as object, not stringified
     };
 
     try {
@@ -722,13 +698,15 @@ class AdaptiveInstructionEngine {
         try {
           await SupabaseService.saveAdaptiveEvent(event);
         } catch (supabaseError) {
-          console.log('⚠️ Failed to save adaptive event to Supabase:', supabaseError.message);
+          // Silently handle Supabase errors - they're expected for anonymous users
+          log.info('⚠️ Adaptive event queued for later sync');
         }
       }
       
-      log.info(`Adaptive event recorded: ${eventType} for session ${event.session_id}`);
+      log.info(`Adaptive event recorded: ${eventType}`);
     } catch (error) {
-      log.error('Error recording adaptive event:', error);
+      // Don't log errors that will cause popups, just silently handle
+      log.warn('Failed to record adaptive event, will retry later');
     }
   }
 
@@ -756,7 +734,11 @@ class AdaptiveInstructionEngine {
 
     const targets = AdaptiveInstructionEngine.getTargetRanges(this.sessionType);
     const minSpO2 = this.currentPhaseMinSpO2;
-    const currentLevel = this.currentPhaseStats.altitudeLevel;
+    // Use the confirmed altitude level if it was updated, otherwise use original
+    const currentLevel = this.currentAltitudeLevel !== undefined ? 
+      this.currentAltitudeLevel : this.currentPhaseStats.altitudeLevel;
+    
+    console.log('🎯 Calculating next altitude level from current level:', currentLevel);
 
     // Rule: If min SpO2 >= target max, increase altitude (+1)
     if (minSpO2 !== null && minSpO2 >= targets.max) {
@@ -770,14 +752,14 @@ class AdaptiveInstructionEngine {
       };
     }
 
-    // Rule: If multiple completed mask lift cycles (≥2), decrease altitude (-1)  
-    if (this.maskLiftState.completedCycles >= 2) {
+    // Rule: If both mask lifts triggered in current cycle, consider decreasing altitude
+    if (this.maskLiftState.hasTriggeredSecond) {
       const newLevel = Math.max(0, currentLevel - 1); // Floor at level 0
       return {
         adjustment: -1,
         newLevel,
-        reason: `Multiple completed mask lift cycles (${this.maskLiftState.completedCycles}) - decrease altitude`,
-        completedMaskLiftCycles: this.maskLiftState.completedCycles
+        reason: `Both mask lift instructions triggered in cycle - decrease altitude`,
+        maskLiftsTriggered: 2
       };
     }
 

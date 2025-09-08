@@ -550,9 +550,9 @@ class SupabaseService {
         signal_strength: reading.signalStrength,
         is_valid: (reading.spo2 !== null && reading.spo2 > 0) || 
                  (reading.heartRate !== null && reading.heartRate > 0),
-        fio2_level: reading.fio2Level || null,
-        phase_type: reading.phaseType || null,
-        cycle_number: reading.cycleNumber || null,
+        fio2_level: reading.fio2_level || reading.fio2Level || null,
+        phase_type: reading.phase_type || reading.phaseType || null,
+        cycle_number: reading.cycle_number || reading.cycleNumber || null,
         data_source: reading.data_source || 'unknown',  // Track mock vs real data
         created_at: new Date().toISOString()
       }));
@@ -611,7 +611,8 @@ class SupabaseService {
         session_id: supabaseSessionId,
         event_type: event.event_type,
         event_timestamp: event.event_timestamp || new Date().toISOString(),
-        cycle_number: event.altitude_phase_number || event.recovery_phase_number || null,
+        altitude_phase_number: event.altitude_phase_number || null,
+        recovery_phase_number: event.recovery_phase_number || null,
         current_altitude_level: event.current_altitude_level || null,
         spo2_value: event.spo2_value || null,
         additional_data: typeof event.additional_data === 'string' 
@@ -626,7 +627,13 @@ class SupabaseService {
         .select();
 
       if (error) {
-        log.error('Failed to save adaptive event to Supabase:', error);
+        // Silently queue for later sync if RLS policy violation or auth issue
+        if (error.code === '42501' || error.code === 'PGRST301') {
+          log.info('Adaptive event queued for sync (auth/RLS):', event.event_type);
+        } else {
+          // Log other errors as warnings instead of errors to avoid popups
+          log.warn('Adaptive event queued for sync:', event.event_type, error.message);
+        }
         this.queueForSync('saveAdaptiveEvent', event);
         return null;
       }

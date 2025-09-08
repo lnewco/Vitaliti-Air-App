@@ -1,5 +1,81 @@
 # Vitaliti Air Mobile Application - Complete Technical Documentation
 
+## Latest Updates (January 2025)
+
+### Major Feature Enhancements
+
+#### 1. Mask Lift Notification System Overhaul
+- **Fixed**: Notification spam issue (was showing 4+ notifications, now correctly limited to 2 max)
+- **Implemented**: Proper state machine with three states for mask lift tracking
+- **Added**: Fixed 15-second cooldown periods with automatic state reset
+- **Logic Flow**:
+  - First mask lift triggers at SpO2 ≤ 83%
+  - Second mask lift triggers at SpO2 ≤ 80% within 15-second window
+  - Emergency removal at SpO2 < 75% (bypasses all cooldowns)
+  - After cooldowns expire, system resets for new cycle
+- **Files Modified**: `src/services/AdaptiveInstructionEngine.js`
+
+#### 2. Altitude Display Animation System
+- **Added**: Smooth flashing animation before altitude changes
+- **Animation**: 3 gentle flashes (opacity 100% → 30% → 100%) over 3 seconds
+- **Fixed**: Text alignment issues when altitude is 0 (added minWidth to prevent shifting)
+- **Timing**: Flash occurs after user confirms switch masks, before altitude value changes
+- **Files Modified**: `src/components/AltitudeSlotMachine.js`, `src/screens/IHHTSessionSimple.js`
+
+#### 3. Notification Flow & User Experience
+- **Added**: Double haptic buzz before all notifications appear
+- **Added**: 500ms fade-in animation for all notification overlays
+- **Fixed**: Notification queueing system to prevent overlapping instructions
+- **Order**: Switch Masks → Dial Adjustment → Altitude Animation
+- **Files Modified**: `src/screens/IHHTSessionSimple.js`
+
+#### 4. Background Service Improvements
+- **Fixed**: Session no longer auto-pauses when app goes to background
+- **Added**: Proper timer synchronization when app returns from background
+- **Fixed**: Phase timer (under altitude) now continues running when app is backgrounded
+- **Files Modified**: `src/screens/IHHTSessionSimple.js`, `src/services/AggressiveBackgroundService.js`
+
+#### 5. Switch Masks Notification
+- **Added**: Automatic notification during transition phases
+- **Messages**: "Switch to Recovery" (remove mask) or "Switch to Altitude" (put on mask)
+- **Integration**: Shows before altitude animation, properly queued with other notifications
+- **Files Modified**: `src/screens/IHHTSessionSimple.js`
+
+#### 6. Dial Adjustment Timing
+- **Fixed**: Dial adjustments now properly queue after switch masks confirmation
+- **Added**: Pending dial adjustment storage to ensure correct order
+- **Flow**: Switch Masks → User Confirms → Dial Adjustment → User Confirms → Altitude Animation
+- **Files Modified**: `src/screens/IHHTSessionSimple.js`
+
+### Technical Implementation Details
+
+#### State Management Improvements
+- Added `hasShownTransitionInstruction` ref to prevent duplicate notifications
+- Added `pendingInstructions` queue for managing multiple notifications
+- Added `pendingDialAdjustment` ref for storing dial changes during transitions
+- Added `notificationOpacity` animation value for smooth fade-ins
+
+#### Animation Specifications
+- **Notification Fade-in**: 500ms duration, useNativeDriver: true
+- **Altitude Flash**: 3 cycles × (500ms fade out + 500ms fade in) = 3000ms total
+- **Haptic Pattern**: Double buzz with 200ms spacing before notification appears
+- **Queue Delay**: 500ms between dismissing one notification and showing next
+
+#### Bug Fixes
+- Fixed mask lift cooldown not resetting properly after expiration
+- Fixed altitude text position shifting when value is 0
+- Fixed notifications appearing without animation
+- Fixed dial instruction being lost during transitions
+- Fixed background timer stopping when switching apps
+- Fixed notification overlap causing dismissal without user interaction
+
+### Files Changed Summary
+1. `src/services/AdaptiveInstructionEngine.js` - Mask lift state machine logic
+2. `src/components/AltitudeSlotMachine.js` - Altitude animation component
+3. `src/screens/IHHTSessionSimple.js` - Main session screen with notification management
+4. `src/services/EnhancedSessionManager.js` - Session state management
+5. `src/services/AggressiveBackgroundService.js` - Background execution handling
+
 ## Executive Summary
 
 Vitaliti Air is an advanced React Native application for Intermittent Hypoxic-Hyperoxic Training (IHHT) that provides real-time biometric monitoring, adaptive altitude control, and comprehensive physiological tracking. The app connects to Bluetooth pulse oximeters using BCI Protocol V1.4, guides users through personalized training sessions with progressive overload, and integrates with wearables (WHOOP/Oura) for holistic health tracking.

@@ -794,31 +794,48 @@ class DatabaseService {
 
   // Save adaptive event
   async saveAdaptiveEvent(event) {
-    const query = `
-      INSERT INTO session_adaptive_events (
-        id, session_id, event_type, event_timestamp,
-        altitude_phase_number, recovery_phase_number, current_altitude_level,
-        spo2_value, additional_data, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    
-    const id = this.generateId();
-    const values = [
-      id,
-      event.session_id || event.sessionId, // Support both naming conventions
-      event.event_type || event.eventType,
-      new Date(event.event_timestamp || event.eventTimestamp).getTime(), // Convert to timestamp
-      event.altitude_phase_number || event.altitudePhaseNumber || null,
-      event.recovery_phase_number || event.recoveryPhaseNumber || null,
-      event.current_altitude_level || event.currentAltitudeLevel || null,
-      event.spo2_value || event.additionalData?.spo2Value || null,
-      event.additional_data || JSON.stringify(event.additionalData || {}),
-      Date.now()
-    ];
-    
-    await this.db.runAsync(query, values);
-    log.info(`Saved adaptive event: ${event.event_type || event.eventType} for session ${event.session_id || event.sessionId}`);
-    return id;
+    try {
+      const query = `
+        INSERT INTO session_adaptive_events (
+          id, session_id, event_type, event_timestamp,
+          altitude_phase_number, recovery_phase_number, current_altitude_level,
+          spo2_value, additional_data, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      
+      const id = this.generateId();
+      
+      // Handle additional_data properly - it could be an object or a string
+      let additionalDataStr;
+      if (typeof event.additional_data === 'string') {
+        additionalDataStr = event.additional_data;
+      } else if (event.additional_data) {
+        additionalDataStr = JSON.stringify(event.additional_data);
+      } else {
+        additionalDataStr = '{}';
+      }
+      
+      const values = [
+        id,
+        event.session_id || event.sessionId,
+        event.event_type || event.eventType,
+        new Date(event.event_timestamp || event.eventTimestamp).getTime(),
+        event.altitude_phase_number || event.altitudePhaseNumber || null,
+        event.recovery_phase_number || event.recoveryPhaseNumber || null,
+        event.current_altitude_level || event.currentAltitudeLevel || null,
+        event.spo2_value || event.additional_data?.spo2Value || null,
+        additionalDataStr,
+        Date.now()
+      ];
+      
+      await this.db.runAsync(query, values);
+      log.info(`Saved adaptive event: ${event.event_type || event.eventType}`);
+      return id;
+    } catch (error) {
+      // Don't throw, just log warning to prevent error popups
+      log.warn('Failed to save adaptive event locally:', error.message);
+      return null;
+    }
   }
 
   // Get adaptive events for a session (for syncing)
