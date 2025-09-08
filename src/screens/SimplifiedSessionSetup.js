@@ -64,10 +64,10 @@ const SimplifiedSessionSetup = ({ navigation }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 3;
 
-  // Dynamic protocol configuration states
-  const [totalCycles, setTotalCycles] = useState(3);
-  const [hypoxicDuration, setHypoxicDuration] = useState(7); // minutes
-  const [recoveryDuration, setRecoveryDuration] = useState(3); // minutes
+  // Dynamic protocol configuration states with AI-recommended defaults
+  const [totalCycles, setTotalCycles] = useState(5); // AI recommended: 5 cycles
+  const [hypoxicDuration, setHypoxicDuration] = useState(7); // AI recommended: 7 minutes
+  const [recoveryDuration, setRecoveryDuration] = useState(3); // AI recommended: 3 minutes
 
   // Helper function to determine button title based on state
   const getButtonTitle = () => {
@@ -80,8 +80,8 @@ const SimplifiedSessionSetup = ({ navigation }) => {
   // Dynamic protocol configuration
   const protocolConfig = {
     totalCycles: totalCycles,
-    hypoxicDuration: hypoxicDuration * 60, // Convert to seconds
-    hyperoxicDuration: recoveryDuration * 60, // Convert to seconds
+    hypoxicDuration: hypoxicDuration, // Keep in minutes - IHHTSessionSimple will convert
+    hyperoxicDuration: recoveryDuration, // Keep in minutes - IHHTSessionSimple will convert
     // defaultAltitudeLevel removed - will be calculated by progression service
   };
 
@@ -191,6 +191,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
       label: 'CYCLES', 
       value: totalCycles, 
       unit: '',
+      isDefault: totalCycles === 5,
       onPress: () => {
         // Cycle through 1-5 cycles
         setTotalCycles(prev => prev >= 5 ? 1 : prev + 1);
@@ -200,6 +201,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
       label: 'HYPOXIC', 
       value: hypoxicDuration, 
       unit: 'min',
+      isDefault: hypoxicDuration === 7,
       onPress: () => {
         // Cycle through 3-10 minutes
         setHypoxicDuration(prev => prev >= 10 ? 3 : prev + 1);
@@ -209,6 +211,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
       label: 'RECOVERY', 
       value: recoveryDuration, 
       unit: 'min',
+      isDefault: recoveryDuration === 3,
       onPress: () => {
         // Cycle through 2-5 minutes
         setRecoveryDuration(prev => prev >= 5 ? 2 : prev + 1);
@@ -312,7 +315,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
                     </View>
                     <View style={styles.cardTitleContainer}>
                       <Text style={styles.cardTitle}>Training Protocol</Text>
-                      <Text style={styles.cardSubtitle}>Adaptive IHHT</Text>
+                      <Text style={styles.cardSubtitle}>AI-Optimized IHHT</Text>
                     </View>
                     <View style={styles.timeBadge}>
                       <Text style={styles.timeBadgeText}>{totalSessionTime}</Text>
@@ -324,17 +327,48 @@ const SimplifiedSessionSetup = ({ navigation }) => {
                     {protocolMetrics.map((metric, index) => (
                       <TouchableOpacity 
                         key={index} 
-                        style={styles.metricItem}
+                        style={[styles.metricItem, metric.isDefault && styles.metricItemDefault]}
                         onPress={metric.onPress}
                         activeOpacity={0.7}
                       >
+                        {metric.isDefault && (
+                          <View style={styles.aiRecommendedBadge}>
+                            <Text style={styles.aiRecommendedText}>AI</Text>
+                          </View>
+                        )}
                         <View style={styles.metricValueContainer}>
-                          <Text style={styles.metricValue}>{metric.value}</Text>
-                          {metric.unit && <Text style={styles.metricUnit}>{metric.unit}</Text>}
+                          <Text style={[styles.metricValue, metric.isDefault && styles.metricValueDefault]}>{metric.value}</Text>
+                          {metric.unit && <Text style={[styles.metricUnit, metric.isDefault && styles.metricUnitDefault]}>{metric.unit}</Text>}
                         </View>
-                        <Text style={styles.metricLabel}>{metric.label}</Text>
-                        <View style={styles.tapHintBadge}>
-                          <Text style={styles.tapHintText}>TAP</Text>
+                        <Text style={[styles.metricLabel, metric.isDefault && styles.metricLabelDefault]}>{metric.label}</Text>
+                        <View style={styles.tapHintContainer}>
+                          <Ionicons 
+                            name="chevron-up" 
+                            size={12} 
+                            color={
+                              // Green arrow if current value is below AI recommendation
+                              (metric.label === 'CYCLES' && totalCycles < 5) ||
+                              (metric.label === 'HYPOXIC' && hypoxicDuration < 7) ||
+                              (metric.label === 'RECOVERY' && recoveryDuration < 3)
+                                ? '#4CAF50' 
+                                : colors.text.quaternary
+                            } 
+                          />
+                          <View style={[styles.tapHintBadge, metric.isDefault && styles.tapHintBadgeDefault]}>
+                            <Text style={[styles.tapHintText, metric.isDefault && styles.tapHintTextDefault]}>TAP</Text>
+                          </View>
+                          <Ionicons 
+                            name="chevron-down" 
+                            size={12} 
+                            color={
+                              // Green arrow if current value is above AI recommendation
+                              (metric.label === 'CYCLES' && totalCycles > 5) ||
+                              (metric.label === 'HYPOXIC' && hypoxicDuration > 7) ||
+                              (metric.label === 'RECOVERY' && recoveryDuration > 3)
+                                ? '#4CAF50' 
+                                : colors.text.quaternary
+                            } 
+                          />
                         </View>
                       </TouchableOpacity>
                     ))}
@@ -720,19 +754,57 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     fontWeight: '600',
   },
+  tapHintContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    marginTop: 8,
+  },
   tapHintBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
     backgroundColor: 'rgba(78, 184, 186, 0.2)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
+    marginVertical: 2,
+  },
+  tapHintBadgeDefault: {
+    backgroundColor: 'rgba(78, 184, 186, 0.3)',
   },
   tapHintText: {
     fontSize: 9,
     color: colors.brand.accent,
     fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  tapHintTextDefault: {
+    color: colors.brand.accent,
+  },
+  metricItemDefault: {
+    backgroundColor: 'rgba(78, 184, 186, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(78, 184, 186, 0.2)',
+  },
+  metricValueDefault: {
+    color: colors.brand.accent,
+  },
+  metricUnitDefault: {
+    color: 'rgba(78, 184, 186, 0.7)',
+  },
+  metricLabelDefault: {
+    color: 'rgba(78, 184, 186, 0.6)',
+  },
+  aiRecommendedBadge: {
+    position: 'absolute',
+    top: -8,
+    right: 4,
+    backgroundColor: '#4CAF50',  // Green to match altitude level
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  aiRecommendedText: {
+    fontSize: 9,
+    color: '#000',  // Black text to match altitude level AI badge
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   divider: {

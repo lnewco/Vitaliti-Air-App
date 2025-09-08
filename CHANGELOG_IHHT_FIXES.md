@@ -211,4 +211,88 @@ Pending tasks for future development:
 
 ---
 
-*Last updated: 2025-01-09*
+---
+
+## 🎯 IHHT Dial Adjustment & Protocol Configuration Updates
+
+### Date: 2025-01-09 (Session 2)
+
+### 1. Fixed Critical Dial Adjustment Logic
+**File:** `src/services/AdaptiveInstructionEngine.js`
+- **Issue:** Dial adjustment was using MINIMUM SpO2 >= 90% to trigger increase (too strict)
+- **Fix:** Changed to use AVERAGE SpO2 > 90% to trigger increase
+- **Correct Rules Now:**
+  - Increase altitude if: Average SpO2 > 90%
+  - Decrease altitude if: Average SpO2 < 85% OR 2+ mask lifts in phase
+- **Removed:** Dead code methods `endAltitudePhase()` and `calculateAltitudeAdjustment()` that were never called
+
+### 2. Fixed Metrics Not Saving to Database
+**File:** `src/services/IHHTMetricsTracker.js`
+- **Issue:** Metrics were calculated but never persisted to database
+- **Fix:** Added proper database save calls in `endPhase()` method
+- **Now Saves:**
+  - Phase statistics to `session_phase_stats` table
+  - Cycle metrics to `session_cycle_metrics` table
+  - Adaptation indices to `session_adaptation_metrics` table
+
+### 3. Fixed Timer Duration Calculation Bug
+**File:** `src/screens/SimplifiedSessionSetup.js`
+- **Issue:** Durations were multiplied by 60 twice (once in setup, once in session)
+- **Result:** 7 minutes showed as 420 minutes (7 × 60 × 60)
+- **Fix:** Removed multiplication in SimplifiedSessionSetup, kept only in IHHTSessionSimple
+- **Impact:** Timer now correctly shows 45 minutes for 5 cycles × (7+3) minutes
+
+### 4. Added Dynamic Protocol Configuration
+**File:** `src/screens/SimplifiedSessionSetup.js`
+- **New Features:**
+  - Tap-to-adjust controls for protocol parameters
+  - Total cycles: 1-5 (default: 5, AI recommended)
+  - Hypoxic duration: 3-10 minutes (default: 7, AI recommended)
+  - Recovery duration: 2-5 minutes (default: 3, AI recommended)
+- **UI Improvements:**
+  - Up/down chevron arrows show tap direction
+  - Green arrows point toward AI-recommended values
+  - "AI" badge appears on recommended settings
+  - Green highlighting for values matching AI recommendation
+  - Clear visual feedback for interactive controls
+
+### 5. Enhanced UI/UX for Protocol Settings
+**Visual Indicators:**
+- ✅ Green "AI" badge when using recommended values
+- ✅ Green chevron arrows pointing to AI recommendations
+- ✅ Highlighted borders for AI-recommended settings
+- ✅ "AI-Optimized IHHT" subtitle
+- ✅ TAP badges with directional hints
+
+### 6. Progressive Overload Confirmation
+**File:** `src/components/altitude-agent/AltitudeAgentWidget.tsx` (Analytics)
+- **Verified:** Progressive overload calculations working correctly
+- **Stored in:** `altitude_progressions` table in Supabase
+- **Includes:**
+  - Deconditioning adjustments based on days since last session
+  - Recovery score integration from wearables
+  - Performance trend analysis
+  - Automatic baseline reduction (-1 level from last session end)
+
+---
+
+## 📊 Session Metrics Now Captured
+
+### Complete Data Pipeline:
+1. **Real-time metrics** → IHHTMetricsTracker
+2. **Phase statistics** → session_phase_stats
+3. **Cycle metrics** → session_cycle_metrics
+4. **Adaptation indices** → session_adaptation_metrics
+5. **Progressive recommendations** → altitude_progressions
+
+### Verified Working:
+- ✅ Dial adjustments based on average SpO2
+- ✅ Dynamic protocol configuration
+- ✅ Metrics persistence to database
+- ✅ Timer calculations (no more 420-minute sessions!)
+- ✅ AI recommendations visible in UI
+- ✅ Progressive overload in Analytics
+
+---
+
+*Last updated: 2025-01-09 (Session 2)*

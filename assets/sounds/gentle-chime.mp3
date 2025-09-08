@@ -1,0 +1,9 @@
+# Placeholder for gentle-chime.mp3
+# This file needs to be replaced with an actual MP3 sound file
+# You can download a free chime sound from:
+# - https://freesound.org/
+# - https://www.zapsplat.com/
+# - Or use any gentle notification sound
+
+# For now, this placeholder prevents the app from crashing
+# The app will use haptic feedback as a fallback

@@ -1,6 +1,56 @@
 # Vitaliti Air Mobile Application - Complete Technical Documentation
 
-## Latest Updates (January 2025)
+## Latest Updates (January 2025 - Session 2)
+
+### Critical Fixes & Enhancements (January 9, 2025)
+
+#### 1. Fixed Critical Dial Adjustment Logic
+- **Issue**: Dial adjustments were using MINIMUM SpO2 >= 90% to trigger increase (too strict)
+- **Fix**: Changed to use AVERAGE SpO2 > 90% to trigger increase
+- **Correct Rules**:
+  - Increase altitude if: Average SpO2 > 90%
+  - Decrease altitude if: Average SpO2 < 85% OR 2+ mask lifts in phase
+- **Files Modified**: `src/services/AdaptiveInstructionEngine.js`
+
+#### 2. Fixed Session Timer Bug (420-Minute Issue)
+- **Issue**: Timer showed 420 minutes instead of 45 minutes
+- **Cause**: Durations were multiplied by 60 twice (setup + session)
+- **Fix**: Removed multiplication in SimplifiedSessionSetup.js
+- **Result**: Timer now correctly shows actual session duration
+- **Files Modified**: `src/screens/SimplifiedSessionSetup.js`
+
+#### 3. Added Dynamic Protocol Configuration
+- **New Feature**: Tap-to-adjust protocol parameters in setup screen
+- **Configurable Settings**:
+  - Total cycles: 1-5 (default: 5, AI recommended)
+  - Hypoxic duration: 3-10 minutes (default: 7, AI recommended)
+  - Recovery duration: 2-5 minutes (default: 3, AI recommended)
+- **UI Enhancements**:
+  - Green "AI" badge on recommended values
+  - Directional chevron arrows (green points to AI recommendation)
+  - Visual highlighting for AI-optimized settings
+  - Clear TAP badges with up/down indicators
+- **Files Modified**: `src/screens/SimplifiedSessionSetup.js`
+
+#### 4. Fixed Metrics Not Saving to Database
+- **Issue**: Metrics were calculated but never persisted
+- **Fix**: Added proper database save calls in endPhase()
+- **Now Saves**:
+  - Phase statistics to session_phase_stats
+  - Cycle metrics to session_cycle_metrics
+  - Adaptation indices to session_adaptation_metrics
+- **Files Modified**: `src/services/IHHTMetricsTracker.js`
+
+#### 5. Progressive Overload Integration Confirmed
+- **Verified**: Analytics correctly calculates and stores progressive overload
+- **Features**:
+  - Automatic baseline reduction (-1 level from last session)
+  - Deconditioning adjustments based on days since last session
+  - Recovery score integration from wearables
+  - Performance trend analysis (improving/stable/declining)
+- **Storage**: altitude_progressions table in Supabase
+
+## Latest Updates (January 2025 - Session 1)
 
 ### Major Feature Enhancements
 
