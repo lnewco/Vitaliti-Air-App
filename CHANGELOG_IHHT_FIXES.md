@@ -295,4 +295,47 @@ Pending tasks for future development:
 
 ---
 
-*Last updated: 2025-01-09 (Session 2)*
+## 🔧 Critical avgSpO2 Calculation Fix for Dial Adjustments
+
+### Date: 2025-01-09 (Session 3)
+
+### Fixed Missing avgSpO2 Causing No Dial Adjustments
+**Files:** `src/services/AdaptiveInstructionEngine.js`, `src/services/EnhancedSessionManager.js`
+
+**Issue:** 
+- Dial adjustments were never triggered despite high SpO2 readings (e.g., 93.7% average)
+- Root cause: `avgSpO2` was null when `calculateNextAltitudeLevel()` was called
+- SpO2 readings were only being tracked for RECOVERY phases, not ALTITUDE phases
+- Dead code removal had eliminated the avgSpO2 calculation logic
+
+**Fix Implementation:**
+1. **Added SpO2 tracking for altitude phases** (`AdaptiveInstructionEngine.js`):
+   - Initialize `avgSpO2: null` in `startAltitudePhase()`
+   - Created `calculateCurrentPhaseAvgSpO2()` method to compute average from readings
+   - Method calculates average from `currentPhaseSpO2Readings` array
+   - Updates `currentPhaseStats.avgSpO2` with calculated value
+
+2. **Pre-calculate avgSpO2 before phase transitions** (`EnhancedSessionManager.js`):
+   - Calculate avgSpO2 10 seconds before altitude phase ends
+   - Added `hasCalculatedPhaseAvgSpO2` flag to prevent duplicate calculations
+   - Ensures avgSpO2 is available before `calculateNextAltitudeLevel()` runs
+   - Also calculates at transition time if not already done
+
+3. **Timing of dial instructions**:
+   - Dial adjustment instructions now appear right after mask switching instructions
+   - Proper notification queue ordering maintained
+
+**Verification:**
+- ✅ avgSpO2 now correctly calculated during altitude phases
+- ✅ Dial adjustments triggered when avgSpO2 > 90% (increase) or < 85% (decrease)
+- ✅ Dial events properly recorded in `session_adaptive_events` table
+- ✅ Instructions appear at correct time in notification queue
+
+**Impact:**
+- Users will now receive proper dial adjustment instructions based on their SpO2 levels
+- Progressive overload system can properly adapt altitude levels during sessions
+- Session data accurately reflects altitude changes made during training
+
+---
+
+*Last updated: 2025-01-09 (Session 3)*

@@ -129,7 +129,8 @@ class AdaptiveInstructionEngine {
       altitudeLevel,
       startTime: Date.now(),
       targetMinSpO2: targets.min,
-      targetMaxSpO2: targets.max
+      targetMaxSpO2: targets.max,
+      avgSpO2: null  // Initialize avgSpO2 to track during phase
     };
     
     // Reset phase counters
@@ -597,6 +598,33 @@ class AdaptiveInstructionEngine {
     // Altitude phases should NEVER end early based on SpO2
     // They always run for full 7 minutes unless user manually skips
     return { shouldAdvance: false };
+  }
+
+  /**
+   * Calculate and update average SpO2 for the current altitude phase
+   * Should be called before phase transition to ensure accurate adjustment calculations
+   */
+  calculateCurrentPhaseAvgSpO2() {
+    if (!this.currentPhaseStats || this.currentPhaseStats.phaseType !== 'altitude') {
+      return null;
+    }
+
+    if (this.currentPhaseSpO2Readings.length === 0) {
+      return null;
+    }
+
+    // Calculate average SpO2 from all readings in this phase
+    const avgSpO2 = Math.round(
+      (this.currentPhaseSpO2Readings.reduce((sum, r) => sum + r.spo2, 0) / 
+       this.currentPhaseSpO2Readings.length) * 10
+    ) / 10;
+
+    // Update the current phase stats with calculated average
+    this.currentPhaseStats.avgSpO2 = avgSpO2;
+    
+    console.log(`📊 Calculated phase avgSpO2: ${avgSpO2}% from ${this.currentPhaseSpO2Readings.length} readings`);
+    
+    return avgSpO2;
   }
 
   /**

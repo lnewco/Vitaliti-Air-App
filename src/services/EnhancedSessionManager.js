@@ -828,8 +828,20 @@ class EnhancedSessionManager {
         console.log(`⏱️ Phase timer: ${this.currentPhase} - ${this.phaseTimeRemaining}s remaining`);
       }
 
+      // Calculate avgSpO2 10 seconds before altitude phase ends
+      // This ensures we have accurate data for dial adjustment decisions
+      if (this.currentPhase === 'ALTITUDE' && 
+          this.phaseTimeRemaining === 10 && 
+          this.adaptiveEngine && 
+          !this.hasCalculatedPhaseAvgSpO2) {
+        const avgSpO2 = this.adaptiveEngine.calculateCurrentPhaseAvgSpO2();
+        console.log(`📊 Pre-calculating avgSpO2 10s before phase end: ${avgSpO2}%`);
+        this.hasCalculatedPhaseAvgSpO2 = true;
+      }
+
       // Check for phase transition
       if (this.phaseTimeRemaining <= 0) {
+        this.hasCalculatedPhaseAvgSpO2 = false; // Reset for next phase
         this.advancePhase();
       }
 
@@ -949,6 +961,11 @@ class EnhancedSessionManager {
       // Calculate altitude adjustment for NEXT altitude phase (if any)
       if (this.adaptiveEngine) {
         try {
+          // First calculate the average SpO2 for the phase that's ending
+          const avgSpO2 = this.adaptiveEngine.calculateCurrentPhaseAvgSpO2();
+          console.log(`📊 Phase ending with avgSpO2: ${avgSpO2}%`);
+          
+          // Now calculate altitude adjustment based on the updated avgSpO2
           const altitudeAdjustment = this.adaptiveEngine.calculateNextAltitudeLevel();
           console.log('🎯 Altitude adjustment calculation:', altitudeAdjustment);
           
