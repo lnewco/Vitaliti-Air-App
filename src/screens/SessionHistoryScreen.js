@@ -1349,3 +1349,4 @@ const SessionHistoryScreen = ({ route, navigation }) => {
 };
 
 export default SessionHistoryScreen;
+
