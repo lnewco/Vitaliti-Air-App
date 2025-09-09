@@ -30,7 +30,7 @@ import { useAuth } from '../auth/AuthContext';
 import { colors, typography, spacing, PremiumCard, PremiumButton } from '../design-system';
 import DatabaseService from '../services/DatabaseService';
 import SupabaseService from '../services/SupabaseService';
-import SessionDetailsModal from '../components/SessionDetailsModal';
+import SessionDetailsModal from '../components/common/SessionDetailsModal';
 
 const { width: screenWidth } = Dimensions.get('window');
 

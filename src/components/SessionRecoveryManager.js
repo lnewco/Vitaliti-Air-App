@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import SessionRecoveryModal from './SessionRecoveryModal';
+import SessionRecoveryModal from './common/SessionRecoveryModal';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 
 const SessionRecoveryManager = ({ onNavigateToSession }) => {

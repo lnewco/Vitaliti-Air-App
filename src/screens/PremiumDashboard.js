@@ -31,7 +31,7 @@ import {
 } from '../design-system';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
 import WearablesDataService from '../services/WearablesDataService';
-import WearablesMetricsCard from '../components/WearablesMetricsCard';
+import WearablesMetricsCard from '../components/integrations/WearablesMetricsCard';
 import { useAuth } from '../auth/AuthContext';
 import { supabase } from '../config/supabase';
 

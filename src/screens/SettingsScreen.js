@@ -16,7 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../auth/AuthContext';
 import { colors, typography, spacing, PremiumCard, PremiumButton } from '../design-system';
 import SafeIcon from '../components/base/SafeIcon';
-import IntegrationCard from '../components/IntegrationCard';
+import IntegrationCard from '../components/integrations/IntegrationCard';
 import WhoopService from '../services/integrations/WhoopService';
 import OuraService from '../services/integrations/OuraService';
 
