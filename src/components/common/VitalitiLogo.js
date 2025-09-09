@@ -13,7 +13,7 @@ const VitalitiLogo = ({ size = 'medium', style }) => {
   return (
     <View style={[styles.container, style]}>
       <Image
-        source={require('../../assets/IMG_4490.png')}
+        source={require('../../../assets/IMG_4490.png')}
         style={[selectedSize]}
         resizeMode="contain"
       />

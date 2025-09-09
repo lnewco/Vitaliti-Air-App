@@ -228,6 +228,7 @@ export default function IHHTSessionSimple() {
       isInitializing = true;
       
       try {
+        console.log('Starting session initialization:', {
           sessionId,
           protocolConfig,
           timestamp: new Date().toISOString()
@@ -262,6 +263,7 @@ export default function IHHTSessionSimple() {
         // Ensure durations are correctly set in seconds
         // Handle both manualAltitudeLevel (from SimplifiedSessionSetup) and defaultAltitudeLevel (legacy)
         const altitudeLevel = protocolConfig.manualAltitudeLevel || protocolConfig.defaultAltitudeLevel || 6;
+        console.log('Altitude levels:', {
           manual: protocolConfig.manualAltitudeLevel,
           default: protocolConfig.defaultAltitudeLevel
         });
@@ -469,6 +471,7 @@ export default function IHHTSessionSimple() {
       
       // CRITICAL: Only send to manager if session is truly active
       if (pulseOximeterData.spo2 && pulseOximeterData.heartRate && EnhancedSessionManager.isActive) {
+        console.log('Pulse oximeter data:', {
           spo2: pulseOximeterData.spo2,
           heartRate: pulseOximeterData.heartRate
         });
@@ -1345,5 +1348,3 @@ EKGWave.propTypes = {
   heartRate: PropTypes.number.isRequired,
   color: PropTypes.string,
 };
-
-export default IHHTSessionSimple;

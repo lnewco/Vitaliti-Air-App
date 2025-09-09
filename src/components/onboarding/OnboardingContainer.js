@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { colors, spacing } from '../../design-system';
 import PremiumButton from '../../design-system/components/PremiumButton';
-import OnboardingProgressIndicator from '../OnboardingProgressIndicator';
+import OnboardingProgressIndicator from '../navigation/OnboardingProgressIndicator';
 
 const OnboardingContainer = ({
   children,

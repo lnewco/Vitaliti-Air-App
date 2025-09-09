@@ -11,7 +11,7 @@ import {
   Modal,
   Dimensions,
 } from 'react-native';
-import { formatTime } from '../utils/formatters';
+import { formatTime } from '../../utils/formatters';
 
 const { width } = Dimensions.get('window');
 

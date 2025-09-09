@@ -5,7 +5,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing } from '../design-system';
+import { colors, spacing } from '../../design-system';
 
 const OnboardingProgressIndicator = ({ currentStep = 1, totalSteps = 5 }) => {
   const progress = (currentStep / totalSteps) * 100;
