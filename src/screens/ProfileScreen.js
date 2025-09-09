@@ -15,7 +15,7 @@ import Container from '../components/base/Container';
 import Button from '../components/base/Button';
 import Card from '../components/base/Card';
 import { H1, H2, Body, Caption } from '../components/base/Typography';
-import VectorIcon from '../components/base/VectorIcon';
+import SafeIcon from '../components/base/SafeIcon';
 
 const ProfileScreen = ({ navigation }) => {
   const { user, signOut } = useAuth();
@@ -252,7 +252,7 @@ const ProfileScreen = ({ navigation }) => {
         <Card.Body>
           <View style={styles.themeRow}>
             <View style={styles.themeOption}>
-              <VectorIcon name={theme === 'dark' ? 'moon' : 'sun'} size={20} color={colors.text.primary} style={styles.themeIcon} />
+              <SafeIcon name={theme === 'dark' ? 'moon' : 'sun'} size={20} color={colors.text.primary} style={styles.themeIcon} />
               <Body>Dark Mode</Body>
             </View>
             <Switch
