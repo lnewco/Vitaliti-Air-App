@@ -56,7 +56,7 @@ src/
 │   └── SpO2Display.js         # SpO2 visualization
 ├── config/
 │   └── supabase.js           # Supabase client configuration
-├── theme/                    # Design system theme
+├── design-system/            # Design system and theme components
 │   ├── colors/               # Color palette & themes
 │   ├── typography.js         # Typography scales
 │   ├── spacing.js            # Spacing system
