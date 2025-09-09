@@ -1,3 +1,27 @@
+/**
+ * MockBLEService - Core mock data generation for BLE pulse oximeter simulation
+ * 
+ * PURPOSE:
+ * Simulates realistic pulse oximeter data for development and testing without
+ * physical hardware. Generates SpO2 and heart rate values based on session
+ * phase (altitude/recovery) and cycle number.
+ * 
+ * WHEN TO USE:
+ * - Development and testing without hardware
+ * - UI/UX development and demonstrations
+ * - Automated testing scenarios
+ * 
+ * KEY FEATURES:
+ * - Realistic SpO2 patterns for altitude training simulation
+ * - Mask lift scenarios with recovery/drop patterns
+ * - Cycle-specific behaviors for testing dial adjustments
+ * - Session state management (start/stop)
+ * 
+ * DATA PATTERNS BY CYCLE:
+ * - Cycle 1: Tests mask lift detection (<83% triggers)
+ * - Cycle 2: Tests dial increase (avg >90%)
+ * - Cycle 3+: Normal operation (85-90% range)
+ */
 class MockBLEService {
   constructor() {
     this.isConnected = false;
@@ -16,6 +40,10 @@ class MockBLEService {
     this.sessionStarted = false; // Track if session has actually started
   }
 
+  /**
+   * Simulates BLE connection to mock pulse oximeter
+   * @returns {Promise<boolean>} Always resolves to true after 1.5s delay
+   */
   async connect() {
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -28,6 +56,9 @@ class MockBLEService {
     });
   }
 
+  /**
+   * Disconnects mock BLE service and stops data generation
+   */
   disconnect() {
     this.isConnected = false;
     if (this.dataInterval) {
@@ -36,6 +67,10 @@ class MockBLEService {
     }
   }
 
+  /**
+   * Starts 1Hz data generation interval
+   * Called automatically on connect
+   */
   startDataStream() {
     if (this.dataInterval) return;
     
@@ -45,6 +80,10 @@ class MockBLEService {
     }, 1000);
   }
 
+  /**
+   * Generates realistic pulse oximeter data based on current session state
+   * @returns {Object} Mock data with spo2, heartRate, timestamp, signalQuality
+   */
   generateMockData() {
     // If session hasn't started yet, just return stable baseline data
     if (!this.sessionStarted || !this.phaseStartTime) {
@@ -177,6 +216,10 @@ class MockBLEService {
     };
   }
 
+  /**
+   * Starts training session - begins realistic data simulation
+   * Must be called to transition from baseline to training data
+   */
   startSession() {
     this.sessionStarted = true;
     this.currentCycle = 1;
@@ -189,6 +232,9 @@ class MockBLEService {
     console.log('🚀 MockBLE: Session started - beginning data simulation');
   }
   
+  /**
+   * Ends training session - returns to baseline data
+   */
   endSession() {
     this.sessionStarted = false;
     this.currentCycle = 1;
@@ -196,6 +242,10 @@ class MockBLEService {
     console.log('🛑 MockBLE: Session ended - returning to baseline');
   }
   
+  /**
+   * Sets current training phase (altitude/recovery)
+   * @param {string} phase - 'altitude' or 'recovery'
+   */
   setPhase(phase) {
     this.currentPhase = phase;
     this.phaseStartTime = Date.now();
@@ -210,6 +260,10 @@ class MockBLEService {
     console.log(`🔄 MockBLE: Phase changed to ${phase}`);
   }
 
+  /**
+   * Sets current training cycle number
+   * @param {number} cycle - Cycle number (1, 2, 3+)
+   */
   setCycle(cycle) {
     const previousCycle = this.currentCycle;
     this.currentCycle = cycle;
@@ -222,6 +276,11 @@ class MockBLEService {
     console.log(`📊 Current state: phase=${this.currentPhase}, cycle=${this.currentCycle}`);
   }
 
+  /**
+   * Registers a callback for data updates
+   * @param {Function} callback - Function to call with new data
+   * @returns {Function} Unsubscribe function
+   */
   onData(callback) {
     this.listeners.add(callback);
     return () => {
@@ -229,6 +288,10 @@ class MockBLEService {
     };
   }
 
+  /**
+   * Notifies all registered listeners with new data
+   * @param {Object} data - Mock pulse oximeter data
+   */
   notifyListeners(data) {
     this.listeners.forEach(listener => {
       try {
@@ -239,6 +302,10 @@ class MockBLEService {
     });
   }
 
+  /**
+   * Simulates BLE device discovery
+   * @returns {Promise<Array>} Array with single mock device after 1s delay
+   */
   async searchForDevices() {
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -249,6 +316,10 @@ class MockBLEService {
     });
   }
 
+  /**
+   * Gets current connection status
+   * @returns {boolean} True if connected, false otherwise
+   */
   getConnectionStatus() {
     return this.isConnected;
   }

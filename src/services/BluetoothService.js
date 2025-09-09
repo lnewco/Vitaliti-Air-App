@@ -61,6 +61,17 @@ class BluetoothService {
     
     this.welluePacketNumber = 0;            // Packet counter
     this.realTimeDataInterval = null;
+    
+    // Store latest metrics for getLatestMetrics()
+    this.latestMetrics = null;
+  }
+
+  /**
+   * Gets the latest received metrics from the pulse oximeter
+   * @returns {Object|null} Latest metrics with spo2 and heartRate, or null if no data
+   */
+  getLatestMetrics() {
+    return this.latestMetrics;
   }
 
   // Reference counting for proper lifecycle management
@@ -360,6 +371,11 @@ class BluetoothService {
     return this.getDeviceType(device) === 'pulse-ox';
   }
 
+  /**
+   * Connects to a BLE device
+   * @param {Object} device - Device object with id and name properties
+   * @returns {Promise<boolean>} True if connection successful
+   */
   async connectToDevice(device) {
     try {
       const deviceType = device.deviceType || this.getDeviceType(device);
@@ -675,6 +691,12 @@ class BluetoothService {
           log.info('✅ PING successful');
         } else if (parsedData.spo2 !== undefined || parsedData.heartRate !== undefined) {
           // This is real-time data
+          // Store latest metrics
+          this.latestMetrics = {
+            spo2: parsedData.spo2,
+            heartRate: parsedData.heartRate
+          };
+          
           // Send to UI callback if available
           if (this.onPulseOxDataReceived) {
             this.onPulseOxDataReceived(parsedData);
@@ -1148,12 +1170,6 @@ class BluetoothService {
     }
   }
 
-  // Legacy cleanup method - now uses reference counting
-  cleanup() {
-    log.warn('⚠️ Direct cleanup() called - using releaseReference() instead');
-    this.releaseReference();
-  }
-
   // Event handlers
   setOnDeviceFound(callback) {
     this.onDeviceFound = callback;
@@ -1161,10 +1177,6 @@ class BluetoothService {
 
   setOnPulseOxDataReceived(callback) {
     this.onPulseOxDataReceived = callback;
-  }
-
-  setOnConnectionStatusChanged(callback) {
-    this.onConnectionStatusChanged = callback;
   }
 
   setOnConnectionChange(callback) {
@@ -1175,16 +1187,9 @@ class BluetoothService {
     }
   }
 
-  // Convenience getters for connection status
+  // Convenience getter for connection status
   get isAnyDeviceConnected() {
     return this.isPulseOxConnected;
-  }
-
-  get connectionStatus() {
-    return {
-      pulseOx: this.isPulseOxConnected,
-      any: this.isAnyDeviceConnected
-    };
   }
 
   async handleDeviceDisconnected() {

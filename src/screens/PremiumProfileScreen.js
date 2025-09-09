@@ -233,7 +233,7 @@ const PremiumProfileScreen = ({ navigation, route }) => {
   const loadSessionDetails = async (sessionId) => {
     try {
       setModalVisible(true);
-      const sessionData = await DatabaseService.getSessionWithDetails(sessionId);
+      const sessionData = await DatabaseService.getSessionWithData(sessionId);
       
       if (sessionData) {
         setSessionData(sessionData);

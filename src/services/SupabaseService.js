@@ -1617,6 +1617,14 @@ class SupabaseService {
   /**
    * Sync pre-session survey data to Supabase (reactivated for AI feedback engine)
    */
+  /**
+   * Syncs pre-session survey data to Supabase
+   * @param {string} localSessionId - Local session ID
+   * @param {number} clarityPre - Mental clarity rating (1-5)
+   * @param {number} energyPre - Energy level rating (1-5)
+   * @param {number} stressPre - Stress level rating (1-5)
+   * @returns {Promise<void>}
+   */
   async syncPreSessionSurvey(localSessionId, clarityPre, energyPre, stressPre) {
     try {
       log.info(`Syncing pre-session survey for: ${localSessionId}`);
@@ -1693,6 +1701,17 @@ class SupabaseService {
 
   /**
    * Sync post-session survey data to Supabase
+   */
+  /**
+   * Syncs post-session survey data to Supabase
+   * @param {string} localSessionId - Local session ID
+   * @param {number} clarityPost - Mental clarity rating (1-5)
+   * @param {number} energyPost - Energy level rating (1-5)
+   * @param {number} stressPost - Stress level rating (1-5)
+   * @param {string|null} notesPost - Optional session notes
+   * @param {Array} symptoms - Array of symptom strings
+   * @param {number|null} overallRating - Overall session rating (1-5)
+   * @returns {Promise<void>}
    */
   async syncPostSessionSurvey(localSessionId, clarityPost, energyPost, stressPost, notesPost = null, symptoms = [], overallRating = null) {
     try {

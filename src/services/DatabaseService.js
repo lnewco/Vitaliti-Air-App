@@ -3,11 +3,22 @@ import logger from '../utils/logger';
 
 const log = logger.createModuleLogger('DatabaseService');
 
+/**
+ * DatabaseService - Local SQLite database management for offline-first storage
+ * 
+ * Handles all local data persistence including sessions, readings, surveys, and adaptive metrics.
+ * Works in conjunction with SupabaseService for cloud synchronization.
+ */
 class DatabaseService {
   constructor() {
     this.db = null;
   }
 
+  /**
+   * Initializes the database and creates/migrates all required tables
+   * @returns {Promise<void>}
+   * @throws {Error} If database initialization fails
+   */
   async init() {
     try {
       log.info('🗄️ Initializing database...');
@@ -612,6 +623,13 @@ class DatabaseService {
   }
 
   // Session Management
+  /**
+   * Creates a new training session in the database
+   * @param {string} sessionId - Unique session identifier
+   * @param {number|null} hypoxiaLevel - Initial hypoxia level (0-100)
+   * @param {Object|null} protocolConfig - Session protocol configuration
+   * @returns {Promise<Object>} Created session object
+   */
   async createSession(sessionId, hypoxiaLevel = null, protocolConfig = null) {
     // First check if session already exists
     const existing = await this.db.getAllAsync('SELECT id FROM sessions WHERE id = ?', [sessionId]);
@@ -651,53 +669,7 @@ class DatabaseService {
     return sessionId;
   }
 
-  // New method to update protocol configuration for existing sessions
-  async updateSessionProtocol(sessionId, protocolConfig) {
-    const query = `
-      UPDATE sessions 
-      SET total_cycles = ?, hypoxic_duration = ?, hyperoxic_duration = ?,
-          planned_total_cycles = ?, planned_hypoxic_duration = ?, planned_hyperoxic_duration = ?,
-          updated_at = ?
-      WHERE id = ?
-    `;
-    
-    const totalCycles = protocolConfig.totalCycles;
-    const hypoxicDuration = protocolConfig.hypoxicDuration;
-    const hyperoxicDuration = protocolConfig.hyperoxicDuration;
-    
-    await this.db.runAsync(query, [
-      totalCycles, hypoxicDuration, hyperoxicDuration,
-      totalCycles, hypoxicDuration, hyperoxicDuration, // planned values
-      Date.now(),
-      sessionId
-    ]);
-    
-    log.info(`� Updated protocol for session ${sessionId}: ${totalCycles} cycles, ${hypoxicDuration}s hypoxic, ${hyperoxicDuration}s hyperoxic`);
-  }
 
-  // Update actual execution stats during the session
-  async updateActualExecution(sessionId, actualData) {
-    const query = `
-      UPDATE sessions 
-      SET actual_cycles_completed = ?, 
-          actual_hypoxic_time = ?, 
-          actual_hyperoxic_time = ?,
-          completion_percentage = ?,
-          updated_at = ?
-      WHERE id = ?
-    `;
-    
-    await this.db.runAsync(query, [
-      actualData.cyclesCompleted || 0,
-      actualData.hypoxicTime || 0,
-      actualData.hyperoxicTime || 0,
-      actualData.completionPercentage || 0,
-      Date.now(),
-      sessionId
-    ]);
-    
-    log.info(`Updated actual execution for session ${sessionId}: ${actualData.cyclesCompleted} cycles completed (${actualData.completionPercentage}%)`);
-  }
 
   // Adaptive Instructions System Methods
 
@@ -929,38 +901,7 @@ class DatabaseService {
     }
   }
 
-  // Get cycle metrics for a session
-  async getCycleMetrics(sessionId) {
-    try {
-      const query = `
-        SELECT * FROM session_cycle_metrics 
-        WHERE session_id = ?
-        ORDER BY cycle_number ASC
-      `;
-      
-      const results = await this.db.getAllAsync(query, [sessionId]);
-      return results || [];
-    } catch (error) {
-      log.error('Failed to get cycle metrics:', error);
-      return [];
-    }
-  }
 
-  // Get adaptation metrics for a session
-  async getAdaptationMetrics(sessionId) {
-    try {
-      const query = `
-        SELECT * FROM session_adaptation_metrics 
-        WHERE session_id = ?
-      `;
-      
-      const result = await this.db.getFirstAsync(query, [sessionId]);
-      return result;
-    } catch (error) {
-      log.error('Failed to get adaptation metrics:', error);
-      return null;
-    }
-  }
 
   // ========================================
   // ALTITUDE PROGRESSION MANAGEMENT
@@ -1047,43 +988,6 @@ class DatabaseService {
     }
   }
 
-  /**
-   * Get the last completed session for a user
-   */
-  async getLastCompletedSession(userId) {
-    try {
-      await this.init();
-      
-      const query = `
-        SELECT 
-          id,
-          start_time,
-          end_time,
-          starting_altitude_level,
-          current_altitude_level,
-          total_mask_lifts,
-          avg_spo2,
-          session_subtype
-        FROM sessions 
-        WHERE end_time IS NOT NULL
-        ORDER BY created_at DESC, start_time DESC
-        LIMIT 1
-      `;
-      
-      const session = await this.db.getFirstAsync(query);
-      
-      if (session) {
-        log.info(`📝 Last completed session: ${session.id}, ended at altitude ${session.current_altitude_level}`);
-      } else {
-        log.info('📝 No completed sessions found for user');
-      }
-      
-      return session;
-    } catch (error) {
-      log.error('❌ Failed to get last completed session:', error);
-      return null;
-    }
-  }
 
   /**
    * Update session altitude levels during progression
@@ -1221,33 +1125,6 @@ class DatabaseService {
     }
   }
 
-  // Update session with adaptive data
-  async updateSessionAdaptive(sessionId, adaptiveData) {
-    const query = `
-      UPDATE sessions 
-      SET session_subtype = ?,
-          starting_altitude_level = ?,
-          current_altitude_level = ?,
-          adaptive_system_enabled = ?,
-          total_mask_lifts = ?,
-          total_altitude_adjustments = ?,
-          updated_at = ?
-      WHERE id = ?
-    `;
-    
-    await this.db.runAsync(query, [
-      adaptiveData.sessionSubtype || 'calibration',
-      adaptiveData.startingAltitudeLevel || 6,
-      adaptiveData.currentAltitudeLevel || 6,
-      adaptiveData.adaptiveSystemEnabled ? 1 : 0,
-      adaptiveData.totalMaskLifts || 0,
-      adaptiveData.totalAltitudeAdjustments || 0,
-      Date.now(),
-      sessionId
-    ]);
-    
-    log.info(`Updated adaptive data for session ${sessionId}`);
-  }
 
   // Helper method to generate UUID-like ID for SQLite
   generateId() {
@@ -1258,6 +1135,13 @@ class DatabaseService {
     });
   }
 
+  /**
+   * Ends an active session and calculates final statistics
+   * @param {string} sessionId - Session to end
+   * @param {Object|null} providedStats - Optional pre-calculated stats
+   * @param {number|null} startTime - Session start timestamp
+   * @returns {Promise<Object>} Session with final stats
+   */
   async endSession(sessionId, providedStats = null, startTime = null) {
     const endTime = Date.now();
     
@@ -1270,10 +1154,17 @@ class DatabaseService {
         log.info('Using provided session stats:', providedStats);
         stats = providedStats;
       } else {
-        // Calculate session statistics
-        log.info(`Calculating stats for session: ${sessionId}`);
-        stats = await this.getSessionStats(sessionId);
-        log.info('Session stats calculated:', stats);
+        // Use minimal default stats since getSessionStats was removed
+        log.warn(`getSessionStats was removed - using default stats for session: ${sessionId}`);
+        stats = {
+          totalReadings: 0,
+          avgSpO2: null,
+          minSpO2: null,
+          maxSpO2: null,
+          avgHeartRate: null,
+          minHeartRate: null,
+          maxHeartRate: null
+        };
       }
       
       // Calculate total duration if startTime provided
@@ -1314,22 +1205,22 @@ class DatabaseService {
     }
   }
 
-  async updateSessionCycle(sessionId, currentCycle) {
-    const query = `
-      UPDATE sessions 
-      SET current_cycle = ?, updated_at = ?
-      WHERE id = ?
-    `;
-    await this.db.runAsync(query, [currentCycle, Date.now(), sessionId]);
-    log.info(`Updated session ${sessionId} to cycle ${currentCycle} in local DB`);
-  }
 
+  /**
+   * Gets a session by ID
+   * @param {string} sessionId - Session identifier
+   * @returns {Promise<Object|null>} Session object or null if not found
+   */
   async getSession(sessionId) {
     const query = 'SELECT * FROM sessions WHERE id = ?';
     const result = await this.db.getFirstAsync(query, [sessionId]);
     return result;
   }
 
+  /**
+   * Gets all sessions ordered by start time (newest first)
+   * @returns {Promise<Array>} Array of session objects
+   */
   async getAllSessions() {
     try {
       // Ensure database is initialized
@@ -1407,359 +1298,25 @@ class DatabaseService {
   }
 
   // Reading Management
-  async addReading(sessionId, reading) {
-    const query = `
-      INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid, fio2_level, phase_type, cycle_number, hrv_rmssd, hrv_type, hrv_interval_count, hrv_data_quality, hrv_confidence)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    
-    // More flexible validation: valid if we have either spo2 or heart rate data
-    const isValid = (reading.spo2 !== null && reading.spo2 > 0) || 
-                   (reading.heartRate !== null && reading.heartRate > 0);
-    
-    await this.db.runAsync(query, [
-      sessionId,
-      reading.timestamp,
-      reading.spo2,
-      reading.heartRate,
-      reading.signalStrength,
-      isValid ? 1 : 0,
-      reading.fio2Level || null,
-      reading.phaseType || null,
-      reading.cycleNumber || null,
-      reading.hrv?.rmssd || reading.hrv_rmssd || null,
-      reading.hrv?.type || null,
-      reading.hrv?.intervalCount || null,
-      reading.hrv?.dataQuality || null,
-      reading.hrv?.confidence || null
-    ]);
-  }
 
-  async addReadingsBatch(readings) {
-    if (readings.length === 0) return;
-    
-    await this.db.withTransactionAsync(async () => {
-      const query = `
-        INSERT INTO readings (session_id, timestamp, spo2, heart_rate, signal_strength, is_valid, fio2_level, phase_type, cycle_number, hrv_rmssd, hrv_type, hrv_interval_count, hrv_data_quality, hrv_confidence)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-      
-      for (const reading of readings) {
-        // More flexible validation: valid if we have either spo2 or heart rate data
-        const isValid = (reading.spo2 !== null && reading.spo2 > 0) || 
-                       (reading.heartRate !== null && reading.heartRate > 0);
-        await this.db.runAsync(query, [
-          reading.sessionId,
-          reading.timestamp,
-          reading.spo2,
-          reading.heartRate,
-          reading.signalStrength,
-          isValid ? 1 : 0,
-          reading.fio2Level || null,
-          reading.phaseType || null,
-          reading.cycleNumber || null,
-          reading.hrv?.rmssd || reading.hrv_rmssd || null,
-          reading.hrv?.type || null,
-          reading.hrv?.intervalCount || null,
-          reading.hrv?.dataQuality || null,
-          reading.hrv?.confidence || null
-        ]);
-      }
-    });
-    
-    log.info(`� Batch inserted ${readings.length} readings with FiO2 data`);
-  }
 
-  async getSessionReadings(sessionId, validOnly = false) {
-    const query = `
-      SELECT * FROM readings 
-      WHERE session_id = ? ${validOnly ? 'AND is_valid = 1' : ''}
-      ORDER BY timestamp ASC
-    `;
-    
-    const readings = await this.db.getAllAsync(query, [sessionId]);
-    return readings;
-  }
 
-  async updateSessionBaselineHRV(sessionId, rmssd, confidence, intervalCount, durationSeconds) {
-    try {
-      const query = `
-        UPDATE sessions 
-        SET baseline_hrv_rmssd = ?, 
-            baseline_hrv_confidence = ?, 
-            baseline_hrv_interval_count = ?,
-            baseline_hrv_duration_seconds = ?,
-            updated_at = strftime('%s', 'now')
-        WHERE id = ?
-      `;
-      
-      await this.db.runAsync(query, [
-        rmssd,
-        confidence,
-        intervalCount,
-        durationSeconds,
-        sessionId
-      ]);
-      
-      log.info(`✅ Updated baseline HRV for session ${sessionId}: ${rmssd}ms (${Math.round(confidence * 100)}% confidence)`);
-      return { success: true };
-    } catch (error) {
-      log.error('❌ Failed to update baseline HRV:', error);
-      return { success: false, error: error.message };
-    }
-  }
 
-  async getSessionBaselineHRV(sessionId) {
-    try {
-      const query = `
-        SELECT baseline_hrv_rmssd, baseline_hrv_confidence, 
-               baseline_hrv_interval_count, baseline_hrv_duration_seconds
-        FROM sessions 
-        WHERE id = ?
-      `;
-      
-      const row = await this.db.getFirstAsync(query, [sessionId]);
-      
-      if (row) {
-        return {
-          rmssd: row.baseline_hrv_rmssd,
-          confidence: row.baseline_hrv_confidence,
-          intervalCount: row.baseline_hrv_interval_count,
-          durationSeconds: row.baseline_hrv_duration_seconds
-        };
-      }
-      
-      return null;
-    } catch (error) {
-      log.error('❌ Failed to get baseline HRV:', error);
-      return null;
-    }
-  }
 
-  async getSessionHRVStats(sessionId) {
-    try {
-      const query = `
-        SELECT 
-          AVG(hrv_rmssd) as avgHRV,
-          MIN(hrv_rmssd) as minHRV,
-          MAX(hrv_rmssd) as maxHRV,
-          COUNT(CASE WHEN hrv_rmssd IS NOT NULL THEN 1 END) as hrvReadingCount
-        FROM readings 
-        WHERE session_id = ? AND hrv_rmssd IS NOT NULL AND hrv_rmssd > 0
-      `;
-      
-      const row = await this.db.getFirstAsync(query, [sessionId]);
-      
-      if (row && row.hrvReadingCount > 0) {
-        return {
-          avgHRV: row.avgHRV,
-          minHRV: row.minHRV,
-          maxHRV: row.maxHRV,
-          readingCount: row.hrvReadingCount
-        };
-      }
-      
-      return null;
-    } catch (error) {
-      log.error('❌ Failed to get session HRV stats:', error);
-      return null;
-    }
-  }
 
-  async getSessionStats(sessionId) {
-    const query = `
-      SELECT 
-        COUNT(*) as totalReadings,
-        COUNT(CASE WHEN spo2 IS NOT NULL AND spo2 > 0 THEN 1 END) as validSpO2Readings,
-        COUNT(CASE WHEN heart_rate IS NOT NULL AND heart_rate > 0 THEN 1 END) as validHeartRateReadings,
-        AVG(CASE WHEN spo2 IS NOT NULL AND spo2 > 0 THEN spo2 END) as avgSpO2,
-        MIN(CASE WHEN spo2 IS NOT NULL AND spo2 > 0 THEN spo2 END) as minSpO2,
-        MAX(CASE WHEN spo2 IS NOT NULL AND spo2 > 0 THEN spo2 END) as maxSpO2,
-        AVG(CASE WHEN heart_rate IS NOT NULL AND heart_rate > 0 THEN heart_rate END) as avgHeartRate,
-        MIN(CASE WHEN heart_rate IS NOT NULL AND heart_rate > 0 THEN heart_rate END) as minHeartRate,
-        MAX(CASE WHEN heart_rate IS NOT NULL AND heart_rate > 0 THEN heart_rate END) as maxHeartRate
-      FROM readings 
-      WHERE session_id = ?
-    `;
-    
-    const stats = await this.db.getFirstAsync(query, [sessionId]);
-    
-    // Log for debugging
-    log.info('Session stats calculated:', {
-      sessionId,
-      totalReadings: stats.totalReadings,
-      validSpO2Readings: stats.validSpO2Readings,
-      validHeartRateReadings: stats.validHeartRateReadings,
-      avgSpO2: stats.avgSpO2,
-      avgHeartRate: stats.avgHeartRate
-    });
-    
-    return stats;
-  }
 
   // Data Management
-  async reprocessSessionStats(sessionId) {
-    log.info(`Reprocessing stats for session: ${sessionId}`);
-    
-    // Recalculate statistics with new logic
-    const stats = await this.getSessionStats(sessionId);
-    
-    const query = `
-      UPDATE sessions 
-      SET total_readings = ?, avg_spo2 = ?, min_spo2 = ?, max_spo2 = ?,
-          avg_heart_rate = ?, min_heart_rate = ?, max_heart_rate = ?
-      WHERE id = ?
-    `;
-    
-    await this.db.runAsync(query, [
-      stats.totalReadings,
-      stats.avgSpO2,
-      stats.minSpO2,
-      stats.maxSpO2,
-      stats.avgHeartRate,
-      stats.minHeartRate,
-      stats.maxHeartRate,
-      sessionId
-    ]);
-    
-    log.info(`Reprocessed stats for session ${sessionId}:`, stats);
-    return stats;
-  }
 
-  async reprocessAllNullStats() {
-    log.info('Reprocessing all sessions with null statistics...');
-    
-    // Find sessions with null stats
-    const query = `
-      SELECT id FROM sessions 
-      WHERE status = 'completed' 
-      AND (avg_spo2 IS NULL OR avg_heart_rate IS NULL)
-      ORDER BY start_time DESC
-    `;
-    
-    const result = await this.db.getAllAsync(query);
-    const sessionsToReprocess = result.map(row => row.id);
-    
-    log.info(`� Found ${sessionsToReprocess.length} sessions to reprocess`);
-    
-    const results = [];
-    for (const sessionId of sessionsToReprocess) {
-      try {
-        const stats = await this.reprocessSessionStats(sessionId);
-        results.push({ sessionId, success: true, stats });
-      } catch (error) {
-        log.error(`❌ Failed to reprocess session ${sessionId}:`, error);
-        results.push({ sessionId, success: false, error: error.message });
-      }
-    }
-    
-    const successful = results.filter(r => r.success).length;
-    log.info(`Reprocessed ${successful}/${sessionsToReprocess.length} sessions successfully`);
-    
-    return results;
-  }
 
-  async cleanupOldSessions() {
-    // Keep only the 10 most recent sessions
-    const deleteQuery = `
-      DELETE FROM sessions 
-      WHERE id NOT IN (
-        SELECT id FROM sessions 
-        ORDER BY start_time DESC 
-        LIMIT 10
-      )
-    `;
-    
-    // This will cascade delete readings due to foreign key
-    await this.db.runAsync(deleteQuery);
-    log.info('🧹 Cleaned up old sessions');
-  }
 
-  async clearAllData() {
-    await this.db.runAsync('DELETE FROM readings');
-    await this.db.runAsync('DELETE FROM sessions');
-    log.info('Cleared all data');
-  }
 
-  async getStorageInfo() {
-    const sessionCountQuery = 'SELECT COUNT(*) as count FROM sessions';
-    const readingCountQuery = 'SELECT COUNT(*) as count FROM readings';
-    
-    const sessionResult = await this.db.getFirstAsync(sessionCountQuery);
-    const readingResult = await this.db.getFirstAsync(readingCountQuery);
-    
-    return {
-      sessionCount: sessionResult.count,
-      readingCount: readingResult.count,
-      estimatedSizeMB: Math.round((readingResult.count * 100) / 1024 / 1024 * 100) / 100
-    };
-  }
 
   // ========================================
   // CALIBRATION SESSION MANAGEMENT
   // ========================================
 
 
-  // Hypoxia Level Analytics
-  async getHypoxiaProgression(limit = 30) {
-    const query = `
-      SELECT 
-        id,
-        start_time,
-        end_time,
-        default_hypoxia_level,
-        total_readings,
-        avg_spo2,
-        avg_heart_rate,
-        status
-      FROM sessions 
-      WHERE default_hypoxia_level IS NOT NULL
-      ORDER BY start_time DESC
-      LIMIT ?
-    `;
-    
-    const results = await this.db.getAllAsync(query, [limit]);
-    const sessions = [];
-    
-    for (const session of results) {
-      sessions.push({
-        id: session.id,
-        startTime: session.start_time,
-        endTime: session.end_time,
-        hypoxiaLevel: session.default_hypoxia_level,
-        totalReadings: session.total_readings,
-        avgSpO2: session.avg_spo2,
-        avgHeartRate: session.avg_heart_rate,
-        status: session.status,
-        date: new Date(session.start_time).toLocaleDateString()
-      });
-    }
-    
-    return sessions.reverse(); // Return in chronological order
-  }
 
-  async getHypoxiaStats() {
-    const query = `
-      SELECT 
-        COUNT(*) as totalSessions,
-        AVG(default_hypoxia_level) as avgHypoxiaLevel,
-        MIN(default_hypoxia_level) as minHypoxiaLevel,
-        MAX(default_hypoxia_level) as maxHypoxiaLevel,
-        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completedSessions
-      FROM sessions 
-      WHERE default_hypoxia_level IS NOT NULL
-    `;
-    
-    const stats = await this.db.getFirstAsync(query);
-    
-    return {
-      totalSessions: stats.totalSessions || 0,
-      avgHypoxiaLevel: Math.round((stats.avgHypoxiaLevel || 0) * 10) / 10,
-      minHypoxiaLevel: stats.minHypoxiaLevel || 0,
-      maxHypoxiaLevel: stats.maxHypoxiaLevel || 0,
-      completedSessions: stats.completedSessions || 0
-    };
-  }
 
   // ========================================
   // SURVEY DATA MANAGEMENT
@@ -1767,6 +1324,14 @@ class DatabaseService {
 
   /**
    * Save pre-session survey data (reactivated for AI feedback engine)
+   */
+  /**
+   * Saves pre-session survey responses
+   * @param {string} sessionId - Session identifier
+   * @param {number} clarityPre - Mental clarity rating (1-5)
+   * @param {number} energyPre - Energy level rating (1-5)
+   * @param {number} stressPre - Stress level rating (1-5)
+   * @returns {Promise<Object>} Survey data object
    */
   async savePreSessionSurvey(sessionId, clarityPre, energyPre, stressPre) {
     try {
@@ -1810,6 +1375,17 @@ class DatabaseService {
 
   /**
    * Save post-session survey data (enhanced with symptoms and rating)
+   */
+  /**
+   * Saves post-session survey responses
+   * @param {string} sessionId - Session identifier
+   * @param {number} clarityPost - Mental clarity rating (1-5)
+   * @param {number} energyPost - Energy level rating (1-5)
+   * @param {number} stressPost - Stress level rating (1-5)
+   * @param {string|null} notesPost - Optional session notes
+   * @param {Array} symptoms - Array of symptom strings
+   * @param {number|null} overallRating - Overall session rating (1-5)
+   * @returns {Promise<Object>} Survey data object
    */
   async savePostSessionSurvey(sessionId, clarityPost, energyPost, stressPost, notesPost = null, symptoms = [], overallRating = null) {
     try {
@@ -1996,38 +1572,6 @@ class DatabaseService {
     }
   }
 
-  /**
-   * Get survey completion status for a session
-   */
-  async getSurveyCompletionStatus(sessionId) {
-    try {
-      const row = await this.db.getFirstAsync(
-        'SELECT clarity_pre, energy_pre, clarity_post, energy_post, stress_post FROM session_surveys WHERE session_id = ?',
-        [sessionId]
-      );
-      
-      if (!row) {
-        return {
-          hasPreSession: false,
-          hasPostSession: false,
-          isPreSessionComplete: false,
-          isPostSessionComplete: false
-        };
-      }
-      const hasPreSession = row.clarity_pre !== null && row.energy_pre !== null;
-      const hasPostSession = row.clarity_post !== null && row.energy_post !== null && row.stress_post !== null;
-      
-      return {
-        hasPreSession,
-        hasPostSession,
-        isPreSessionComplete: hasPreSession,
-        isPostSessionComplete: hasPostSession
-      };
-    } catch (error) {
-      log.error('❌ Failed to check survey completion status:', error);
-      throw error;
-    }
-  }
 
   /**
    * Validate survey scale value (1-5)
@@ -2036,23 +1580,6 @@ class DatabaseService {
     return Number.isInteger(value) && value >= 1 && value <= 5;
   }
 
-  /**
-   * Delete all survey data for a session
-   */
-  async deleteSurveyData(sessionId) {
-    try {
-      log.info(`Deleting survey data for session: ${sessionId}`);
-      
-      await this.db.runAsync('DELETE FROM session_surveys WHERE session_id = ?', [sessionId]);
-      await this.db.runAsync('DELETE FROM intra_session_responses WHERE session_id = ?', [sessionId]);
-      
-      log.info(`Survey data deleted for session: ${sessionId}`);
-      return { success: true };
-    } catch (error) {
-      log.error('❌ Failed to delete survey data:', error);
-      throw error;
-    }
-  }
 
   /**
    * Get complete session data including readings, stats, and survey
@@ -2069,11 +1596,10 @@ class DatabaseService {
         return null;
       }
       
-      // Get session readings
-      const readings = await this.getSessionReadings(sessionId);
-      
-      // Get session statistics
-      const stats = await this.getSessionStats(sessionId);
+      // Note: getSessionReadings, getSessionStats, getSessionBaselineHRV, and getSessionHRVStats were removed
+      log.warn('Multiple data retrieval methods were removed - returning minimal session data');
+      const readings = [];
+      const stats = {};
       
       // Get survey data if available
       let surveyData = null;
@@ -2083,21 +1609,8 @@ class DatabaseService {
         log.warn('Survey data not available for session:', sessionId);
       }
       
-      // Get baseline HRV if available
-      let baselineHRV = null;
-      try {
-        baselineHRV = await this.getSessionBaselineHRV(sessionId);
-      } catch (error) {
-        log.warn('Baseline HRV not available for session:', sessionId);
-      }
-      
-      // Get HRV stats if available
-      let hrvStats = null;
-      try {
-        hrvStats = await this.getSessionHRVStats(sessionId);
-      } catch (error) {
-        log.warn('HRV stats not available for session:', sessionId);
-      }
+      const baselineHRV = null;
+      const hrvStats = null;
       
       // Combine all data
       return {
@@ -2115,13 +1628,6 @@ class DatabaseService {
     }
   }
 
-  async close() {
-    if (this.db) {
-      await this.db.close();
-      this.db = null;
-      log.info('Database closed');
-    }
-  }
 }
 
 export default new DatabaseService(); 

@@ -3,7 +3,12 @@
     "allow": [
       "Bash(git restore:*)",
       "Bash(git reset:*)",
-      "mcp__ide__getDiagnostics"
+      "Bash(node:*)",
+      "Bash(git stash push:*)",
+      "Bash(git diff:*)",
+      "Bash(git fetch:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

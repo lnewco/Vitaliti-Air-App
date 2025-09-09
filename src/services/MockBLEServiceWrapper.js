@@ -1,6 +1,24 @@
 /**
- * MockBLEServiceWrapper - Wraps MockBLEService to match BluetoothService interface
- * This provides all the methods expected by BluetoothContext while using MockBLEService for data
+ * MockBLEServiceWrapper - Adapter layer between MockBLEService and BluetoothContext
+ * 
+ * PURPOSE:
+ * Wraps MockBLEService to provide the exact interface expected by BluetoothContext,
+ * enabling seamless switching between real and mock BLE implementations.
+ * 
+ * WHEN TO USE:
+ * - Use MockBLEServiceWrapper when BluetoothContext needs mock data
+ * - Use MockBLEService directly only for unit testing
+ * - This wrapper handles auto-connection and interface compatibility
+ * 
+ * KEY DIFFERENCES FROM MockBLEService:
+ * - Implements full BluetoothService interface (all required methods)
+ * - Auto-connects on initialization for easier development
+ * - Manages reference counting for proper resource management
+ * - Handles callback registration matching BluetoothContext expectations
+ * 
+ * USAGE:
+ * Import and use in BluetoothContext when USE_MOCK_BLE is true
+ * All BluetoothContext operations will work transparently with mock data
  */
 
 import { mockBLEService } from './MockBLEService';
