@@ -1,3 +1,7 @@
+/**
+ * @fileoverview Wearables metrics display card for showing data from fitness trackers
+ */
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -8,8 +12,26 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
-import { colors, typography, spacing, MetricRing, PremiumButton } from '../design-system';
+import { colors, typography, spacing, MetricRing, PremiumButton } from '../../design-system';
 
+/**
+ * WearablesMetricsCard - Displays health metrics from connected wearable devices
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {Object} props.metrics - Health metrics data (HRV, sleep, recovery, etc.)
+ * @param {boolean} props.isLoading - Loading state indicator
+ * @param {string} props.vendor - Current vendor (Whoop, Oura, etc.)
+ * @param {Function} props.onVendorToggle - Callback for vendor switch
+ * @param {Array} props.availableVendors - List of available vendors
+ * @param {Object} props.sessionInfo - Current session information
+ * @param {Function} props.onStartTraining - Callback to start training
+ * @param {Date} props.selectedDate - Currently selected date
+ * @param {Function} props.onNavigateDate - Callback for date navigation
+ * @param {boolean} props.isToday - Whether selected date is today
+ * @param {Object} props.style - Additional styles
+ * @returns {React.ReactElement} Rendered metrics card
+ */
 const WearablesMetricsCard = ({
   metrics,
   isLoading,

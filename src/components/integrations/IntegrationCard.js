@@ -1,3 +1,7 @@
+/**
+ * @fileoverview Integration card component for displaying third-party service connections
+ */
+
 import React from 'react';
 import {
   View,
@@ -5,9 +9,22 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import { colors, spacing, typography } from '../design-system';
-import SafeIcon from './base/SafeIcon';
+import { colors, spacing, typography } from '../../design-system';
+import SafeIcon from '../base/SafeIcon';
 
+/**
+ * IntegrationCard - Displays integration status and controls for third-party services
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {string} props.name - Name of the integration service
+ * @param {string} props.icon - Icon name for the service
+ * @param {boolean} props.connected - Connection status
+ * @param {Function} props.onConnect - Callback when connect button is pressed
+ * @param {Function} props.onDisconnect - Callback when disconnect button is pressed
+ * @param {string} props.description - Brief description of the integration
+ * @returns {React.ReactElement} Rendered integration card
+ */
 const IntegrationCard = ({ 
   name, 
   icon, 

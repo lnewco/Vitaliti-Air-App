@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   Animated,
 } from 'react-native';
-import runtimeEnvironment from '../utils/RuntimeEnvironment';
+import runtimeEnvironment from '../../utils/RuntimeEnvironment';
 
 const CapabilityBanner = ({ style }) => {
   const [isExpanded, setIsExpanded] = useState(false);

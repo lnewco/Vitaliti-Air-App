@@ -1,3 +1,7 @@
+/**
+ * @fileoverview Modal component for displaying detailed session information
+ */
+
 import React from 'react';
 import {
   View,
@@ -10,12 +14,22 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing, typography } from '../design-system';
-import SafeIcon from './base/SafeIcon';
-import PremiumButton from '../design-system/components/PremiumButton';
+import { colors, spacing, typography } from '../../design-system';
+import SafeIcon from '../base/SafeIcon';
+import PremiumButton from '../../design-system/components/PremiumButton';
 
 const { width: screenWidth } = Dimensions.get('window');
 
+/**
+ * SessionDetailsModal - Displays comprehensive session details in a modal
+ * 
+ * @component
+ * @param {Object} props - Component props
+ * @param {boolean} props.visible - Modal visibility state
+ * @param {Object} props.session - Session data object
+ * @param {Function} props.onClose - Callback when modal is closed
+ * @returns {React.ReactElement|null} Rendered modal or null
+ */
 const SessionDetailsModal = ({ visible, session, onClose }) => {
   if (!session) return null;
 
