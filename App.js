@@ -3,7 +3,7 @@ import { LogBox } from 'react-native';
 import { BluetoothProvider } from './src/context/BluetoothContext';
 import { AuthProvider } from './src/auth/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
-import ErrorBoundary from './src/components/ErrorBoundary';
+import ErrorBoundary from './src/components/common/ErrorBoundary';
 import logger from './src/utils/logger';
 import SupabaseService from './src/services/SupabaseService';
 

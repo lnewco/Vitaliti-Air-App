@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CommonActions } from '@react-navigation/native';
-import OnboardingProgressIndicator from '../../components/OnboardingProgressIndicator';
+import OnboardingProgressIndicator from '../../components/navigation/OnboardingProgressIndicator';
 import { useOnboarding } from '../../context/OnboardingContext';
 import { useAuth } from '../../auth/AuthContext';
 import { supabase } from '../../config/supabase';

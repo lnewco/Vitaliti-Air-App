@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useAuth } from '../AuthContext';
 import { colors, typography, spacing } from '../../design-system';
-import VitalitiLogo from '../../components/VitalitiLogo';
+import VitalitiLogo from '../../components/common/VitalitiLogo';
 
 const PremiumOTPScreen = ({ route, navigation }) => {
   const { phoneNumber, displayNumber } = route.params;

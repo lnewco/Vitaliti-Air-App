@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import OnboardingProgressIndicator from './OnboardingProgressIndicator';
+import OnboardingProgressIndicator from './navigation/OnboardingProgressIndicator';
 import { useOnboarding } from '../context/OnboardingContext';
 import { useAuth } from '../auth/AuthContext';
 
