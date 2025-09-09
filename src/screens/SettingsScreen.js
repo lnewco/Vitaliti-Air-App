@@ -25,7 +25,6 @@ const SettingsScreen = ({ navigation }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [whoopConnected, setWhoopConnected] = useState(false);
   const [ouraConnected, setOuraConnected] = useState(false);
-  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     console.log('🔧 SettingsScreen mounted');

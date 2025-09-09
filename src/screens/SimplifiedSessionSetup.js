@@ -9,7 +9,6 @@ import {
   Alert,
   StatusBar,
   ActivityIndicator,
-  Modal,
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,10 +17,6 @@ import Animated, {
   FadeInDown,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
-  withSequence,
-  withTiming,
-  interpolate,
 } from 'react-native-reanimated';
 import InlineDeviceScanner from '../components/InlineDeviceScanner';
 import {

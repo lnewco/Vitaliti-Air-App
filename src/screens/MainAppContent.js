@@ -1,13 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { StatusBar } from 'expo-status-bar';
+import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { SafeAreaView, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import { colors } from '../design-system';
 import PremiumDashboard from './PremiumDashboard';
-import SessionHistoryScreen from './SessionHistoryScreen';
 import SimplifiedSessionSetup from './SimplifiedSessionSetup';
 import IHHTSessionSimple from './IHHTSessionSimple';
 import PostSessionSurveyScreen from './PostSessionSurveyScreen';
