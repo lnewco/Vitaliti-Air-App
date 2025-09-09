@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import Constants from 'expo-constants';
 import { useBluetooth } from '../context/BluetoothContext';
 import EnhancedSessionManager from '../services/EnhancedSessionManager';
+import { formatTime } from '../utils/formatters';
 import AdaptiveInstructionEngine from '../services/AdaptiveInstructionEngine';
 import SessionIdGenerator from '../utils/sessionIdGenerator';
 import DatabaseService from '../services/DatabaseService';
@@ -819,11 +820,6 @@ export default function IHHTSessionSimple() {
     );
   };
   
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
   
   // Get altitude data - show 0 during recovery phase
   const displayAltitudeLevel = sessionInfo?.phaseType === 'RECOVERY' ? 0 : metrics.dialLevel;

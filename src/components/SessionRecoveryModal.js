@@ -11,6 +11,7 @@ import {
   Modal,
   Dimensions,
 } from 'react-native';
+import { formatTime } from '../utils/formatters';
 
 const { width } = Dimensions.get('window');
 
@@ -23,11 +24,6 @@ const SessionRecoveryModal = ({
 }) => {
   if (!recoveryData) return null;
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   const formatPhase = (phase) => {
     return phase === 'HYPOXIC' ? 'Hypoxic' : 'Hyperoxic';

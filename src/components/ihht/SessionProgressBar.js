@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
+import { formatTime } from '../../utils/formatters';
 
 export default function SessionProgressBar({
   currentCycle,
@@ -16,11 +17,6 @@ export default function SessionProgressBar({
   onSkip,
   onEnd
 }) {
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   const phaseProgress = phaseDuration > 0 ? (phaseTimeElapsed / phaseDuration) * 100 : 0;
 
