@@ -1,4 +1,9 @@
+/**
+ * @fileoverview Premium dashboard screen with wearables integration
+ */
+
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import {
   View,
   ScrollView,
@@ -34,6 +39,9 @@ import WearablesDataService from '../services/WearablesDataService';
 import WearablesMetricsCard from '../components/integrations/WearablesMetricsCard';
 import { useAuth } from '../auth/AuthContext';
 import { supabase } from '../config/supabase';
+import DashboardHeader from '../components/common/DashboardHeader';
+import StatusBadge from '../components/common/StatusBadge';
+import { INTERVALS, API_CONFIG, GREETING_HOURS, UI_CONSTANTS, DATE_CONSTANTS } from '../constants/dashboardConstants';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -297,9 +305,9 @@ const PremiumDashboard = ({ navigation }) => {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour >= 17 || hour < 4) {
+    if (hour >= GREETING_HOURS.EVENING_START || hour < GREETING_HOURS.EVENING_END) {
       return 'Good evening';
-    } else if (hour >= 12) {
+    } else if (hour >= GREETING_HOURS.AFTERNOON_START) {
       return 'Good afternoon';
     } else {
       return 'Good morning';
@@ -307,9 +315,7 @@ const PremiumDashboard = ({ navigation }) => {
   };
 
   const getCurrentDate = () => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    return `${days[selectedDate.getDay()]}, ${months[selectedDate.getMonth()]} ${selectedDate.getDate()}`;
+    return `${DATE_CONSTANTS.DAYS[selectedDate.getDay()]}, ${DATE_CONSTANTS.MONTHS[selectedDate.getMonth()]} ${selectedDate.getDate()}`;
   };
 
   const isToday = () => {
@@ -332,27 +338,15 @@ const PremiumDashboard = ({ navigation }) => {
   };
 
   const renderHeader = () => (
-    <Animated.View style={[styles.header, headerAnimatedStyle]}>
-      <View style={styles.headerTop}>
-        <TouchableOpacity
-          onPress={() => navigation.navigate('AnimationPreview')}
-          activeOpacity={0.7}
-        >
-          <Image
-            source={require('../../assets/IMG_4490.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-        </TouchableOpacity>
-        <View style={styles.headerBadge}>
-          <View style={[styles.statusDot, isRefreshingMetrics && styles.statusDotLoading]} />
-          <Text style={styles.statusText}>{isRefreshingMetrics ? 'Loading...' : 'Connected'}</Text>
-        </View>
-      </View>
-      
-      <Text style={styles.greeting}>{getGreeting()},  {userName || 'User'}</Text>
-      <Text style={styles.date}>{getCurrentDate()}</Text>
-    </Animated.View>
+    <DashboardHeader
+      animatedStyle={headerAnimatedStyle}
+      onSettingsPress={() => navigation.navigate('Settings')}
+      isLoading={isRefreshingMetrics}
+      statusText={isRefreshingMetrics ? 'Loading...' : 'Connected'}
+      greeting={getGreeting()}
+      dateText={getCurrentDate()}
+      userName={userName}
+    />
   );
 
   const renderMetrics = () => {
@@ -663,5 +657,11 @@ const styles = StyleSheet.create({
     color: colors.text.quaternary,
   },
 });
+
+PremiumDashboard.propTypes = {
+  navigation: PropTypes.shape({
+    navigate: PropTypes.func.isRequired,
+  }).isRequired,
+};
 
 export default PremiumDashboard;
