@@ -167,6 +167,7 @@ export default function IHHTSessionSimple() {
   
   // Helper function to show notification with buzz and fade-in
   const showNotificationWithAnimation = (instruction) => {
+    console.log('📢 Showing notification with animation:', instruction);
     
     // Set the instruction first
     setAdaptiveInstruction(instruction);
@@ -222,12 +223,14 @@ export default function IHHTSessionSimple() {
     
     const initSession = async () => {
       if (isInitializing) {
+        console.warn('⚠️ Session initialization already in progress, skipping duplicate call');
         return;
       }
       
       isInitializing = true;
       
       try {
+        console.log('🚀 Initializing IHHT Session Simple with:', {
           sessionId,
           protocolConfig,
           timestamp: new Date().toISOString()
@@ -244,6 +247,7 @@ export default function IHHTSessionSimple() {
         
         // Check if there's already an active session and clean it up
         if (EnhancedSessionManager.isActive) {
+          console.log('⚠️ Cleaning up previous session state');
           await EnhancedSessionManager.endSession();
           // Also end mock BLE session
           if (endSession) {
@@ -255,6 +259,7 @@ export default function IHHTSessionSimple() {
         
         // CRITICAL: Check if cancelled before starting session
         if (isCancelled) {
+          console.log('⚠️ Session initialization was cancelled, not starting session');
           return;
         }
         
@@ -262,6 +267,7 @@ export default function IHHTSessionSimple() {
         // Ensure durations are correctly set in seconds
         // Handle both manualAltitudeLevel (from SimplifiedSessionSetup) and defaultAltitudeLevel (legacy)
         const altitudeLevel = protocolConfig.manualAltitudeLevel || protocolConfig.defaultAltitudeLevel || 6;
+        console.log('🏔️ Using altitude level:', altitudeLevel, 'from', {
           manual: protocolConfig.manualAltitudeLevel,
           default: protocolConfig.defaultAltitudeLevel
         });
@@ -281,6 +287,7 @@ export default function IHHTSessionSimple() {
           
           // Save pre-session survey data if provided
           if (preSessionData) {
+            console.log('📝 Saving pre-session survey data:', preSessionData);
             try {
               // Save to local database
               await DatabaseService.savePreSessionSurvey(
@@ -298,13 +305,16 @@ export default function IHHTSessionSimple() {
                 preSessionData.stress
               );
               
+              console.log('✅ Pre-session survey saved successfully');
             } catch (error) {
+              console.error('❌ Failed to save pre-session survey:', error);
               // Continue anyway - don't block session start
             }
           }
           
           // Start mock BLE session for data generation
           if (startSession) {
+            console.log('🚀 IHHTSessionSimple: Starting mock BLE session');
             startSession();
           }
         }
@@ -312,7 +322,10 @@ export default function IHHTSessionSimple() {
         // Keep screen awake
         activateKeepAwakeAsync();
         
+        console.log('🚨🚨🚨 CODE VERSION 3 - CACHE CLEARED! 🚨🚨🚨');
+        console.log('✅ Session initialized successfully');
       } catch (error) {
+        console.error('❌ Failed to initialize session:', error);
         setIsInitializing(false);
         
         // Ensure session manager is reset on error
@@ -325,6 +338,7 @@ export default function IHHTSessionSimple() {
             }
           }
         } catch (cleanupError) {
+          console.error('Error during cleanup:', cleanupError);
         }
         
         Alert.alert(
@@ -347,7 +361,9 @@ export default function IHHTSessionSimple() {
       
       // CRITICAL: Properly end session if component unmounts
       if (EnhancedSessionManager.isActive) {
+        console.log('🛑 Component unmounting, ending active session');
         EnhancedSessionManager.endSession().catch(error => {
+          console.error('Error ending session on unmount:', error);
         });
         // Also end mock BLE session
         if (endSession) {
@@ -385,6 +401,7 @@ export default function IHHTSessionSimple() {
                 if (pendingDialAdjustment.current && !isGoingToRecovery) {
                   // Apply the pending dial adjustment to the altitude level
                   adjustedLevel = pendingDialAdjustment.current.newLevel || adjustedLevel;
+                  console.log(`🎯 Applying pending dial adjustment: ${adjustedLevel}`);
                 }
                 
                 const fromLevel = isGoingToRecovery ? adjustedLevel : 0;
@@ -406,6 +423,8 @@ export default function IHHTSessionSimple() {
                 
                 showNotificationWithAnimation(instruction);
                 
+                console.log(`🎰 Showing switch masks instruction: ${fromLevel} → ${toLevel} (next phase: ${info.nextPhaseAfterTransition})`);
+                console.log(`📋 Pending dial adjustment:`, pendingDialAdjustment.current);
                 
                 // Store transition details but don't start animation yet
                 setTransitionFromLevel(fromLevel);
@@ -416,10 +435,12 @@ export default function IHHTSessionSimple() {
               // Phase changed away from transition - reset the flag
               if (hasShownTransitionInstruction.current) {
                 hasShownTransitionInstruction.current = false;
+                console.log('🔄 Reset transition instruction flag');
               }
               
               if (isTransitioning) {
                 // Transition animation ended
+                console.log('🎰 Transition animation complete');
                 setIsTransitioning(false);
               }
             }
@@ -430,6 +451,7 @@ export default function IHHTSessionSimple() {
             }
           }
         } catch (error) {
+          console.error('Error getting session info:', error);
         }
       }, 1000);
       
@@ -457,6 +479,7 @@ export default function IHHTSessionSimple() {
       return;
     }
     
+    console.log('📱 IHHTSession useEffect - isPulseOxConnected:', isPulseOxConnected, 'pulseOximeterData:', pulseOximeterData);
     // Use real data when available
     if (isPulseOxConnected && pulseOximeterData) {
       const newMetrics = {
@@ -469,6 +492,7 @@ export default function IHHTSessionSimple() {
       
       // CRITICAL: Only send to manager if session is truly active
       if (pulseOximeterData.spo2 && pulseOximeterData.heartRate && EnhancedSessionManager.isActive) {
+        console.log('📱 IHHTSession: Sending reading to EnhancedSessionManager:', {
           spo2: pulseOximeterData.spo2,
           heartRate: pulseOximeterData.heartRate
         });
@@ -478,6 +502,7 @@ export default function IHHTSessionSimple() {
           timestamp: Date.now()
         });
       } else if (!EnhancedSessionManager.isActive) {
+        console.log('⚠️ IHHTSession: Skipping data - no active session in manager');
       }
     } else {
       // Demo mode - simulate metrics
@@ -536,16 +561,19 @@ export default function IHHTSessionSimple() {
   const processNextInstruction = () => {
     if (pendingInstructions.current.length > 0 && !showAdaptiveInstruction) {
       const nextInstruction = pendingInstructions.current.shift();
+      console.log('📋 Processing queued instruction:', nextInstruction);
       handleAdaptiveInstruction(nextInstruction, true); // true = from queue
     }
   };
 
   // Handle adaptive instructions
   const handleAdaptiveInstruction = (instruction, fromQueue = false) => {
+    console.log('🎯 Received adaptive instruction:', instruction, fromQueue ? '(from queue)' : '');
     
     // Special handling for dial adjustments during transitions
     if ((instruction.type === 'dial_adjustment' || instruction.type === 'altitude_adjustment') && 
         instruction.showDuringTransition && !fromQueue) {
+      console.log('📋 Storing dial adjustment to show after switch masks:', instruction);
       pendingDialAdjustment.current = instruction;
       return; // Don't show it yet
     }
@@ -553,6 +581,7 @@ export default function IHHTSessionSimple() {
     // If we're already showing an instruction and this is a dial adjustment, queue it
     if (!fromQueue && showAdaptiveInstruction && 
         (instruction.type === 'dial_adjustment' || instruction.type === 'altitude_adjustment')) {
+      console.log('📋 Queueing dial adjustment instruction');
       pendingInstructions.current.push(instruction);
       return;
     }
@@ -593,6 +622,7 @@ export default function IHHTSessionSimple() {
       
       // Actually update the dial level when adjustment is made
       if (instruction.newLevel !== undefined) {
+        console.log(`🎛️ Adjusting dial level to: ${instruction.newLevel}`);
         setMetrics(prev => ({
           ...prev,
           dialLevel: instruction.newLevel
@@ -630,6 +660,7 @@ export default function IHHTSessionSimple() {
   // Handle app state changes to sync timers and clean up sessions
   useEffect(() => {
     const handleAppStateChange = async (nextAppState) => {
+      console.log('📱 App state changed to:', nextAppState);
       
       if (nextAppState === 'active' && sessionStarted) {
         // App came to foreground - sync timers with background state
@@ -637,6 +668,7 @@ export default function IHHTSessionSimple() {
         if (info && info.sessionStartTime) {
           const actualElapsed = Math.floor((Date.now() - new Date(info.sessionStartTime).getTime()) / 1000);
           setTotalElapsedTime(actualElapsed);
+          console.log('⏱️ Synced timer after app resume:', actualElapsed, 'seconds');
         }
         
         // Force a session info update to refresh all timers
@@ -685,13 +717,16 @@ export default function IHHTSessionSimple() {
         metrics.heartRate
       );
       
+      console.log('✅ Intra-session feedback saved for cycle', sessionInfo.currentCycle);
     } catch (error) {
+      console.error('Error saving intra-session feedback:', error);
     }
     
     setShowIntraSessionFeedback(false);
   };
   
   const handleIntraSessionDismiss = () => {
+    console.log('❌ Intra-session feedback dismissed for cycle', sessionInfo.currentCycle);
     setShowIntraSessionFeedback(false);
   };
   
@@ -715,6 +750,7 @@ export default function IHHTSessionSimple() {
       
       // End mock BLE session
       if (endSession) {
+        console.log('🛑 IHHTSessionSimple: Ending mock BLE session');
         endSession();
       }
       
@@ -737,6 +773,7 @@ export default function IHHTSessionSimple() {
         ],
       });
     } catch (error) {
+      console.error('Error completing session:', error);
     }
   };
   
@@ -853,6 +890,7 @@ export default function IHHTSessionSimple() {
               duration={3000}
               isActive={isTransitioning}
               onComplete={() => {
+                console.log('🎰 Altitude transition completed');
               }}
             />
           </View>
@@ -902,6 +940,7 @@ export default function IHHTSessionSimple() {
         <TouchableOpacity 
           style={styles.feedbackButton}
           onPress={() => {
+            console.log('📝 Manual feedback triggered');
             setShowIntraSessionFeedback(true);
           }}
         >
@@ -925,6 +964,7 @@ export default function IHHTSessionSimple() {
           <TouchableOpacity 
             style={[styles.button, styles.skipButton]}
             onPress={() => {
+              console.log('⏭️ Skip phase requested');
               // Skip to next phase
               if (EnhancedSessionManager.skipToNextPhase) {
                 EnhancedSessionManager.skipToNextPhase();
@@ -960,14 +1000,17 @@ export default function IHHTSessionSimple() {
               onPress={() => {
                 // If this is a dial adjustment, confirm it with the engine
                 if (adaptiveInstruction.type === 'dial_adjustment' && adaptiveInstruction.newLevel !== undefined) {
+                  console.log('✅ User confirmed dial adjustment to level', adaptiveInstruction.newLevel);
                   EnhancedSessionManager.confirmDialAdjustment(adaptiveInstruction.newLevel);
                 }
                 
                 // If this is a switch masks instruction, check for dial adjustment first
                 if (adaptiveInstruction.type === 'SWITCH_MASKS') {
+                  console.log('✅ User confirmed switch masks');
                   
                   // Check if there's a pending dial adjustment to show FIRST
                   if (pendingDialAdjustment.current) {
+                    console.log('📋 Showing pending dial adjustment before altitude animation:', pendingDialAdjustment.current);
                     const dialInstruction = pendingDialAdjustment.current;
                     pendingDialAdjustment.current = null;
                     
@@ -986,6 +1029,7 @@ export default function IHHTSessionSimple() {
                 // If this is a dial adjustment confirmation, do NOT start animation yet
                 // The animation should only start with the switch masks confirmation
                 if (adaptiveInstruction.type === 'dial_adjustment') {
+                  console.log('✅ Dial adjustment confirmed - animation will start when masks are switched');
                   // Do NOT start the animation here - let the switch masks trigger it
                 }
                 
@@ -1325,25 +1369,3 @@ const styles = StyleSheet.create({
     color: '#FFF',
   },
 });
-
-// Add PropTypes
-IHHTSessionSimple.propTypes = {
-  navigation: PropTypes.shape({
-    replace: PropTypes.func.isRequired,
-    reset: PropTypes.func.isRequired,
-  }).isRequired,
-  route: PropTypes.shape({
-    params: PropTypes.shape({
-      sessionId: PropTypes.string.isRequired,
-      protocolConfig: PropTypes.object.isRequired,
-      preSessionData: PropTypes.object,
-    }).isRequired,
-  }).isRequired,
-};
-
-EKGWave.propTypes = {
-  heartRate: PropTypes.number.isRequired,
-  color: PropTypes.string,
-};
-
-export default IHHTSessionSimple;

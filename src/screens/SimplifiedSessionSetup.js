@@ -1,4 +1,9 @@
+/**
+ * @fileoverview Simplified IHHT session setup screen with device connection and configuration
+ */
+
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import {
   View,
   Text,
@@ -37,6 +42,8 @@ import AltitudeProgressionService from '../services/AltitudeProgressionService';
 import Constants from 'expo-constants';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { SESSION_DEFAULTS, SESSION_LIMITS, SESSION_COLORS, DEMO_MODE } from '../constants/sessionConstants';
+import { calculateSessionDuration, cycleCount, cycleHypoxicDuration, cycleRecoveryDuration } from '../utils/sessionHelpers';
 
 // Detect if running in Expo Go (demo mode) vs production build
 const IS_EXPO_GO = Constants.appOwnership === 'expo';
@@ -50,19 +57,14 @@ const SimplifiedSessionSetup = ({ navigation }) => {
   const [showPreSessionSurvey, setShowPreSessionSurvey] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState(null);
   const [showConnectionManager, setShowConnectionManager] = useState(false);
-  const [recommendedAltitude, setRecommendedAltitude] = useState(6);
-  const [selectedAltitude, setSelectedAltitude] = useState(6);
+  const [recommendedAltitude, setRecommendedAltitude] = useState(SESSION_DEFAULTS.ALTITUDE_LEVEL);
+  const [selectedAltitude, setSelectedAltitude] = useState(SESSION_DEFAULTS.ALTITUDE_LEVEL);
   const [altitudeLoadingState, setAltitudeLoadingState] = useState('loading');
   const [userAdjustedAltitude, setUserAdjustedAltitude] = useState(false);
-  const scale = useSharedValue(1);
-  const progressAnimation = useSharedValue(0);
-  const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 3;
-
   // Dynamic protocol configuration states with AI-recommended defaults
-  const [totalCycles, setTotalCycles] = useState(5); // AI recommended: 5 cycles
-  const [hypoxicDuration, setHypoxicDuration] = useState(7); // AI recommended: 7 minutes
-  const [recoveryDuration, setRecoveryDuration] = useState(3); // AI recommended: 3 minutes
+  const [totalCycles, setTotalCycles] = useState(SESSION_DEFAULTS.TOTAL_CYCLES);
+  const [hypoxicDuration, setHypoxicDuration] = useState(SESSION_DEFAULTS.HYPOXIC_DURATION);
+  const [recoveryDuration, setRecoveryDuration] = useState(SESSION_DEFAULTS.RECOVERY_DURATION);
 
   // Helper function to determine button title based on state
   const getButtonTitle = () => {
@@ -89,7 +91,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
     try {
       setAltitudeLoadingState('loading');
       // Get user ID (you may need to get this from auth context)
-      const userId = 'default_user'; // TODO: Get from auth context
+      const userId = SESSION_DEFAULTS.DEFAULT_USER_ID; // TODO: Get from auth context
       
       const progressionData = await AltitudeProgressionService.calculateOptimalStartingAltitude(userId);
       
@@ -97,12 +99,11 @@ const SimplifiedSessionSetup = ({ navigation }) => {
       setSelectedAltitude(progressionData.recommendedLevel); // Set initial selection to recommended
       setAltitudeLoadingState('loaded');
       
-      console.log(`🎯 Recommended altitude: Level ${progressionData.recommendedLevel}`);
-      console.log(`📊 Reasoning:`, progressionData.reasoning);
+      // Recommendation loaded successfully
     } catch (error) {
-      console.warn('Failed to calculate recommended altitude:', error);
-      setRecommendedAltitude(6); // Fallback
-      setSelectedAltitude(6);
+      // Failed to calculate, using defaults
+      setRecommendedAltitude(SESSION_DEFAULTS.ALTITUDE_LEVEL);
+      setSelectedAltitude(SESSION_DEFAULTS.ALTITUDE_LEVEL);
       setAltitudeLoadingState('loaded');
     }
   };
@@ -110,7 +111,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
   const handleAltitudeSelect = (level) => {
     setSelectedAltitude(level);
     setUserAdjustedAltitude(level !== recommendedAltitude);
-    console.log(`🎚️ User selected altitude level ${level} (Recommended: ${recommendedAltitude})`);
+    // User selected altitude
   };
 
   const handleStartSession = async () => {
@@ -126,9 +127,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
     }
     
     // Log warning if starting without device in demo mode
-    if (ALLOW_DEMO_MODE && !isPulseOxConnected) {
-      console.warn('[DEMO MODE] Starting session without pulse oximeter - for testing only');
-    }
+    // Demo mode - starting without pulse oximeter
 
     // Generate session ID for pre-session survey
     const sessionId = SessionIdGenerator.generate('IHHT');
@@ -145,15 +144,10 @@ const SimplifiedSessionSetup = ({ navigation }) => {
     try {
       // Generate session ID
       const sessionId = SessionIdGenerator.generate('IHHT');
-      console.log('📝 Generated session ID:', sessionId);
-
       // Initialize database
       await DatabaseService.init();
 
-      // REMOVED: Duplicate session creation
       // Session will be created by EnhancedSessionManager in IHHTSessionSimple screen
-      // This prevents the duplicate session bug where two sessions are created with same ID
-      console.log('📝 Session will be created by EnhancedSessionManager');
 
       // Replace current screen with training session to prevent flash on completion
       navigation.replace('IHHTSessionSimple', { 
@@ -167,7 +161,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
         preSessionData: surveyData // Pass pre-session survey data
       });
     } catch (error) {
-      console.error('❌ Error starting session:', error);
+      // Error handled with Alert
       Alert.alert(
         'Error',
         'Failed to start session. Please try again.',
@@ -178,7 +172,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
     }
   };
 
-  const totalSessionTime = totalCycles * (hypoxicDuration + recoveryDuration);
+  const totalSessionTime = calculateSessionDuration(totalCycles, hypoxicDuration, recoveryDuration);
 
   // Protocol metrics data - now interactive
   const protocolMetrics = [
@@ -186,31 +180,22 @@ const SimplifiedSessionSetup = ({ navigation }) => {
       label: 'CYCLES', 
       value: totalCycles, 
       unit: '',
-      isDefault: totalCycles === 5,
-      onPress: () => {
-        // Cycle through 1-5 cycles
-        setTotalCycles(prev => prev >= 5 ? 1 : prev + 1);
-      }
+      isDefault: totalCycles === SESSION_DEFAULTS.TOTAL_CYCLES,
+      onPress: () => setTotalCycles(prev => cycleCount(prev))
     },
     { 
       label: 'HYPOXIC', 
       value: hypoxicDuration, 
       unit: 'min',
-      isDefault: hypoxicDuration === 7,
-      onPress: () => {
-        // Cycle through 3-10 minutes
-        setHypoxicDuration(prev => prev >= 10 ? 3 : prev + 1);
-      }
+      isDefault: hypoxicDuration === SESSION_DEFAULTS.HYPOXIC_DURATION,
+      onPress: () => setHypoxicDuration(prev => cycleHypoxicDuration(prev))
     },
     { 
       label: 'RECOVERY', 
       value: recoveryDuration, 
       unit: 'min',
-      isDefault: recoveryDuration === 3,
-      onPress: () => {
-        // Cycle through 2-5 minutes
-        setRecoveryDuration(prev => prev >= 5 ? 2 : prev + 1);
-      }
+      isDefault: recoveryDuration === SESSION_DEFAULTS.RECOVERY_DURATION,
+      onPress: () => setRecoveryDuration(prev => cycleRecoveryDuration(prev))
     },
   ];
 
@@ -469,7 +454,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
               isVisible={true}
               onClose={() => setShowConnectionManager(false)}
               onDeviceConnected={(device) => {
-                console.log('Device connected:', device.name);
+                // Device connected
                 setShowConnectionManager(false);
                 // Device is already connected via the scanner
               }}
@@ -538,7 +523,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: SESSION_COLORS.DARK_BG,
   },
   safeArea: {
     flex: 1,
@@ -791,14 +776,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -8,
     right: 4,
-    backgroundColor: '#4CAF50',  // Green to match altitude level
+    backgroundColor: SESSION_COLORS.SUCCESS,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
   },
   aiRecommendedText: {
     fontSize: 9,
-    color: '#000',  // Black text to match altitude level AI badge
+    color: SESSION_COLORS.DARK_BG,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -832,7 +817,7 @@ const styles = StyleSheet.create({
   },
   adjustedBadgeText: {
     fontSize: 10,
-    color: '#FFCC00',
+    color: SESSION_COLORS.WARNING,
     fontWeight: '600',
     textTransform: 'uppercase',
   },
@@ -886,7 +871,7 @@ const styles = StyleSheet.create({
   },
   disconnectButtonText: {
     fontSize: 15,
-    color: '#FF3B30',
+    color: SESSION_COLORS.ERROR,
     fontWeight: '600',
   },
   floatingAction: {
@@ -935,7 +920,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: SESSION_COLORS.DARK_BG,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -965,5 +950,12 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
 });
+
+SimplifiedSessionSetup.propTypes = {
+  navigation: PropTypes.shape({
+    replace: PropTypes.func.isRequired,
+    navigate: PropTypes.func.isRequired,
+  }).isRequired,
+};
 
 export default SimplifiedSessionSetup;
