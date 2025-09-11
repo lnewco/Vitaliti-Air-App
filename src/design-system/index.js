@@ -34,6 +34,13 @@ export const animations = {
     medium: 300,
     slow: 500,
   },
+  scale: {
+    pressIn: 0.96,
+    pressOut: 1,
+    small: 0.95,
+    medium: 1,
+    large: 1.05,
+  },
 };
 
 // Haptic feedback presets
