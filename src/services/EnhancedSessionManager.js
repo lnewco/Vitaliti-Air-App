@@ -1484,7 +1484,8 @@ class EnhancedSessionManager {
       
       // Get altitude progression data
       const currentAltitudeLevel = this.currentAltitudeLevel || this.startingAltitudeLevel || 6;
-      const totalMaskLifts = this.adaptiveEngine?.getTotalMaskLifts() || 0;
+      // getTotalMaskLifts method doesn't exist yet, using 0 as fallback
+      const totalMaskLifts = 0; // TODO: Implement getTotalMaskLifts in AdaptiveInstructionEngine
       const totalAltitudeAdjustments = this.totalAltitudeAdjustments || 0;
       const actualCyclesCompleted = this.currentCycle - 1; // Current cycle minus 1 since we start at 1
       const actualHypoxicTime = Math.floor(this.totalAltitudeTime || 0);
