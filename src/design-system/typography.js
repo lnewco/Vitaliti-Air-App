@@ -106,6 +106,31 @@ const typography = {
     fontWeight: '400',
     letterSpacing: 0.1,
   },
+  
+  // Body styles with nested structure for backward compatibility
+  body: {
+    large: {
+      fontFamily: fontFamily.regular,
+      fontSize: 17,
+      lineHeight: 24,
+      fontWeight: '400',
+      letterSpacing: 0,
+    },
+    medium: {
+      fontFamily: fontFamily.regular,
+      fontSize: 15,
+      lineHeight: 22,
+      fontWeight: '400',
+      letterSpacing: 0,
+    },
+    small: {
+      fontFamily: fontFamily.regular,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: '400',
+      letterSpacing: 0.1,
+    },
+  },
 
   // Label styles
   labelLarge: {

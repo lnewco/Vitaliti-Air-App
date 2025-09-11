@@ -24,7 +24,20 @@ const spacing = {
   sectionGap: 24,
   elementGap: 12,
   inputPadding: 16,
-  buttonPadding: 16,
+  buttonPadding: {
+    small: {
+      vertical: 8,
+      horizontal: 16,
+    },
+    medium: {
+      vertical: 12,
+      horizontal: 24,
+    },
+    large: {
+      vertical: 16,
+      horizontal: 32,
+    },
+  },
   iconSize: {
     small: 16,
     medium: 24,
