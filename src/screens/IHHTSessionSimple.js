@@ -908,7 +908,7 @@ export default function IHHTSessionSimple() {
             setShowIntraSessionFeedback(true);
           }}
         >
-          <Icon name="chat-bubble" size={20} color="#FFF" />
+          <Icon name="message" size={20} color="#FFF" />
           <Text style={styles.feedbackButtonText}>Feedback</Text>
         </TouchableOpacity>
 
