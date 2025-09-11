@@ -66,6 +66,10 @@ const SimplifiedSessionSetup = ({ navigation }) => {
   const [hypoxicDuration, setHypoxicDuration] = useState(SESSION_DEFAULTS.HYPOXIC_DURATION);
   const [recoveryDuration, setRecoveryDuration] = useState(SESSION_DEFAULTS.RECOVERY_DURATION);
 
+  // Animation shared values
+  const scale = useSharedValue(1);
+  const progressAnimation = useSharedValue(0);
+
   // Helper function to determine button title based on state
   const getButtonTitle = () => {
     if (IS_EXPO_GO && !isPulseOxConnected) {
