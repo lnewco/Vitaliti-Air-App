@@ -1,17 +1,45 @@
 /**
  * ServiceFactory - Creates appropriate service instances based on runtime environment
- * 
+ *
  * This factory automatically selects between native and Expo implementations
  * based on the current runtime environment and available modules.
- * 
- * Background Service Architecture:
+ *
+ * BACKGROUND SERVICE DECISION TREE:
+ *
+ * 1. Check environment capabilities:
+ *    └─ Has backgroundTimer capability? (Native modules available)
+ *       ├─ YES → Try NativeBackgroundService
+ *       │   └─ Verify native modules loaded successfully
+ *       │       ├─ SUCCESS → Use NativeBackgroundService
+ *       │       └─ FAILURE → Fallback to ExpoBackgroundService
+ *       └─ NO → Use ExpoBackgroundService
+ *
+ * BACKGROUND SERVICE ARCHITECTURE:
+ *
+ * Interface Hierarchy:
  * - BaseBackgroundService: Abstract base class defining the interface
- * - NativeBackgroundService: Uses native iOS/Android modules (production builds)
- * - ExpoBackgroundService: Fallback for Expo Go using timestamps and notifications
- * - AggressiveBackgroundService: Advanced iOS-specific background persistence (used directly by EnhancedSessionManager)
- * 
- * The factory dynamically selects NativeBackgroundService when available,
- * falling back to ExpoBackgroundService for Expo Go compatibility.
+ *   ├─ NativeBackgroundService: Uses native iOS/Android modules (production builds)
+ *   └─ ExpoBackgroundService: Fallback for Expo Go using timestamps and notifications
+ *
+ * Standalone Services (not created by factory):
+ * - AggressiveBackgroundService: Advanced iOS-specific background persistence
+ *   (Used directly by EnhancedSessionManager for critical sessions)
+ * - BackgroundService: Legacy implementation (consider deprecating)
+ *
+ * PLATFORM DIFFERENCES:
+ *
+ * iOS:
+ * - Supports background app refresh
+ * - Limited to ~30 seconds unless using special modes
+ * - AggressiveBackgroundService uses multiple techniques for extended execution
+ *
+ * Android:
+ * - More permissive background execution
+ * - Foreground service support for long-running tasks
+ * - Less aggressive techniques needed
+ *
+ * The factory dynamically selects the best available implementation
+ * based on runtime capabilities and module availability.
  */
 
 import runtimeEnvironment from '../utils/RuntimeEnvironment';

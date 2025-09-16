@@ -7,6 +7,12 @@ import logger from '../utils/logger';
 const log = logger.createModuleLogger('BluetoothService');
 
 
+/**
+ * BluetoothService - Manages BLE connections for pulse oximeter devices
+ *
+ * Handles device scanning, connection management, data parsing, and real-time
+ * data streaming from Wellue and BerryMed pulse oximeter devices.
+ */
 class BluetoothService {
   constructor() {
     // Initialize BleManager immediately to avoid race conditions
@@ -61,20 +67,12 @@ class BluetoothService {
     
     this.welluePacketNumber = 0;            // Packet counter
     this.realTimeDataInterval = null;
-    
-    // Store latest metrics for getLatestMetrics()
-    this.latestMetrics = null;
   }
 
   /**
-   * Gets the latest received metrics from the pulse oximeter
-   * @returns {Object|null} Latest metrics with spo2 and heartRate, or null if no data
+   * Acquires a reference to the BluetoothService to prevent cleanup
+   * @returns {number} Current reference count
    */
-  getLatestMetrics() {
-    return this.latestMetrics;
-  }
-
-  // Reference counting for proper lifecycle management
   acquireReference() {
     this.referenceCount++;
     log.info(`📱 BluetoothService reference acquired (count: ${this.referenceCount})`);
@@ -94,6 +92,10 @@ class BluetoothService {
     return this.referenceCount;
   }
   
+  /**
+   * Releases a reference to the BluetoothService
+   * @returns {number} Current reference count after release
+   */
   releaseReference() {
     if (this.referenceCount > 0) {
       this.referenceCount--;
@@ -130,70 +132,16 @@ class BluetoothService {
     }
   }
 
-  async requestPermissions() {
-    try {
-      if (Platform.OS === 'android') {
-        // Android 12+ requires explicit Bluetooth permissions
-        const androidVersion = Platform.Version;
-        
-        if (androidVersion >= 31) {
-          // Android 12+ (API 31+)
-          const permissions = [
-            PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          ];
-          
-          const results = await PermissionsAndroid.requestMultiple(permissions);
-          
-          return (
-            results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
-            results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED &&
-            results[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED
-          );
-        } else {
-          // Android 11 and below
-          const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-            {
-              title: 'Bluetooth Permission',
-              message: 'This app needs Bluetooth permission to connect to your pulse oximeter.',
-              buttonNeutral: 'Ask Me Later',
-              buttonNegative: 'Cancel',
-              buttonPositive: 'OK',
-            }
-          );
-          return granted === PermissionsAndroid.RESULTS.GRANTED;
-        }
-      } else {
-        return true; // iOS handles Bluetooth permissions automatically
-      }
-    } catch (error) {
-      log.error('Permission request failed:', error);
-      return false;
-    }
-  }
-
-  async isBluetoothEnabled() {
-    try {
-      // Ensure manager exists before checking state
-      if (!this.manager || this.isDestroyed) {
-        log.warn('BleManager not initialized - cannot check Bluetooth state');
-        return false;
-      }
-      const state = await this.manager.state();
-      return state === 'PoweredOn';
-    } catch (error) {
-      log.error('Error checking Bluetooth state:', error);
-      return false;
-    }
-  }
-
   // Alias for backward compatibility
   async startScan(deviceType = 'pulse-ox') {
     return this.startScanning(deviceType);
   }
 
+  /**
+   * Starts scanning for BLE devices of specified type
+   * @param {string} deviceType - Type of device to scan for ('pulse-ox' by default)
+   * @returns {Promise<boolean>} True if scanning started successfully
+   */
   async startScanning(deviceType = 'pulse-ox') {
     try {
       // Ensure manager exists before scanning
@@ -252,6 +200,10 @@ class BluetoothService {
     return this.stopScanning();
   }
 
+  /**
+   * Stops the current BLE device scan
+   * @returns {Promise<boolean>} Always returns true
+   */
   async stopScanning() {
     try {
       if (!this.manager || this.isDestroyed) {
@@ -365,10 +317,6 @@ class BluetoothService {
     }
     
     return 'unknown';
-  }
-
-  isWellueDevice(device) {
-    return this.getDeviceType(device) === 'pulse-ox';
   }
 
   /**
@@ -691,12 +639,6 @@ class BluetoothService {
           log.info('✅ PING successful');
         } else if (parsedData.spo2 !== undefined || parsedData.heartRate !== undefined) {
           // This is real-time data
-          // Store latest metrics
-          this.latestMetrics = {
-            spo2: parsedData.spo2,
-            heartRate: parsedData.heartRate
-          };
-          
           // Send to UI callback if available
           if (this.onPulseOxDataReceived) {
             this.onPulseOxDataReceived(parsedData);
@@ -1112,6 +1054,11 @@ class BluetoothService {
 
 
 
+  /**
+   * Disconnects from connected BLE devices
+   * @param {string} deviceType - Device type to disconnect ('all', 'pulse-ox')
+   * @returns {Promise<boolean>} True if disconnection successful
+   */
   async disconnect(deviceType = 'all') {
     try {
       if (deviceType === 'all' || deviceType === 'pulse-ox') {
@@ -1171,14 +1118,26 @@ class BluetoothService {
   }
 
   // Event handlers
+  /**
+   * Sets callback for when a BLE device is discovered during scanning
+   * @param {Function} callback - Callback function that receives device info
+   */
   setOnDeviceFound(callback) {
     this.onDeviceFound = callback;
   }
 
+  /**
+   * Sets callback for receiving pulse oximeter data
+   * @param {Function} callback - Callback function that receives pulse ox data
+   */
   setOnPulseOxDataReceived(callback) {
     this.onPulseOxDataReceived = callback;
   }
 
+  /**
+   * Sets callback for connection state changes
+   * @param {Function} callback - Callback function that receives connection status
+   */
   setOnConnectionChange(callback) {
     this.onConnectionChangeCallback = callback;
     // Also call the callback with current connection status

@@ -6,6 +6,12 @@ import DatabaseService from './DatabaseService';
 
 const log = logger.createModuleLogger('SupabaseService');
 
+/**
+ * SupabaseService - Manages cloud synchronization and data persistence
+ *
+ * Handles all interactions with Supabase backend including session syncing,
+ * user authentication state, and offline-to-online data synchronization.
+ */
 class SupabaseService {
   constructor() {
     this.isOnline = true;
@@ -15,6 +21,10 @@ class SupabaseService {
     this.lastSyncTime = null; // For throttling sync queue processing
   }
 
+  /**
+   * Initializes unique device identifier for session tracking
+   * @returns {Promise<void>}
+   */
   async initializeDeviceId() {
     try {
       let deviceId = await AsyncStorage.getItem('deviceId');
@@ -74,6 +84,10 @@ class SupabaseService {
     }
   }
 
+  /**
+   * Gets or creates the device ID
+   * @returns {Promise<string>} Device identifier
+   */
   async getDeviceId() {
     if (!this.deviceId) {
       await this.initializeDeviceId();
@@ -83,7 +97,11 @@ class SupabaseService {
 
 
 
-  // Get session data from database
+  /**
+   * Verifies session data from Supabase
+   * @param {string} supabaseSessionId - UUID of the session in Supabase
+   * @returns {Promise<Object|null>} Session data or null if error
+   */
   async verifySessionData(supabaseSessionId) {
     try {
       const { data, error } = await supabase
@@ -123,6 +141,11 @@ class SupabaseService {
   }
 
   // Session Management
+  /**
+   * Creates a new session in Supabase and maps it to local session
+   * @param {Object} sessionData - Session data including localSessionId
+   * @returns {Promise<Object>} Created session with Supabase ID
+   */
   async createSession(sessionData) {
     try {
       // Get current authenticated user directly from Supabase
@@ -211,6 +234,13 @@ class SupabaseService {
     }
   }
 
+  /**
+   * Ends a session in Supabase with final statistics
+   * @param {string} sessionId - Local session ID
+   * @param {Object} stats - Session statistics
+   * @param {number|null} startTime - Optional session start timestamp
+   * @returns {Promise<Object>} Updated session data
+   */
   async endSession(sessionId, stats, startTime = null) {
     try {
       // Get the Supabase UUID for this local session ID
@@ -894,74 +924,7 @@ class SupabaseService {
     }
   }
 
-  // Data Retrieval
-  async getAllSessions() {
-    try {
-      if (!this.isOnline) {
-        log.info('Offline: Cannot fetch sessions from Supabase');
-        return [];
-      }
 
-      // Get current authenticated user
-      const currentUser = authService.getCurrentUser();
-      
-      let query = supabase.from('sessions').select('*');
-      
-      if (currentUser) {
-        // Authenticated: get user's sessions
-        query = query.eq('user_id', currentUser.id);
-      } else {
-        // Anonymous: get sessions for this device
-        query = query.eq('device_id', this.deviceId).is('user_id', null);
-      }
-      
-      const { data, error } = await query
-        .order('start_time', { ascending: false })
-        .limit(20);
-
-      if (error) {
-        log.error('❌ Error fetching sessions:', error);
-        return [];
-      }
-
-      return data || [];
-    } catch (error) {
-      log.error('❌ Error getting sessions:', error);
-      return [];
-    }
-  }
-
-  async getSessionReadings(sessionId, validOnly = false) {
-    try {
-      if (!this.isOnline) {
-        log.info('Offline: Cannot fetch readings from Supabase');
-        return [];
-      }
-
-      // Fetch readings for the session (user filter handled by session access)
-      let query = supabase
-        .from('readings')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('timestamp', { ascending: true });
-
-      if (validOnly) {
-        query = query.eq('is_valid', true);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        log.error('❌ Error fetching readings:', error);
-        return [];
-      }
-
-      return data || [];
-    } catch (error) {
-      log.error('❌ Error getting readings:', error);
-      return [];
-    }
-  }
 
   // Sync Queue Management
   queueForSync(operation, data) {
@@ -1242,49 +1205,7 @@ class SupabaseService {
     log.info(`Sync complete. ${processedItems.length} items processed, ${this.syncQueue.length} remaining`);
   }
 
-  // Real-time subscriptions (for future use)
-  subscribeToSessions(callback) {
-    if (!this.isOnline) return null;
 
-    return supabase
-      .channel('sessions')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'sessions',
-          filter: `device_id=eq.${this.deviceId}`
-        }, 
-        callback
-      )
-      .subscribe();
-  }
-
-  subscribeToReadings(sessionId, callback) {
-    if (!this.isOnline) return null;
-
-    return supabase
-      .channel('readings')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'readings',
-          filter: `session_id=eq.${sessionId}`
-        }, 
-        callback
-      )
-      .subscribe();
-  }
-
-  // Utility methods
-  isConnected() {
-    return this.isOnline;
-  }
-
-  getSyncQueueLength() {
-    return this.syncQueue.length;
-  }
 
   // Public method to manually trigger cleanup of invalid queue items
   async clearInvalidQueueItems() {
@@ -1308,15 +1229,6 @@ class SupabaseService {
     log.info('Sync queue cleared');
   }
 
-  // Manual trigger for sync queue processing (for debugging)
-  async forceSyncQueueProcessing() {
-    log.info('� Manual sync queue processing triggered');
-    await this.processSyncQueue();
-    return {
-      remaining: this.syncQueue.length,
-      mappings: Array.from(this.sessionMapping.entries())
-    };
-  }
 
   async cleanupAbandonedSessions() {
     try {
@@ -1533,72 +1445,6 @@ class SupabaseService {
     }
   }
 
-  // Clean up stuck sessions for the current user/device
-  async cleanupStuckSessions() {
-    try {
-      log.info('Searching for stuck active sessions...');
-      
-      // Query for sessions that are still active but older than 1 hour
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-      
-      // Get current user (may be null for anonymous sessions)
-      const currentUser = authService.getCurrentUser();
-      
-      let query = supabase
-        .from('sessions')
-        .select('id, local_session_id, created_at')
-        .eq('status', 'active')
-        .lt('created_at', oneHourAgo);
-      
-      // Filter by user if authenticated, or by device_id if anonymous
-      if (currentUser?.id) {
-        query = query.eq('user_id', currentUser.id);
-      } else {
-        query = query.eq('device_id', this.deviceId);
-      }
-      
-      const { data: stuckSessions, error } = await query;
-      
-      if (error) {
-        log.error('❌ Error querying stuck sessions:', error);
-        return { cleaned: 0, error: error.message };
-      }
-      
-      log.info(`Found ${stuckSessions?.length || 0} stuck sessions`);
-      
-      if (!stuckSessions || stuckSessions.length === 0) {
-        return { cleaned: 0 };
-      }
-      
-      // Clean up each stuck session
-      let cleanedCount = 0;
-      for (const session of stuckSessions) {
-        try {
-          const { error: updateError } = await supabase
-            .from('sessions')
-            .update({ 
-              status: 'completed',
-              end_time: new Date().toISOString()
-            })
-            .eq('id', session.id);
-          
-          if (!updateError) {
-            cleanedCount++;
-            log.info(`Cleaned stuck session: ${session.local_session_id}`);
-          } else {
-            log.warn(`⚠️ Could not clean session ${session.local_session_id}:`, updateError.message);
-          }
-        } catch (sessionError) {
-          log.warn(`⚠️ Error cleaning session ${session.local_session_id}:`, sessionError.message);
-        }
-      }
-      
-      return { cleaned: cleanedCount, total: stuckSessions.length };
-    } catch (error) {
-      log.error('❌ Cleanup stuck sessions failed:', error);
-      return { cleaned: 0, error: error.message };
-    }
-  }
 
   // Load session mapping from storage (called during initialization)
   async loadSessionMapping() {
@@ -1837,70 +1683,6 @@ class SupabaseService {
     }
   }
 
-  /**
-   * Get survey data for a session from Supabase
-   */
-  async getSessionSurveyData(sessionId) {
-    try {
-      log.info(`Fetching survey data from Supabase for session: ${sessionId}`);
-      
-      // Get main survey data
-      const { data: surveyData, error: surveyError } = await supabase
-        .from('session_surveys')
-        .select('*')
-        .eq('session_id', sessionId)
-        .single();
-
-      // Get intra-session responses
-      const { data: responsesData, error: responsesError } = await supabase
-        .from('intra_session_responses')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('phase_number', { ascending: true });
-
-      if (surveyError && surveyError.code !== 'PGRST116') { // PGRST116 = no rows found
-        log.error('❌ Failed to fetch survey data:', surveyError);
-        return { success: false, error: surveyError.message };
-      }
-
-      if (responsesError) {
-        log.error('❌ Failed to fetch intra-session responses:', responsesError);
-        return { success: false, error: responsesError.message };
-      }
-
-      const result = {
-        sessionId,
-        preSession: null,
-        postSession: null,
-        intraSessionResponses: responsesData || []
-      };
-
-      // Process survey data
-      if (surveyData) {
-        if (surveyData.clarity_pre !== null && surveyData.energy_pre !== null) {
-          result.preSession = {
-            clarity: surveyData.clarity_pre,
-            energy: surveyData.energy_pre
-          };
-        }
-
-        if (surveyData.clarity_post !== null && surveyData.energy_post !== null && surveyData.stress_post !== null) {
-          result.postSession = {
-            clarity: surveyData.clarity_post,
-            energy: surveyData.energy_post,
-            stress: surveyData.stress_post,
-            notes: surveyData.notes_post || undefined
-          };
-        }
-      }
-
-      log.info(`Survey data fetched from Supabase for ${sessionId}`);
-      return { success: true, data: result };
-    } catch (error) {
-      log.error('❌ Error fetching survey data from Supabase:', error);
-      return { success: false, error: error.message };
-    }
-  }
 
   // Update protocol configuration for an existing session
   async updateSessionProtocolConfig(localSessionId, protocolConfig) {

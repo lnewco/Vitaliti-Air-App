@@ -1,9 +1,9 @@
 /**
  * AggressiveBackgroundService - Advanced iOS Background Persistence
- * 
+ *
  * Uses multiple aggressive techniques to maximize background execution time:
  * 1. Background App Refresh
- * 2. Silent Push Notifications  
+ * 2. Silent Push Notifications
  * 3. Background Fetch
  * 4. Bluetooth Central Background Mode
  * 5. Background Processing Tasks
@@ -11,6 +11,10 @@
  * 7. Location Updates (minimal power usage)
  * 8. Network Activity Keepalive
  * 9. State Restoration
+ *
+ * Note: This service extends BaseBackgroundService but provides additional
+ * aggressive methods for critical iOS sessions. The standard interface methods
+ * delegate to the aggressive implementations for compatibility.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -20,6 +24,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import moduleLoader from '../modules/ModuleLoader';
+import BaseBackgroundService from './abstract/BaseBackgroundService';
 
 // Check if we're in production build or Expo Go
 const isProduction = Constants.appOwnership === 'standalone' && !__DEV__;
@@ -31,8 +36,10 @@ const SESSION_STATE_KEY = '@aggressive_session_state';
 const HEARTBEAT_INTERVAL = 5000; // 5 seconds
 const AGGRESSIVE_PING_INTERVAL = 1000; // 1 second when critical
 
-export default class AggressiveBackgroundService {
+export default class AggressiveBackgroundService extends BaseBackgroundService {
   constructor() {
+    super();
+    this.isNative = true; // This service uses aggressive native techniques
     this.isActive = false;
     this.sessionData = null;
     this.backgroundTimer = null;
@@ -579,8 +586,58 @@ export default class AggressiveBackgroundService {
   async cleanup() {
     // Remove app state listener
     AppState.removeEventListener('change', this.handleAppStateChange);
-    
+
     // Stop all background activities
     await this.stopAggressiveBackgroundMonitoring();
+  }
+
+  // ==========================================
+  // BaseBackgroundService Interface Methods
+  // ==========================================
+  // These methods implement the standard interface by delegating
+  // to the aggressive implementations for compatibility
+
+  /**
+   * Start background monitoring (delegates to aggressive implementation)
+   */
+  async startBackgroundMonitoring(sessionData) {
+    return await this.startAggressiveBackgroundMonitoring(sessionData);
+  }
+
+  /**
+   * Stop background monitoring (delegates to aggressive implementation)
+   */
+  async stopBackgroundMonitoring() {
+    return await this.stopAggressiveBackgroundMonitoring();
+  }
+
+  /**
+   * Update background state (stores session state)
+   */
+  async updateBackgroundState(state) {
+    // Store the state using the existing session state mechanism
+    await this.saveSessionState({
+      ...this.sessionData,
+      ...state,
+      lastUpdate: Date.now()
+    });
+  }
+
+  /**
+   * Pause background session (not applicable for aggressive mode)
+   */
+  async pauseBackgroundSession() {
+    // Aggressive mode doesn't pause, it keeps running
+    console.log('⚠️ AggressiveBackgroundService does not pause - continuing monitoring');
+    return true;
+  }
+
+  /**
+   * Resume background session (not applicable for aggressive mode)
+   */
+  async resumeBackgroundSession() {
+    // Aggressive mode doesn't pause, so no need to resume
+    console.log('⚠️ AggressiveBackgroundService does not pause - already monitoring');
+    return true;
   }
 }

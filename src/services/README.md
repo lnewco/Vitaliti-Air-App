@@ -1,219 +1,129 @@
 # Services Architecture
 
-## Overview
-The services layer provides the core business logic and data management for the Vitaliti Air app. All services follow an offline-first architecture with cloud synchronization capabilities.
+This directory contains the core service layer for the Vitaliti Air App, managing data persistence, Bluetooth connectivity, and cloud synchronization.
 
-## Core Services
-
-### 📱 BluetoothService
-**Purpose:** Manages BLE connections to pulse oximeter devices  
-**Location:** `BluetoothService.js`  
-**Key Responsibilities:**
-- Device discovery and connection management
-- Real-time SpO2 and heart rate data streaming
-- Support for multiple device protocols (Wellue, BCI)
-- Connection resilience and auto-recovery
-
-**Usage:**
-```javascript
-// Acquire reference before use
-BluetoothService.acquireReference();
-
-// Start scanning for devices
-await BluetoothService.startScanning('pulse-ox');
-
-// Connect to discovered device
-await BluetoothService.connectToDevice(device);
-
-// Get latest metrics
-const metrics = BluetoothService.getLatestMetrics();
-// Returns: { spo2: 95, heartRate: 72 }
-```
+## Service Overview
 
 ### 🗄️ DatabaseService
-**Purpose:** Local SQLite database for offline-first storage  
-**Location:** `DatabaseService.js`  
-**Key Responsibilities:**
-- Session lifecycle management
-- Readings and metrics storage
-- Survey data persistence
-- Adaptive system event tracking
+**Purpose:** Local SQLite database management for offline-first storage
+**Location:** `DatabaseService.js`
 
-**Usage:**
-```javascript
-// Initialize database
-await DatabaseService.init();
+- Manages all local data persistence (sessions, readings, surveys, metrics)
+- Handles database initialization and migrations
+- Provides CRUD operations for all data entities
+- Works in conjunction with SupabaseService for cloud sync
 
-// Create new session
-const session = await DatabaseService.createSession(sessionId);
+**Key Methods:**
+- `createSession()` - Creates new training sessions
+- `endSession()` - Finalizes sessions with statistics
+- `savePhaseStats()` - Stores altitude/recovery phase metrics
+- `saveCycleMetrics()` - Records per-cycle data
+- `saveAdaptiveEvent()` - Logs mask lifts and adjustments
 
-// Save survey data
-await DatabaseService.savePreSessionSurvey(sessionId, clarity, energy, stress);
+### 📡 BluetoothService
+**Purpose:** Manages BLE connections for pulse oximeter devices
+**Location:** `BluetoothService.js`
 
-// End session with stats
-await DatabaseService.endSession(sessionId, stats);
-```
+- Handles device scanning and connection management
+- Parses real-time data from Wellue and BerryMed devices
+- Implements device-specific protocols
+- Manages connection resilience and auto-reconnection
+
+**Key Methods:**
+- `startScanning()` - Discovers BLE devices
+- `connectToDevice()` - Establishes connection to pulse oximeter
+- `disconnect()` - Cleanly disconnects from devices
+- `setOnPulseOxDataReceived()` - Registers data callback
 
 ### ☁️ SupabaseService
-**Purpose:** Cloud synchronization and data backup  
-**Location:** `SupabaseService.js`  
-**Key Responsibilities:**
-- Session mapping (local ID ↔ cloud ID)
-- Offline sync queue management
-- Automatic retry with exponential backoff
-- Batch data uploads
+**Purpose:** Cloud synchronization and authentication management
+**Location:** `SupabaseService.js`
 
-**Usage:**
-```javascript
-// Initialize service
-await SupabaseService.initialize();
+- Syncs local sessions to Supabase backend
+- Manages online/offline state transitions
+- Handles user authentication state
+- Maintains session ID mapping (local ↔ cloud)
 
-// Create cloud session
-await SupabaseService.createSession(sessionData);
+**Key Methods:**
+- `createSession()` - Creates cloud session record
+- `endSession()` - Syncs final session data
+- `syncPreSessionSurvey()` - Uploads pre-session surveys
+- `syncPostSessionSurvey()` - Uploads post-session surveys
 
-// Sync readings batch
-await SupabaseService.addReadingsBatch(readings);
+### 🎭 Mock Services
+**Purpose:** Development and testing without hardware
+**Location:** `MockBLEService.js`, `MockBLEServiceWrapper.js`
 
-// Sync survey data
-await SupabaseService.syncPostSessionSurvey(sessionId, ...surveyData);
+- **MockBLEService:** Core mock data generation
+  - Simulates realistic SpO2/HR patterns
+  - Cycle-specific behaviors for testing
+  - Mask lift scenarios
+
+- **MockBLEServiceWrapper:** Interface adapter
+  - Wraps MockBLEService for BluetoothContext compatibility
+  - Auto-connects for easier development
+  - Implements full BluetoothService interface
+
+## Service Dependencies
+
+```
+BluetoothContext
+    ├── BluetoothService (Production)
+    └── MockBLEServiceWrapper → MockBLEService (Development)
+
+SessionManager
+    ├── DatabaseService (Local Storage)
+    └── SupabaseService (Cloud Sync)
 ```
 
-### 🎯 EnhancedSessionManager
-**Purpose:** Orchestrates training sessions and coordinates all services  
-**Location:** `EnhancedSessionManager.js`  
-**Key Responsibilities:**
-- Session state management
-- Phase and cycle tracking
-- Adaptive altitude adjustments
-- Real-time metrics processing
+## Background Services
 
-### 🧠 AdaptiveInstructionEngine
-**Purpose:** Intelligent altitude adjustment based on physiological response  
-**Location:** `AdaptiveInstructionEngine.js`  
-**Key Responsibilities:**
-- SpO2 pattern analysis
-- Mask lift detection
-- Altitude level recommendations
-- Performance tracking
+### 🔄 BackgroundService Architecture
+**Location:** `BackgroundService.js`, `ServiceFactory.js`
 
-## Mock Services (Development)
+The app uses a factory pattern to select the appropriate background service based on the runtime environment:
 
-### 🔧 MockBLEService
-**Purpose:** Simulates pulse oximeter data for development  
-**Location:** `MockBLEService.js`  
-**Key Features:**
-- Realistic SpO2 patterns by cycle
-- Mask lift simulation
-- Configurable test scenarios
+- **ExpoBackgroundService:** Expo-specific implementation
+- **NativeBackgroundService:** React Native bare workflow
+- **AggressiveBackgroundService:** Enhanced background processing
+- **BaseBackgroundService:** Abstract base class
 
-### 🔧 MockBLEServiceWrapper
-**Purpose:** Adapter between MockBLEService and BluetoothContext  
-**Location:** `MockBLEServiceWrapper.js`  
-**Key Features:**
-- Auto-connection on init
-- BluetoothService interface compatibility
-- Reference counting support
-
-**Usage:**
-```javascript
-// In BluetoothContext when USE_MOCK_BLE is true
-import bluetoothService from './services/MockBLEServiceWrapper';
-```
+**ServiceFactory** automatically selects the correct implementation based on:
+- Platform (iOS/Android)
+- Expo vs bare React Native
+- Available APIs
 
 ## Data Flow
 
-```
-Physical Device / Mock
-        ↓
-  BluetoothService
-        ↓
- SessionManager ←→ AdaptiveEngine
-        ↓
-  DatabaseService
-        ↓
-  SupabaseService
-        ↓
-    Cloud DB
-```
+1. **Session Creation:**
+   - SessionManager → DatabaseService (local) → SupabaseService (cloud)
 
-## Service Communication Patterns
+2. **Real-time Data:**
+   - Pulse Oximeter → BluetoothService → SessionManager → DatabaseService
 
-### Event-Driven Updates
-Services use callbacks for real-time updates:
-```javascript
-BluetoothService.setOnPulseOxDataReceived((data) => {
-  // Process real-time SpO2 data
-});
-```
-
-### Promise-Based Operations
-All async operations return promises:
-```javascript
-const session = await DatabaseService.createSession(id);
-```
-
-### Reference Counting
-Services requiring lifecycle management use reference counting:
-```javascript
-// Component mount
-BluetoothService.acquireReference();
-
-// Component unmount
-BluetoothService.releaseReference();
-```
-
-## Offline-First Architecture
-
-1. **Write Path:**
-   - Data always written to local DB first
-   - Queued for sync if online
-   - Sync happens in background
-
-2. **Read Path:**
-   - Always read from local DB
-   - Background sync updates local data
-   - No direct cloud reads during sessions
-
-3. **Sync Queue:**
-   - Operations queued when offline
-   - Automatic retry with backoff
-   - Persisted across app restarts
+3. **Synchronization:**
+   - DatabaseService → SupabaseService (when online)
+   - Queue-based sync for offline-to-online transitions
 
 ## Error Handling
 
-All services implement consistent error handling:
-- Errors logged via centralized logger
-- User-facing errors via Alert
-- Automatic recovery where possible
-- Graceful degradation when offline
+All services implement comprehensive error handling:
+- Logging via centralized logger utility
+- Graceful degradation for offline scenarios
+- Automatic retry mechanisms for transient failures
+- User-friendly error messages bubbled to UI
 
 ## Testing
 
-### Using Mock Services
-Set `USE_MOCK_BLE = true` in BluetoothContext to use mock data:
-- No physical device required
-- Predictable test scenarios
-- Faster development cycles
-
-### Service Isolation
-Each service can be tested independently:
-- DatabaseService: Direct SQLite operations
-- BluetoothService: Mock BLE manager
-- SupabaseService: Mock network responses
-
-## Best Practices
-
-1. **Always initialize services** before use
-2. **Use reference counting** for lifecycle management
-3. **Handle offline scenarios** gracefully
-4. **Log all errors** for debugging
-5. **Batch operations** when possible
-6. **Clean up resources** on unmount
+Mock services enable testing without hardware:
+- Set `USE_MOCK_BLE=true` in environment
+- MockBLEService generates realistic training patterns
+- Supports all session phases and scenarios
 
 ## Future Improvements
 
-- [ ] Add service health monitoring
-- [ ] Implement data compression for sync
-- [ ] Add conflict resolution for offline edits
-- [ ] Create service test suite
-- [ ] Add performance metrics tracking
+- [ ] Implement comprehensive test coverage
+- [ ] Add request/response interceptors for API logging
+- [ ] Standardize error response formats
+- [ ] Implement migration system for database updates
+- [ ] Add performance monitoring and analytics

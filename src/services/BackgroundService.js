@@ -1,7 +1,13 @@
 /**
+ * @deprecated This is a legacy implementation. Please use ServiceFactory.createBackgroundService()
+ * which will automatically select the appropriate implementation (NativeBackgroundService or
+ * ExpoBackgroundService) based on the runtime environment.
+ *
  * Background Service - Manages iOS background execution for IHHT sessions
  * This service uses native iOS capabilities when available (development builds)
  * and provides fallbacks for Expo Go
+ *
+ * TODO: Remove this file after confirming no dependencies exist
  */
 
 import { NativeModules, NativeEventEmitter, Platform, AppState } from 'react-native';
