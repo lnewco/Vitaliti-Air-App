@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20, // EXACT same as Session Setup
     paddingTop: 0,
-    paddingBottom: 60, // EXACT same as Session Setup
+    paddingBottom: 120, // Increased to ensure Overall Rating is visible above button
   },
   header: {
     marginBottom: 12, // EXACT same as Session Setup
