@@ -1,10 +1,25 @@
-import { BleManager } from 'react-native-ble-plx';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { Buffer } from 'buffer';
 import EnhancedSessionManager from './EnhancedSessionManager';
 import logger from '../utils/logger';
+import Constants from 'expo-constants';
 
 const log = logger.createModuleLogger('BluetoothService');
+
+// Only import BleManager in development builds, not Expo Go
+let BleManager = null;
+const isExpoGo = Constants.appOwnership === 'expo';
+
+if (!isExpoGo) {
+  try {
+    BleManager = require('react-native-ble-plx').BleManager;
+    log.info('✅ BleManager loaded for development build');
+  } catch (error) {
+    log.warn('⚠️ BleManager not available:', error.message);
+  }
+} else {
+  log.info('📱 Running in Expo Go - Bluetooth disabled');
+}
 
 
 /**
@@ -15,15 +30,22 @@ const log = logger.createModuleLogger('BluetoothService');
  */
 class BluetoothService {
   constructor() {
-    // Initialize BleManager immediately to avoid race conditions
-    try {
-      this.manager = new BleManager();
-      this.isDestroyed = false;
-      log.info('🔄 BleManager initialized on service creation');
-    } catch (error) {
-      log.error('Failed to initialize BleManager:', error);
+    // Initialize BleManager only if available (not in Expo Go)
+    if (BleManager) {
+      try {
+        this.manager = new BleManager();
+        this.isDestroyed = false;
+        log.info('🔄 BleManager initialized on service creation');
+      } catch (error) {
+        log.error('Failed to initialize BleManager:', error);
+        this.manager = null;
+        this.isDestroyed = true;
+      }
+    } else {
+      // Running in Expo Go - no Bluetooth available
       this.manager = null;
-      this.isDestroyed = true;
+      this.isDestroyed = false;
+      log.info('📱 BluetoothService running without BLE (Expo Go mode)');
     }
     this.referenceCount = 0;
     this.pulseOxDevice = null;
@@ -76,9 +98,9 @@ class BluetoothService {
   acquireReference() {
     this.referenceCount++;
     log.info(`📱 BluetoothService reference acquired (count: ${this.referenceCount})`);
-    
-    // Recreate manager if it was destroyed
-    if (!this.manager || this.isDestroyed) {
+
+    // Recreate manager if it was destroyed and BleManager is available
+    if (BleManager && (!this.manager || this.isDestroyed)) {
       try {
         log.info('🔄 Recreating BleManager instance');
         this.manager = new BleManager();
@@ -88,7 +110,7 @@ class BluetoothService {
         // Keep the destroyed state if recreation fails
       }
     }
-    
+
     return this.referenceCount;
   }
   
