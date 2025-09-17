@@ -420,42 +420,43 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
             </TouchableOpacity>
           </Animated.View>
 
-          {/* Bottom padding - removed extra space */}
-        </ScrollView>
+          {/* Submit Button - Now part of scroll content */}
+          <Animated.View
+            entering={FadeIn.duration(400).delay(400).springify()}
+            style={styles.submitButtonContainer}
+          >
+            <TouchableOpacity
+                style={[
+                  styles.submitButton,
+                  (!isPostSessionSurveyComplete(surveyData) || !overallRating) && styles.submitButtonDisabled
+                ]}
+                onPress={handleSubmit}
+                disabled={!isPostSessionSurveyComplete(surveyData) || !overallRating || isSubmitting}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={(!isPostSessionSurveyComplete(surveyData) || !overallRating)
+                    ? ['#2A2D35', '#1F2228']
+                    : [colors.brand.accent, colors.brand.accent + 'dd']
+                  }
+                  style={StyleSheet.absoluteFillObject}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <View style={styles.buttonContent}>
+                    <Text style={styles.buttonText}>Complete Survey</Text>
+                    <Ionicons name="checkmark-circle" size={24} color="white" style={{ marginLeft: 8 }} />
+                  </View>
+                )}
+              </TouchableOpacity>
+          </Animated.View>
 
-        {/* Floating Submit Button */}
-        <Animated.View 
-          entering={FadeIn.duration(400).delay(400).springify()}
-          style={styles.floatingAction}
-        >
-          <TouchableOpacity
-              style={[
-                styles.submitButton,
-                (!isPostSessionSurveyComplete(surveyData) || !overallRating) && styles.submitButtonDisabled
-              ]}
-              onPress={handleSubmit}
-              disabled={!isPostSessionSurveyComplete(surveyData) || !overallRating || isSubmitting}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={(!isPostSessionSurveyComplete(surveyData) || !overallRating)
-                  ? ['#2A2D35', '#1F2228']
-                  : [colors.brand.accent, colors.brand.accent + 'dd']
-                }
-                style={StyleSheet.absoluteFillObject}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              />
-              {isSubmitting ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <View style={styles.buttonContent}>
-                  <Text style={styles.buttonText}>Complete Survey</Text>
-                  <Ionicons name="checkmark-circle" size={24} color="white" style={{ marginLeft: 8 }} />
-                </View>
-              )}
-            </TouchableOpacity>
-        </Animated.View>
+          {/* Bottom padding for safe scrolling */}
+          <View style={{ height: 40 }} />
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -533,7 +534,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20, // EXACT same as Session Setup
     paddingTop: 0,
-    paddingBottom: 120, // Increased to ensure Overall Rating is visible above button
+    paddingBottom: 20, // Normal padding since button is now in scroll content
   },
   header: {
     marginBottom: 12, // EXACT same as Session Setup
@@ -652,14 +653,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
   },
-  floatingAction: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-    paddingTop: 5, // EXACT minimal gap like Session Setup
+  submitButtonContainer: {
+    marginTop: 24,
+    marginHorizontal: 0, // Full width within padding
   },
   submitButton: {
     height: 56,
