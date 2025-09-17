@@ -120,14 +120,7 @@ export const BluetoothProvider = ({ children }) => {
       console.log('⚠️ BluetoothService.setOnConnectionChange not available');
     }
 
-    // Check initial connection status for mock device
-    if (useMockService) {
-      // When using mock service, the mock device auto-connects
-      setTimeout(() => {
-        console.log('🔵 Setting mock device as connected');
-        setIsPulseOxConnected(true);
-      }, 2000);
-    }
+    // Removed mock device auto-connect - no longer using mock service
 
     // Clean up on unmount
     return () => {
