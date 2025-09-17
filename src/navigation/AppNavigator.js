@@ -40,17 +40,25 @@ const AppNavigator = () => {
   // Check onboarding status when auth state changes to authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      // Auth state changed to authenticated - check onboarding
-      
-      // Add a small delay to ensure AsyncStorage has been updated by PhoneVerificationScreen
-      setTimeout(async () => {
-        // Delayed check to ensure AsyncStorage is updated
-        await checkOnboardingStatus();
-        
-        // Also check if onboarding completion just finished
-        await checkForCompletionTransition();
-      }, 300); // 300ms delay to ensure AsyncStorage is written
-      
+      // Use Promise-based approach instead of fixed delay
+      const performAsyncChecks = async () => {
+        try {
+          // Force AsyncStorage to flush any pending writes
+          await AsyncStorage.getAllKeys(); // This forces a sync read
+
+          // Small delay only if absolutely needed (reduced from 300ms to 100ms)
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // Now perform checks
+          await checkOnboardingStatus();
+          await checkForCompletionTransition();
+        } catch (error) {
+          console.error('Error during async checks:', error);
+        }
+      };
+
+      performAsyncChecks();
+
     } else {
       // Reset the flag when user logs out
       hasCheckedOnboardingRef.current = false;

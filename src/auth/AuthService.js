@@ -106,26 +106,7 @@ class AuthService {
       log.info('OTP Code length:', otpCode?.length);
       log.info('OTP Code (masked):', otpCode ? otpCode.substring(0, 2) + '****' : 'empty');
 
-      // TEMPORARY: Development bypass for Danyal
-      if (otpCode === '123456' && phoneNumber.includes('6508805248')) {
-        log.info('✅ Using development bypass for Danyal');
-        const mockUser = {
-          id: 'da754dc4-e0bb-45f3-8547-71c2a6f2786c',
-          phone: phoneNumber,
-          phone_confirmed_at: new Date().toISOString(),
-          confirmed_at: new Date().toISOString()
-        };
-        this.currentUser = mockUser;
-        
-        // Notify auth state change listeners
-        this.authStateChangeListeners.forEach(listener => {
-          listener('SIGNED_IN', mockUser);
-        });
-        
-        // Create profile if needed
-        await this.createUserProfileIfNeeded(mockUser, phoneNumber);
-        return { success: true, user: mockUser, session: { user: mockUser } };
-      }
+      // Development bypass removed for production security
 
       const cleanPhone = this.formatPhoneNumber(phoneNumber);
       log.info('Formatted phone:', cleanPhone);
@@ -222,14 +203,45 @@ class AuthService {
 
       if (existingProfile) {
         log.info('User profile already exists');
-        return;
+        return existingProfile;
       }
 
-      // Don't create profile here - let onboarding flow handle it
-      log.info('User authenticated - profile creation will be handled by onboarding flow');
-      
+      // Create profile immediately for new users
+      log.info('Creating user profile for new user:', user.id);
+
+      const profileData = {
+        user_id: user.id,
+        phone_number: this.formatPhoneNumber(phoneNumber),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        // Set basic defaults - onboarding will update these
+        onboarding_completed_at: null,
+        height_feet: null,
+        height_inches: null,
+        weight_lbs: null,
+        gender: null,
+        birth_date: null
+      };
+
+      const { data: newProfile, error: createError } = await supabase
+        .from('user_profiles')
+        .insert([profileData])
+        .select()
+        .single();
+
+      if (createError) {
+        log.error('❌ Error creating user profile:', createError.message);
+        // Don't throw - let user continue even if profile creation fails
+        return null;
+      }
+
+      log.info('✅ User profile created successfully:', newProfile.id);
+      return newProfile;
+
     } catch (error) {
       log.error('❌ Error in createUserProfileIfNeeded:', error.message);
+      // Don't throw - let user continue
+      return null;
     }
   }
 

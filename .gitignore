@@ -102,3 +102,4 @@ app_*.json
 *.sql
 
 # @end expo-cli.claude/
+.mcp.json

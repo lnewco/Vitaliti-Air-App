@@ -151,9 +151,16 @@ class SupabaseService {
       // Get current authenticated user directly from Supabase
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
       log.info('Supabase auth.getUser():', authUser?.id, authError);
-      
-      // Use Supabase user if available, otherwise null for anonymous sessions
-      const userId = authUser?.id || null;
+
+      // CRITICAL: Require authenticated user for sessions
+      if (!authUser?.id) {
+        log.error('❌ Cannot create session without authenticated user');
+        // Queue for sync instead of failing completely
+        this.queueForSync('createSession', sessionData);
+        return null;
+      }
+
+      const userId = authUser.id;
       log.info('Using user_id for session:', userId);
       
       // CRITICAL: Ensure we have the local session ID
@@ -1728,27 +1735,56 @@ class SupabaseService {
     }
   }
 
-  // Helper method to update sessions with authenticated user_id
-  async updateSessionsWithUserId(userId) {
+  // Helper method to update sessions with authenticated user_id - with retry logic
+  async updateSessionsWithUserId(userId, retryCount = 0) {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // Start with 1 second delay
+
     try {
-      log.info('� Attempting to update sessions with authenticated user_id:', userId);
-             const { data, error } = await supabase
-         .from('sessions')
-         .update({ user_id: userId })
-         .is('user_id', null) // Only update sessions that are currently anonymous
-         .select();
+      log.info('🔄 Attempting to update sessions with authenticated user_id:', userId);
+
+      const { data, error } = await supabase
+        .from('sessions')
+        .update({ user_id: userId })
+        .is('user_id', null) // Only update sessions that are currently anonymous
+        .select();
 
       if (error) {
-        log.error('❌ Failed to update sessions with user_id:', error);
-        this.queueForSync('updateSessionsWithUserId', { userId });
-        return { success: false, error: error.message };
+        log.error(`❌ Failed to update sessions with user_id (attempt ${retryCount + 1}/${MAX_RETRIES}):`, error);
+
+        // Retry logic
+        if (retryCount < MAX_RETRIES) {
+          const delay = RETRY_DELAY * Math.pow(2, retryCount); // Exponential backoff
+          log.info(`⏳ Retrying in ${delay}ms...`);
+
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return this.updateSessionsWithUserId(userId, retryCount + 1);
+        } else {
+          // All retries failed, queue for sync as fallback
+          log.error('❌ All retry attempts failed, queuing for sync');
+          this.queueForSync('updateSessionsWithUserId', { userId });
+          return { success: false, error: error.message, retriesExhausted: true };
+        }
       }
-      log.info(`Updated ${data.length} sessions with user_id: ${userId}`);
+
+      log.info(`✅ Updated ${data?.length || 0} sessions with user_id: ${userId}`);
       return { success: true, data };
+
     } catch (error) {
-      log.error('❌ Error updating sessions with user_id:', error);
-      this.queueForSync('updateSessionsWithUserId', { userId });
-      return { success: false, error: error.message };
+      log.error(`❌ Error updating sessions with user_id (attempt ${retryCount + 1}):`, error);
+
+      // Retry on exceptions too
+      if (retryCount < MAX_RETRIES) {
+        const delay = RETRY_DELAY * Math.pow(2, retryCount);
+        log.info(`⏳ Retrying after exception in ${delay}ms...`);
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.updateSessionsWithUserId(userId, retryCount + 1);
+      } else {
+        // Queue as last resort
+        this.queueForSync('updateSessionsWithUserId', { userId });
+        return { success: false, error: error.message, retriesExhausted: true };
+      }
     }
   }
 
