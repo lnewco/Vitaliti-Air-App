@@ -345,13 +345,23 @@ class EnhancedSessionManager {
     try {
       console.log('🎬 Starting enhanced IHHT session with ID:', sessionId);
       console.log('📋 Protocol configuration:', protocolConfig);
-      
+
+      // Validate sessionId
+      if (!sessionId) {
+        throw new Error('Session ID is required to start a session');
+      }
+
       // Wait for initialization if needed
       if (!this.initialized) {
         console.log('⏳ Service not initialized, initializing now...');
-        await this.initializeServices();
-        // Additional wait to ensure everything is ready
-        await new Promise(resolve => setTimeout(resolve, 500));
+        try {
+          await this.initializeServices();
+          // Additional wait to ensure everything is ready
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (initError) {
+          console.error('❌ Failed to initialize services:', initError);
+          throw new Error('Failed to initialize session services. Please restart the app.');
+        }
       }
       
       // Update protocol configuration
@@ -513,22 +523,7 @@ class EnhancedSessionManager {
       this.phaseStartTime = Date.now();
       this.readingBuffer = [];
       
-      // Update mock service with initial cycle and phase
-      if (global.bluetoothService) {
-        // Start the mock session
-        if (global.bluetoothService.startSession) {
-          console.log('🚀 Starting mock BLE session');
-          global.bluetoothService.startSession();
-        }
-        if (global.bluetoothService.setCycle) {
-          console.log('🔄 Setting initial cycle to 1 for mock service');
-          global.bluetoothService.setCycle(1);
-        }
-        if (global.bluetoothService.setPhase) {
-          console.log('🔄 Setting initial phase to altitude for mock service');
-          global.bluetoothService.setPhase('altitude');
-        }
-      }
+      // Removed mock service code - we only use real device data
 
       // Keep screen awake during session
       try {
@@ -650,7 +645,26 @@ class EnhancedSessionManager {
         stack: error.stack,
         name: error.name
       });
-      throw error;
+
+      // Clean up any partial session state
+      try {
+        this.resetSessionState();
+        await AsyncStorage.removeItem('activeSession');
+        console.log('🧹 Cleaned up partial session state');
+      } catch (cleanupError) {
+        console.error('⚠️ Error during cleanup:', cleanupError);
+      }
+
+      // Provide more user-friendly error messages
+      if (error.message?.includes('network') || error.message?.includes('fetch')) {
+        throw new Error('Network connection error. Please check your internet connection and try again.');
+      } else if (error.message?.includes('permission') || error.message?.includes('bluetooth')) {
+        throw new Error('Bluetooth permission required. Please enable Bluetooth and grant permissions.');
+      } else if (error.message?.includes('initialize')) {
+        throw error; // Pass through initialization errors
+      } else {
+        throw new Error(`Session failed to start: ${error.message || 'Unknown error'}`);
+      }
     }
   }
 
@@ -972,12 +986,7 @@ class EnhancedSessionManager {
         }
       }
       
-      // Update mock service with new phase
-      if (global.bluetoothService?.setPhase) {
-        const mockPhase = this.currentPhase === 'RECOVERY' ? 'recovery' : 'altitude';
-        console.log(`🔄 Setting mock service phase to: ${mockPhase}`);
-        global.bluetoothService.setPhase(mockPhase);
-      }
+      // Removed mock service code - we only use real device data
       
       console.log(`🔄 Transition complete - starting ${this.currentPhase} phase`);
       
@@ -1061,10 +1070,7 @@ class EnhancedSessionManager {
       this.currentCycle++;
       this.currentPhase = 'TRANSITION';
       
-      // Update mock service if available
-      if (global.bluetoothService?.setCycle) {
-        global.bluetoothService.setCycle(this.currentCycle);
-      }
+      // Removed mock service code - we only use real device data
       this.nextPhaseAfterTransition = 'ALTITUDE';
       this.phaseTimeRemaining = 10; // 10 seconds
       this.phaseStartTime = Date.now();
@@ -1245,11 +1251,7 @@ class EnhancedSessionManager {
       );
     }
 
-    // End mock session if available
-    if (global.bluetoothService?.endSession) {
-      console.log('🛑 Ending mock BLE session');
-      global.bluetoothService.endSession();
-    }
+    // Removed mock session code - we only use real device data
 
     // Clear session state
     const sessionId = this.currentSession?.id;

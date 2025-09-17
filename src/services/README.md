@@ -50,26 +50,19 @@ This directory contains the core service layer for the Vitaliti Air App, managin
 - `syncPreSessionSurvey()` - Uploads pre-session surveys
 - `syncPostSessionSurvey()` - Uploads post-session surveys
 
-### 🎭 Mock Services
-**Purpose:** Development and testing without hardware
-**Location:** `MockBLEService.js`, `MockBLEServiceWrapper.js`
+### 📱 Bluetooth Service
+**Purpose:** Real device integration only
+**Location:** `BluetoothService.js`
 
-- **MockBLEService:** Core mock data generation
-  - Simulates realistic SpO2/HR patterns
-  - Cycle-specific behaviors for testing
-  - Mask lift scenarios
-
-- **MockBLEServiceWrapper:** Interface adapter
-  - Wraps MockBLEService for BluetoothContext compatibility
-  - Auto-connects for easier development
-  - Implements full BluetoothService interface
+- **No mock data:** App only uses real device data
+- **Supported devices:** Wellue/Checkme O2, BerryMed pulse oximeters
+- **Real-time data:** Direct SpO2/HR readings from connected devices
 
 ## Service Dependencies
 
 ```
 BluetoothContext
-    ├── BluetoothService (Production)
-    └── MockBLEServiceWrapper → MockBLEService (Development)
+    └── BluetoothService (Real devices only)
 
 SessionManager
     ├── DatabaseService (Local Storage)
@@ -115,10 +108,10 @@ All services implement comprehensive error handling:
 
 ## Testing
 
-Mock services enable testing without hardware:
-- Set `USE_MOCK_BLE=true` in environment
-- MockBLEService generates realistic training patterns
-- Supports all session phases and scenarios
+Testing requires real hardware:
+- Use actual Wellue or BerryMed pulse oximeters
+- No mock data generation available
+- Ensures production-ready code with real device integration
 
 ## Future Improvements
 

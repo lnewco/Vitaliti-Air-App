@@ -1,75 +1,33 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { shouldUseMockBluetooth, getEnvironmentInfo } from '../config/bluetooth.config';
 import logger from '../utils/logger';
 
-// Conditionally import BluetoothService with error handling
+// Import real BluetoothService only - no mock data
 let BluetoothService = null;
 
-// Log environment info for debugging
-const envInfo = getEnvironmentInfo();
-console.log('🔍 Bluetooth Environment:', envInfo);
-
-// Determine which service to use
-const useMockService = shouldUseMockBluetooth();
-
-if (useMockService) {
-  console.log('📱 Loading MockBLEServiceWrapper for data generation');
-  // Use the MockBLEServiceWrapper that provides full interface
-  try {
-    BluetoothService = require('../services/MockBLEServiceWrapper').default;
-    console.log('✅ MockBLEServiceWrapper loaded successfully');
-  } catch (error) {
-    console.error('❌ Failed to load MockBLEServiceWrapper:', error);
-    // Fallback to basic mock if MockBLEServiceWrapper fails
-    BluetoothService = {
-      acquireReference: () => {},
-      releaseReference: () => {},
-      setOnDeviceFound: () => {},
-      setOnPulseOximeterData: () => {},
-      setOnPulseOxDataReceived: () => {},
-      setOnConnectionChange: () => {},
-      startScanning: () => Promise.resolve(),
-      stopScanning: () => Promise.resolve(),
-      connectToDevice: () => Promise.resolve(false),
-      disconnectDevice: () => Promise.resolve(),
-      isPulseOxConnected: false,
-      isAnyDeviceConnected: false,
-      destroy: () => {},
-      cleanup: () => {},
-      getConnectedDevices: () => [],
-      reconnectDevices: () => Promise.resolve(false),
-    };
-  }
-} else {
-  try {
-    BluetoothService = require('../services/BluetoothService').default;
-    console.log('📱 Using real BluetoothService for native build');
-  } catch (error) {
-    console.log('📱 BluetoothService not available - falling back to MockBLEServiceWrapper');
-    try {
-      BluetoothService = require('../services/MockBLEServiceWrapper').default;
-    } catch (mockError) {
-      console.error('❌ Both services failed, using basic mock');
-      BluetoothService = {
-        acquireReference: () => {},
-        releaseReference: () => {},
-        setOnDeviceFound: () => {},
-        setOnPulseOximeterData: () => {},
-        setOnPulseOxDataReceived: () => {},
-        setOnConnectionChange: () => {},
-        startScanning: () => Promise.resolve(),
-        stopScanning: () => Promise.resolve(),
-        connectToDevice: () => Promise.resolve(false),
-        disconnectDevice: () => Promise.resolve(),
-        isPulseOxConnected: false,
-        isAnyDeviceConnected: false,
-        destroy: () => {},
-        cleanup: () => {},
-        getConnectedDevices: () => [],
-        reconnectDevices: () => Promise.resolve(false),
-      };
-    }
-  }
+try {
+  BluetoothService = require('../services/BluetoothService').default;
+  console.log('📱 Using real BluetoothService');
+} catch (error) {
+  console.error('❌ BluetoothService not available:', error);
+  // Provide minimal fallback for development environments without BLE
+  BluetoothService = {
+    acquireReference: () => {},
+    releaseReference: () => {},
+    setOnDeviceFound: () => {},
+    setOnPulseOximeterData: () => {},
+    setOnPulseOxDataReceived: () => {},
+    setOnConnectionChange: () => {},
+    startScanning: () => Promise.resolve(),
+    stopScanning: () => Promise.resolve(),
+    connectToDevice: () => Promise.resolve(false),
+    disconnectDevice: () => Promise.resolve(),
+    isPulseOxConnected: false,
+    isAnyDeviceConnected: false,
+    destroy: () => {},
+    cleanup: () => {},
+    getConnectedDevices: () => [],
+    reconnectDevices: () => Promise.resolve(false),
+  };
 }
 
 const log = logger.createModuleLogger('BluetoothContext');
@@ -116,8 +74,7 @@ export const BluetoothProvider = ({ children }) => {
     // Acquire reference to BluetoothService
     BluetoothService.acquireReference();
     
-    // Make service globally available for EnhancedSessionManager
-    global.bluetoothService = BluetoothService;
+    // Removed global.bluetoothService - no longer needed without mock data
     
     // Set up event handler for pulse oximeter
     BluetoothService.setOnDeviceFound((device) => {
@@ -179,20 +136,7 @@ export const BluetoothProvider = ({ children }) => {
     };
   }, [throttledUIUpdate]);
 
-  // ===== SESSION CONTROL =====
-  const startSession = useCallback(() => {
-    console.log('🚀 BluetoothContext: Starting session');
-    if (BluetoothService.startSession) {
-      BluetoothService.startSession();
-    }
-  }, []);
-  
-  const endSession = useCallback(() => {
-    console.log('🛑 BluetoothContext: Ending session');
-    if (BluetoothService.endSession) {
-      BluetoothService.endSession();
-    }
-  }, []);
+  // Removed session control methods - these were only for mock data
   
   // ===== SCANNING =====
   const startScan = useCallback(async () => {
@@ -307,11 +251,7 @@ export const BluetoothProvider = ({ children }) => {
     
     // Actions
     connectToDevice,
-    disconnect,
-    
-    // Session control
-    startSession,
-    endSession
+    disconnect
   }), [
     isScanning,
     startScan,
@@ -321,9 +261,7 @@ export const BluetoothProvider = ({ children }) => {
     discoveredDevices,
     connectedPulseOxDevice,
     connectToDevice,
-    disconnect,
-    startSession,
-    endSession
+    disconnect
   ]);
 
   const dataValue = useMemo(() => ({

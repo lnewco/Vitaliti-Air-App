@@ -506,33 +506,40 @@ class BluetoothService {
       
       // Some Wellue devices stream data automatically without commands
       log.info('🔍 Checking if device streams data automatically...');
-      
+
+      // Track whether we're receiving data
+      this.lastDataReceived = null;
+      this.dataReceivedCount = 0;
+
       // Wait a moment to see if data comes automatically
       setTimeout(async () => {
         // If we haven't received valid data yet, try sending commands
         log.info('📋 Attempting to get device information...');
         await this.sendWellueCommand(this.WELLUE_CMD_GET_DEVICE_INFO);
-        
+
         // Try PING
         setTimeout(async () => {
           log.info('🏓 Sending PING command...');
           await this.sendWellueCommand(this.WELLUE_CMD_PING);
         }, 1000);
-        
+
         // Try real-time data command
         setTimeout(async () => {
           log.info('📊 Requesting real-time data...');
           await this.sendWellueCommand(this.WELLUE_CMD_GET_RT_DATA);
-          
+
           // Start periodic polling if needed
           if (this.realTimeDataInterval) {
             clearInterval(this.realTimeDataInterval);
           }
-          
-          // Poll less frequently initially to see what works
-          this.realTimeDataInterval = setInterval(() => {
-            this.sendWellueCommand(this.WELLUE_CMD_GET_RT_DATA);
-          }, 2000); // Try every 2 seconds
+
+          // Poll more frequently for better responsiveness
+          this.realTimeDataInterval = setInterval(async () => {
+            // Only send command if we haven't received data recently
+            if (!this.lastDataReceived || Date.now() - this.lastDataReceived > 1500) {
+              await this.sendWellueCommand(this.WELLUE_CMD_GET_RT_DATA);
+            }
+          }, 1000); // Poll every second but only if needed
         }, 2000);
       }, 1000); // Wait 1 second before sending any commands
       
@@ -628,7 +635,7 @@ class BluetoothService {
         log.warn('Cannot handle Wellue data - BleManager is destroyed');
         return;
       }
-      
+
       const parsedData = this.parseWellueData(data);
       if (parsedData) {
         // Handle different response types
@@ -639,11 +646,15 @@ class BluetoothService {
           log.info('✅ PING successful');
         } else if (parsedData.spo2 !== undefined || parsedData.heartRate !== undefined) {
           // This is real-time data
+          // Track that we received data
+          this.lastDataReceived = Date.now();
+          this.dataReceivedCount++;
+
           // Send to UI callback if available
           if (this.onPulseOxDataReceived) {
             this.onPulseOxDataReceived(parsedData);
           }
-          
+
           // Send to session manager if session is active
           if (EnhancedSessionManager.getSessionInfo().isActive) {
             EnhancedSessionManager.addReading(parsedData);
@@ -837,18 +848,33 @@ class BluetoothService {
       const ackBufSizeL = buffer[5];
       const ackBufSizeH = buffer[6];
       const ackBufSize = ackBufSizeL | (ackBufSizeH << 8);
-      
+
       if (ackBufSize > 0 && buffer.length > 7) {
         // Extract the JSON data from ACK_BUF
         const jsonData = buffer.slice(7, 7 + ackBufSize).toString('utf8');
-        
+
         try {
           const deviceInfo = JSON.parse(jsonData);
           log.info('📋 Device information:', deviceInfo);
-          
+
           // Store device info for reference
           this.wellueDeviceInfo = deviceInfo;
-          
+
+          // Log critical firmware info for debugging SpO2 parsing issues
+          if (deviceInfo.FirmwareVersion) {
+            log.info(`🔧 Wellvue Firmware Version: ${deviceInfo.FirmwareVersion}`);
+          }
+          if (deviceInfo.Model) {
+            log.info(`📱 Wellvue Device Model: ${deviceInfo.Model}`);
+          }
+          if (deviceInfo.ProtocolVersion) {
+            log.info(`📝 Wellvue Protocol Version: ${deviceInfo.ProtocolVersion}`);
+          }
+
+          // Store firmware version to determine parsing strategy
+          this.wellueFirmwareVersion = deviceInfo.FirmwareVersion || 'unknown';
+          this.wellueModel = deviceInfo.Model || 'unknown';
+
           return {
             type: 'device_info',
             data: deviceInfo
@@ -858,7 +884,7 @@ class BluetoothService {
           log.info('Raw JSON string:', jsonData);
         }
       }
-      
+
       return null;
     } catch (error) {
       log.error('Error parsing device info:', error);
@@ -868,36 +894,93 @@ class BluetoothService {
 
   parseWellueRealTimeData(buffer, originalBase64Data) {
     try {
+      // Log the raw buffer for debugging
+      if (buffer.length >= 20) {
+        const hexStr = Array.from(buffer.slice(0, 20)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ');
+        log.info(`🔍 Wellue RT data raw bytes: ${hexStr}`);
+      }
+
       // Check if this is an ACK response with data
       if (buffer.length >= 13 && buffer[2] === 0xff) {
         // This appears to be an ACK with embedded data
         // ACK format: 0x55 0x00 0xff [packet_nr] [buf_size] [data...]
         const dataSize = buffer[5] | (buffer[6] << 8);
-        
+
         if (dataSize === 13 && buffer.length >= 20) {
           // Real-time data is 13 bytes starting at offset 7
-          // Based on the documentation format (page 17)
+          // IMPORTANT FIX: The data structure may have different byte order
           const dataOffset = 7;
-          const spo2 = buffer[dataOffset + 0];  // Byte 0: SpO2
+
+          // Try multiple parsing strategies to handle different firmware versions
+          let spo2, pulseRate, pi, battery, wearStatus;
+
+          // Strategy 1: Standard format (as documented)
+          spo2 = buffer[dataOffset + 0];  // Byte 0: SpO2
           const pulseRateLow = buffer[dataOffset + 1];  // Byte 1: PR low byte
           const pulseRateHigh = buffer[dataOffset + 2]; // Byte 2: PR high byte
-          const pulseRate = pulseRateLow | (pulseRateHigh << 8);
-          
-          // Additional data
-          const steps = buffer.readUInt32LE(dataOffset + 3); // Bytes 3-6: Steps
-          const battery = buffer[dataOffset + 7]; // Byte 7: Battery %
+          pulseRate = pulseRateLow | (pulseRateHigh << 8);
+          battery = buffer[dataOffset + 7]; // Byte 7: Battery %
           const chargeStatus = buffer[dataOffset + 8]; // Byte 8: Charging status
           const acceleration = buffer[dataOffset + 9]; // Byte 9: Acceleration
-          const pi = buffer[dataOffset + 10]; // Byte 10: PI
-          const wearStatus = buffer[dataOffset + 11]; // Byte 11: Wear status
-          
+          pi = buffer[dataOffset + 10]; // Byte 10: PI
+          wearStatus = buffer[dataOffset + 11]; // Byte 11: Wear status
+
+          // Strategy 2: Alternative byte order (if SpO2 seems invalid)
+          // Some Wellue devices may swap SpO2 and HR bytes
+          if (spo2 > 100 || spo2 === 0) {
+            // Log device info for debugging
+            if (this.wellueFirmwareVersion) {
+              log.info(`🔍 Device firmware: ${this.wellueFirmwareVersion}, Model: ${this.wellueModel}`);
+            }
+
+            // Try swapping - HR might be in byte 0, SpO2 in bytes 1-2
+            const altSpo2 = buffer[dataOffset + 1];
+            const altHR = buffer[dataOffset + 0];
+
+            if (altSpo2 >= 70 && altSpo2 <= 100 && altHR >= 40 && altHR <= 200) {
+              log.info('📋 Using alternative byte order for Wellue data (SpO2 in byte 1, HR in byte 0)');
+              spo2 = altSpo2;
+              pulseRate = altHR;
+            }
+          }
+
+          // Strategy 3: Check if data is offset by 1 byte
+          if (spo2 > 100 || spo2 === 0) {
+            const offsetSpo2 = buffer[dataOffset + 1];
+            const offsetHR = buffer[dataOffset + 2] | (buffer[dataOffset + 3] << 8);
+
+            if (offsetSpo2 >= 70 && offsetSpo2 <= 100 && offsetHR >= 40 && offsetHR <= 200) {
+              log.info('📋 Data appears offset by 1 byte');
+              spo2 = offsetSpo2;
+              pulseRate = offsetHR;
+              pi = buffer[dataOffset + 11]; // Adjust PI offset too
+              wearStatus = buffer[dataOffset + 12] || 1; // Adjust wear status
+            }
+          }
+
+          // Strategy 4: Check if it's using a completely different format
+          // Some devices might send SpO2 in byte 2, HR in bytes 0-1
+          if (spo2 > 100 || spo2 === 0) {
+            const altSpo2_v2 = buffer[dataOffset + 2];
+            const altHR_v2 = buffer[dataOffset + 0] | (buffer[dataOffset + 1] << 8);
+
+            if (altSpo2_v2 >= 70 && altSpo2_v2 <= 100 && altHR_v2 >= 40 && altHR_v2 <= 200) {
+              log.info('📋 Using format v2 (SpO2 in byte 2, HR in bytes 0-1)');
+              spo2 = altSpo2_v2;
+              pulseRate = altHR_v2;
+            }
+          }
+
           // Check for valid ranges
           const isSpo2Valid = spo2 > 0 && spo2 <= 100;
           const isPulseValid = pulseRate > 0 && pulseRate < 300;
-          
+
           // Check wear status (bit 0 of byte 11: 1=wearing, 0=not wearing)
           const isWearing = (wearStatus & 0x01) === 1;
-          
+
+          // Log the parsed values for debugging
+          log.info(`📊 Parsed Wellue values - SpO2: ${spo2}, HR: ${pulseRate}, PI: ${pi}, Wearing: ${isWearing}`);
+
           if ((isSpo2Valid || isPulseValid) && isWearing) {
             const result = {
               spo2: isSpo2Valid ? spo2 : null,
@@ -916,7 +999,7 @@ class BluetoothService {
               rawData: originalBase64Data,
               protocol: 'wellue-rt-ack'
             };
-            
+
             log.info(`✅ Valid readings - SpO2: ${result.spo2}%, HR: ${result.heartRate} bpm, PI: ${result.perfusionIndex}%, Battery: ${battery}%`);
             return result;
           } else if (!isWearing) {

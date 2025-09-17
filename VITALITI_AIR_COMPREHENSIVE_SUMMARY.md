@@ -35,10 +35,10 @@ Vitaliti Air is a sophisticated React Native application for Intermittent Hypoxi
    - Modified: `EnhancedSessionManager.js`
    - Result: Single session creation per training
 
-3. **Mock Bluetooth for Development**
-   - Created MockBLEServiceWrapper for Expo Go testing
-   - Auto-connects, generates realistic SpO2 (85-98%) and HR (60-100 bpm)
-   - Enables full testing without physical device
+3. **Real Device Data Only**
+   - Removed all mock data generation
+   - Only real Bluetooth devices supported
+   - Wellue and BerryMed pulse oximeters required for testing
 
 4. **Data Storage Fix** (CRITICAL)
    - Fixed flushReadingBuffer() parameter order
@@ -61,7 +61,7 @@ Vitaliti Air is a sophisticated React Native application for Intermittent Hypoxi
 
 ### Bluetooth Data Pipeline
 ```
-Physical Device / Mock Service
+Physical Device Only
         ↓
 BluetoothContext (1Hz data rate)
         ↓
@@ -77,15 +77,15 @@ PostgreSQL Database
 ### Key Services
 - **EnhancedSessionManager**: Session lifecycle, data buffering, sync coordination
 - **BluetoothService**: BLE communication, BCI Protocol V1.4
-- **MockBLEServiceWrapper**: Development testing without hardware
+- **Real Devices Only**: No mock data generation
 - **SupabaseService**: Cloud sync, batch operations
 - **AdaptiveInstructionEngine**: Real-time guidance
 
 ## Testing Results
 
-### Mock Data Test (Expo Go)
-- ✅ 528 readings stored successfully
-- ✅ Average SpO2: 88%, HR: 87 bpm
+### Real Device Testing
+- ✅ Only real device data used
+- ✅ No simulated values
 - ✅ Consistent 1Hz data collection
 - ✅ 5-second batch inserts working
 

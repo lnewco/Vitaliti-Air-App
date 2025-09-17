@@ -305,8 +305,11 @@ export default function IHHTSessionSimple() {
             }
           }
           
-          // Start mock BLE session for data generation
-          if (startSession) {
+          // Start mock BLE session for data generation (only for mock environments)
+          // Check if we're actually using mock service before calling these methods
+          const isUsingMock = Constants.appOwnership === 'expo' || process.env.EXPO_PUBLIC_USE_MOCK_BLE === 'true';
+          if (isUsingMock && startSession) {
+            console.log('📱 Starting mock BLE session (Expo Go environment)');
             startSession();
           }
         }
@@ -316,23 +319,58 @@ export default function IHHTSessionSimple() {
         
       } catch (error) {
         setIsInitializing(false);
-        
+        console.error('❌ Session initialization error:', error);
+
         // Ensure session manager is reset on error
         try {
           if (EnhancedSessionManager.isActive) {
             await EnhancedSessionManager.endSession();
-            // Also end mock BLE session
-            if (endSession) {
+            // Also end mock BLE session (only for mock environments)
+            const isUsingMock = Constants.appOwnership === 'expo' || process.env.EXPO_PUBLIC_USE_MOCK_BLE === 'true';
+            if (isUsingMock && endSession) {
               endSession();
             }
           }
         } catch (cleanupError) {
+          console.error('⚠️ Cleanup error:', cleanupError);
         }
-        
+
+        // Provide specific error message based on the error
+        let errorTitle = 'Session Start Failed';
+        let errorMessage = 'Unable to start the session. ';
+
+        if (error.message) {
+          if (error.message.includes('Network connection')) {
+            errorMessage = error.message;
+          } else if (error.message.includes('Bluetooth')) {
+            errorMessage = error.message;
+          } else if (error.message.includes('initialize')) {
+            errorMessage = error.message;
+          } else {
+            errorMessage += error.message;
+          }
+        } else {
+          errorMessage += 'Please ensure your device is connected and try again.';
+        }
+
         Alert.alert(
-          'Error',
-          'Failed to start session. Please try again.',
-          [{ text: 'OK', onPress: () => navigation.replace('MainTabs') }]
+          errorTitle,
+          errorMessage,
+          [
+            {
+              text: 'Try Again',
+              onPress: () => {
+                // Reset and try to restart
+                setIsInitializing(true);
+                initSession();
+              }
+            },
+            {
+              text: 'Go Back',
+              onPress: () => navigation.replace('MainTabs'),
+              style: 'cancel'
+            }
+          ]
         );
       }
     };
@@ -351,10 +389,7 @@ export default function IHHTSessionSimple() {
       if (EnhancedSessionManager.isActive) {
         EnhancedSessionManager.endSession().catch(error => {
         });
-        // Also end mock BLE session
-        if (endSession) {
-          endSession();
-        }
+        // Removed mock session code - we only use real device data
       }
     };
   }, []);
@@ -716,8 +751,9 @@ export default function IHHTSessionSimple() {
       // End session in manager
       await EnhancedSessionManager.endSession();
       
-      // End mock BLE session
-      if (endSession) {
+      // End mock BLE session (only for mock environments)
+      const isUsingMock = Constants.appOwnership === 'expo' || process.env.EXPO_PUBLIC_USE_MOCK_BLE === 'true';
+      if (isUsingMock && endSession) {
         endSession();
       }
       
@@ -774,8 +810,9 @@ export default function IHHTSessionSimple() {
             // End the session
             await EnhancedSessionManager.endSession();
             
-            // End mock BLE session
-            if (endSession) {
+            // End mock BLE session (only for mock environments)
+            const isUsingMock = Constants.appOwnership === 'expo' || process.env.EXPO_PUBLIC_USE_MOCK_BLE === 'true';
+            if (isUsingMock && endSession) {
               endSession();
             }
             

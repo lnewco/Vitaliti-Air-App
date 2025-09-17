@@ -675,18 +675,36 @@ class DatabaseService {
 
   // Get completed adaptive sessions for user (local SQLite version)
   async getCompletedAdaptiveSessions() {
-    const query = `
-      SELECT id, session_subtype, start_time, end_time 
-      FROM sessions 
-      WHERE status = 'completed' AND adaptive_system_enabled = 1
-      ORDER BY start_time DESC
-    `;
-    
     try {
+      // First check if the column exists to avoid crashes on unmigrated databases
+      const tableInfo = await this.db.getAllAsync("PRAGMA table_info(sessions)");
+      const hasAdaptiveColumn = tableInfo.some(col => col.name === 'adaptive_system_enabled');
+
+      let query;
+      if (hasAdaptiveColumn) {
+        // Use the new column if it exists
+        query = `
+          SELECT id, session_subtype, start_time, end_time
+          FROM sessions
+          WHERE status = 'completed' AND adaptive_system_enabled = 1
+          ORDER BY start_time DESC
+        `;
+      } else {
+        // Fallback for older database schema - consider all completed sessions as adaptive
+        log.warn('adaptive_system_enabled column not found, using fallback query');
+        query = `
+          SELECT id, session_subtype, start_time, end_time
+          FROM sessions
+          WHERE status = 'completed'
+          ORDER BY start_time DESC
+        `;
+      }
+
       const result = await this.db.getAllAsync(query, []);
       return result || [];
     } catch (error) {
       log.error('Error getting completed adaptive sessions:', error);
+      // Return empty array as safest fallback
       return [];
     }
   }

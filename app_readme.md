@@ -1513,14 +1513,11 @@ The mobile app sends the following events to the analytics dashboard:
 - **Solution**: Added mutex lock pattern to prevent concurrent session creation
 - **Files Modified**: `src/services/EnhancedSessionManager.js`
 
-#### 3. Mock Data Integration for Expo Go
-- **Problem**: Bluetooth not available in Expo Go development builds
-- **Solution**: Created `MockBLEServiceWrapper` that auto-connects and generates realistic SpO2/HR data
-- **Files Created**: `src/services/MockBLEServiceWrapper.js`
-- **Features**: 
-  - Auto-connects after 1 second
-  - Generates SpO2: 85-98%, HR: 60-100 bpm
-  - Simulates realistic variations
+#### 3. Real Device Data Only
+- **Important**: App now only uses real device data
+- **No mock data**: All SpO2/HR values come from connected devices
+- **Supported devices**: Wellue/Checkme O2, BerryMed pulse oximeters
+- **Testing**: Requires actual hardware devices
 
 #### 4. Data Storage Bug Fix
 - **Problem**: `flushReadingBuffer()` called `addReadingsBatch()` with incorrect parameters
@@ -1548,9 +1545,9 @@ The mobile app sends the following events to the analytics dashboard:
 
 ### Testing Results
 
-#### Mock Data Test (Expo Go)
-- ✅ 528 readings successfully stored
-- ✅ Average SpO2: 88%, Average HR: 87 bpm
+#### Real Device Testing
+- ✅ Only real device data is used
+- ✅ No mock or simulated values
 - ✅ Consistent 1Hz data rate
 - ✅ Batch inserts working (5-second intervals)
 

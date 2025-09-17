@@ -55,12 +55,12 @@ Fixed critical IHHT data synchronization issues between SQLite and Supabase, imp
 
 ## 📱 Bluetooth Improvements
 
-### 1. Smart Bluetooth Service Selection
-**File:** `src/config/bluetooth.config.js` (created)
+### 1. Real Device Data Only
+**Important Change:** Removed all mock data generation
 ```javascript
-- Detects environment (Expo Go, Simulator, Development, Production)
-- Automatically selects MockBLEServiceWrapper or real BluetoothService
-- Configurable via BluetoothConfig settings
+- No more mock SpO2/HR values
+- Only real Bluetooth devices supported
+- Wellue and BerryMed pulse oximeters
 ```
 
 ### 2. Fixed Missing setOnConnectionChange Method
@@ -350,16 +350,16 @@ Pending tasks for future development:
 **Problem:**
 - Session duration displayed as "0:00" in session history
 - `total_duration_seconds` field was 0 or NULL in database
-- Stats calculation was returning mock data (avgSpO2: 95, avgHeartRate: 72)
+- Stats calculation was returning hardcoded values (avgSpO2: 95, avgHeartRate: 72)
 
 **Root Causes:**
-- `calculateSessionStats()` was returning hardcoded values instead of actual data
+- `calculateSessionStats()` was returning fixed values instead of actual data
 - Only partial stats (avgSpO2, avgHeartRate) were passed to `SupabaseService.endSession()`
 - Missing tracking for actual time spent in altitude/recovery phases
 
 **Fix:**
 ```javascript
-// Before: Mock data
+// Before: Hardcoded values
 return { avgSpO2: 95, avgHeartRate: 72 };
 
 // After: Actual calculation from readings

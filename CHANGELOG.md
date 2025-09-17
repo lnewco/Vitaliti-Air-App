@@ -20,13 +20,13 @@
 
 ### 🚀 New Features
 
-#### Mock Bluetooth Service
-- **Added**: `MockBLEServiceWrapper` for Expo Go development
-- Auto-connects after 1 second delay
-- Generates realistic biometric data:
-  - SpO2: 85-98% with natural variations
-  - Heart Rate: 60-100 bpm with realistic patterns
-- Enables full app testing without physical Bluetooth device
+#### Real Device Data Only
+- **Removed**: All mock data generation
+- **Removed**: `MockBLEServiceWrapper` and `MockBLEService`
+- Only real Bluetooth devices supported:
+  - Wellue/Checkme O2 pulse oximeters
+  - BerryMed pulse oximeters
+- Testing requires actual hardware devices
 
 ### 📊 Testing Results
 - ✅ 528 readings successfully stored per session
