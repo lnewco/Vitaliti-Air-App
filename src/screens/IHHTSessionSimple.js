@@ -167,8 +167,14 @@ export default function IHHTSessionSimple() {
   // Pulse ox monitoring state
   const [isPulseOxStale, setIsPulseOxStale] = useState(false);
   const [showPulseOxWarning, setShowPulseOxWarning] = useState(false);
+  const [showNoFingerWarning, setShowNoFingerWarning] = useState(false);
   const lastPulseOxUpdate = useRef(null);
   const pulseOxStaleTimer = useRef(null);
+  const connectionCooldown = useRef(null); // Track when device first connected
+  const hasReceivedValidData = useRef(false); // Track if we've ever received valid data
+  const lastValidSpo2 = useRef(null); // Track last valid SpO2 to detect cached values
+  const lastValidHeartRate = useRef(null); // Track last valid HR to detect cached values
+  const sameValueCount = useRef(0); // Track how many times we get the same values
 
   // Adaptive instruction state
   const [adaptiveInstruction, setAdaptiveInstruction] = useState(null);
@@ -514,17 +520,129 @@ export default function IHHTSessionSimple() {
       hasData: !!pulseOximeterData,
       spo2: pulseOximeterData?.spo2,
       heartRate: pulseOximeterData?.heartRate,
+      isFingerDetected: pulseOximeterData?.isFingerDetected,
+      currentMetrics: metrics,
       lastUpdate: lastPulseOxUpdate.current,
       timeSinceLastUpdate: lastPulseOxUpdate.current ? now - lastPulseOxUpdate.current : null
     });
 
-    if (isPulseOxConnected) {
-      // Pulse ox is connected - check if data is fresh or stale
-      if (pulseOximeterData && pulseOximeterData.spo2 && pulseOximeterData.heartRate) {
-        // Check if this is new data by comparing with last update time
+    if (isPulseOxConnected && pulseOximeterData) {
+      // EARLY EXIT: Block ALL data for the first second after detecting pulse ox data
+      if (!connectionCooldown.current) {
+        connectionCooldown.current = Date.now();
+
+        // Store the first values we see - these are likely cached
+        lastValidSpo2.current = pulseOximeterData.spo2;
+        lastValidHeartRate.current = pulseOximeterData.heartRate;
+
+        console.log('🔌 BLOCKING INITIAL DATA - Pulse ox just connected with values:', {
+          spo2: pulseOximeterData.spo2,
+          heartRate: pulseOximeterData.heartRate,
+          message: 'These are likely cached - ignoring for first second'
+        });
+
+        // CRITICAL: Clear metrics and exit immediately
+        setMetrics(prev => ({
+          ...prev,
+          spo2: null,
+          heartRate: null,
+          dialLevel: sessionInfo?.currentAltitudeLevel || prev.dialLevel
+        }));
+
+        // Exit early - don't process any data on first detection
+        return;
+      }
+
+      const timeSinceConnection = Date.now() - connectionCooldown.current;
+
+      // CRITICAL: Check if finger is actually detected by the device
+      const isFingerOnDevice = pulseOximeterData.isFingerDetected === true;
+
+      // Smart cached data detection - check if values match the initial cached values
+      const matchesInitialCachedValues =
+        !hasReceivedValidData.current &&
+        lastValidSpo2.current === pulseOximeterData.spo2 &&
+        lastValidHeartRate.current === pulseOximeterData.heartRate;
+
+      // Values haven't changed from initial readings
+      const valuesUnchanged = matchesInitialCachedValues && timeSinceConnection < 10000;
+
+      // General cooldown period where we're extra careful
+      const isInCooldownPeriod = timeSinceConnection < 8000; // 8 second cooldown
+
+      console.log('📊 Pulse ox validation:', {
+        isFingerOnDevice,
+        timeSinceConnection,
+        matchesInitialCachedValues,
+        valuesUnchanged,
+        isInCooldownPeriod,
+        currentValues: { spo2: pulseOximeterData.spo2, hr: pulseOximeterData.heartRate },
+        initialCachedValues: { spo2: lastValidSpo2.current, hr: lastValidHeartRate.current },
+        hasReceivedValidData: hasReceivedValidData.current
+      });
+
+      // AGGRESSIVE BLOCKING: Block data if any of these conditions are true
+      const shouldBlockData =
+        !isFingerOnDevice || // No finger on device
+        isInCooldownPeriod || // Still in initial cooldown
+        valuesUnchanged || // Values haven't changed from initial cached values
+        (!hasReceivedValidData.current && timeSinceConnection < 5000) || // First 5 seconds always block unless data changes
+        // CRITICAL: Block ANY data in the first second no matter what
+        timeSinceConnection < 1000;
+
+      // During cooldown, if no finger detected, or if we detect cached values, clear values
+      if (shouldBlockData) {
+        // Show appropriate warning
+        if (!isFingerOnDevice && !isInCooldownPeriod) {
+          console.log('👆 No finger detected on pulse ox device');
+          if (!showNoFingerWarning) {
+            setShowNoFingerWarning(true);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          }
+        } else if (isInCooldownPeriod) {
+          console.log('⏳ In connection cooldown period, ignoring all data for 8 seconds');
+        } else if (valuesUnchanged) {
+          console.log('🚫 Detected likely cached values, waiting for real data');
+        }
+
+        // Clear metrics to show dashes
+        setMetrics(prev => ({
+          ...prev,
+          spo2: null,
+          heartRate: null,
+          dialLevel: sessionInfo?.currentAltitudeLevel || prev.dialLevel
+        }));
+
+        // Clear any stale timer
+        if (pulseOxStaleTimer.current) {
+          clearTimeout(pulseOxStaleTimer.current);
+        }
+
+        return; // Exit early - no need to process further
+      }
+
+      // Finger IS detected - clear no-finger warning
+      if (showNoFingerWarning) {
+        setShowNoFingerWarning(false);
+      }
+
+      // Check if we have valid readings - ONLY if finger is detected
+      // Also reject 99/72 unless we've already received other valid data
+      const hasValidReadings = isFingerOnDevice &&  // Must have finger on device
+                              pulseOximeterData.spo2 &&
+                              pulseOximeterData.heartRate &&
+                              pulseOximeterData.spo2 > 0 &&
+                              pulseOximeterData.spo2 <= 100 &&
+                              pulseOximeterData.heartRate > 0 &&
+                              pulseOximeterData.heartRate <= 250 &&
+                              // Block 99/72 unless we've already seen real data
+                              (hasReceivedValidData.current || !(pulseOximeterData.spo2 === 99 && pulseOximeterData.heartRate === 72));
+
+      if (hasValidReadings) {
+        // Always update when we have valid data to ensure real-time display
         const isNewData = !lastPulseOxUpdate.current ||
-                         (pulseOximeterData.timestamp && pulseOximeterData.timestamp > lastPulseOxUpdate.current) ||
-                         (pulseOximeterData.spo2 !== metrics.spo2 || pulseOximeterData.heartRate !== metrics.heartRate);
+                         pulseOximeterData.timestamp !== lastPulseOxUpdate.current ||
+                         Date.now() - lastPulseOxUpdate.current > 200; // Force update every 200ms
 
         if (isNewData) {
           // Fresh data received - update metrics
@@ -562,6 +680,16 @@ export default function IHHTSessionSimple() {
           };
 
           console.log('📊 Updating metrics with fresh data:', newMetrics);
+          console.log('🎯 Current device data:', {
+            rawSpo2: pulseOximeterData.spo2,
+            rawHR: pulseOximeterData.heartRate,
+            fingerDetected: pulseOximeterData.isFingerDetected
+          });
+          // Mark that we've received valid data
+          hasReceivedValidData.current = true;
+          lastValidSpo2.current = pulseOximeterData.spo2;
+          lastValidHeartRate.current = pulseOximeterData.heartRate;
+
           setMetrics(newMetrics);
 
           // CRITICAL: Only send to manager if session is truly active
@@ -573,10 +701,9 @@ export default function IHHTSessionSimple() {
             });
           }
         }
-        // If data hasn't changed, don't update (it's likely stale)
       } else {
-        // Pulse ox connected but no data yet - show null values
-        console.log('⏳ Pulse ox connected but waiting for data...');
+        // Finger detected but readings not valid yet (might be searching for pulse)
+        console.log('⏳ Finger detected, waiting for valid readings...');
         setMetrics(prev => ({
           ...prev,
           spo2: null,
@@ -584,9 +711,29 @@ export default function IHHTSessionSimple() {
           dialLevel: sessionInfo?.currentAltitudeLevel || prev.dialLevel
         }));
       }
+    } else if (isPulseOxConnected && !pulseOximeterData) {
+      // Connected but no data at all yet
+      console.log('⏳ Pulse ox connected, waiting for initial data...');
+      if (!showNoFingerWarning) {
+        setShowNoFingerWarning(true);
+      }
+      setMetrics(prev => ({
+        ...prev,
+        spo2: null,
+        heartRate: null,
+        dialLevel: sessionInfo?.currentAltitudeLevel || prev.dialLevel
+      }));
     } else {
-      // No pulse ox connected - show null values (no simulation for real users)
+      // No pulse ox connected - show null values and reset connection tracking
       console.log('❌ No pulse ox connected - showing no data');
+
+      // Reset connection tracking for next connection
+      connectionCooldown.current = null;
+      hasReceivedValidData.current = false;
+      lastValidSpo2.current = null;
+      lastValidHeartRate.current = null;
+      sameValueCount.current = 0;
+
       setMetrics(prev => ({
         ...prev,
         spo2: null,
@@ -594,7 +741,7 @@ export default function IHHTSessionSimple() {
         dialLevel: sessionInfo?.currentAltitudeLevel || prev.dialLevel
       }));
     }
-  }, [pulseOximeterData, isPulseOxConnected, sessionStarted, sessionInfo]);
+  }, [pulseOximeterData, isPulseOxConnected, sessionStarted, sessionInfo, showNoFingerWarning, showPulseOxWarning]);
 
   // Cleanup stale timer on unmount
   useEffect(() => {
@@ -1017,10 +1164,10 @@ export default function IHHTSessionSimple() {
         {/* Top/Center - SpO2 */}
         <View style={styles.diamondTop}>
           <Text style={[
-            styles.spo2Value, 
-            { color: metrics.spo2 > 90 ? '#4ADE80' : (metrics.spo2 > 85 ? '#FFA500' : '#FF6B6B') }
+            styles.spo2Value,
+            { color: !metrics.spo2 ? '#6B7280' : (metrics.spo2 > 90 ? '#4ADE80' : (metrics.spo2 > 85 ? '#FFA500' : '#FF6B6B')) }
           ]}>
-            {Math.round(metrics.spo2)}
+            {metrics.spo2 !== null && metrics.spo2 !== undefined ? Math.round(metrics.spo2) : '--'}
           </Text>
           <Text style={styles.spo2Label}>SpO₂</Text>
         </View>
@@ -1051,9 +1198,11 @@ export default function IHHTSessionSimple() {
         
         {/* Right - Heart Rate */}
         <View style={styles.diamondRight}>
-          <Text style={styles.heartRateValue}>{metrics.heartRate}</Text>
+          <Text style={[styles.heartRateValue, { color: !metrics.heartRate ? '#6B7280' : '#EC4899' }]}>
+            {metrics.heartRate !== null && metrics.heartRate !== undefined ? metrics.heartRate : '--'}
+          </Text>
           <Text style={styles.heartRateUnit}>bpm</Text>
-          <EKGWave heartRate={metrics.heartRate} />
+          {metrics.heartRate && <EKGWave heartRate={metrics.heartRate} />}
         </View>
         
         {/* Bottom - Status */}
@@ -1077,8 +1226,8 @@ export default function IHHTSessionSimple() {
         </View>
       )}
 
-      {/* Pulse Ox Removed Warning */}
-      {isPulseOxConnected && showPulseOxWarning && (
+      {/* Pulse Ox Warning - Combined for removed or no finger */}
+      {isPulseOxConnected && (showPulseOxWarning || showNoFingerWarning) && (
         <Animated.View
           style={[
             styles.pulseOxWarning,
@@ -1087,7 +1236,7 @@ export default function IHHTSessionSimple() {
         >
           <Icon name="alert-circle" size={20} color="#FF6B6B" />
           <Text style={styles.pulseOxWarningText}>
-            Pulse Ox removed - Please place on finger
+            {showNoFingerWarning ? 'Please place pulse ox on finger' : 'Pulse ox removed - Please place on finger'}
           </Text>
         </Animated.View>
       )}

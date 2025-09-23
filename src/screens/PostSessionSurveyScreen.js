@@ -1,31 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  StyleSheet, 
-  Alert, 
-  ScrollView, 
-  Text, 
+import {
+  View,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  Text,
   TouchableOpacity,
   StatusBar,
-  Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { Animated } from 'react-native';
 import {
   FadeInDown,
-  FadeIn,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  withTiming,
-  interpolate,
   AnimatedAPI,
   isExpoGo
 } from '../utils/animationHelpers';
-import { colors, spacing, typography } from '../design-system';
+import { colors } from '../design-system';
 import SurveyScaleInput from '../components/SurveyScaleInput';
 import StarRating from '../components/feedback/StarRating';
 import SensationTag from '../components/feedback/SensationTag';
@@ -33,8 +29,6 @@ import DatabaseService from '../services/DatabaseService';
 import SupabaseService from '../services/SupabaseService';
 import { isPostSessionSurveyComplete } from '../utils/surveyValidation';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-
-const { width: screenWidth } = Dimensions.get('window');
 
 const PostSessionSurveyScreen = ({ route, navigation }) => {
   const { sessionId = `session_${Date.now()}` } = route.params || {};
@@ -49,140 +43,125 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const progressAnimation = useSharedValue(0);
 
+  const availableSensations = [
+    { id: 'light_headed', label: 'Light-headed', icon: '💫', type: 'symptom' },
+    { id: 'tingling', label: 'Tingling', icon: '✨', type: 'symptom' },
+    { id: 'warm', label: 'Warm', icon: '🔥', type: 'neutral' },
+    { id: 'relaxed', label: 'Relaxed', icon: '😌', type: 'positive' },
+    { id: 'energized', label: 'Energized', icon: '⚡', type: 'positive' },
+    { id: 'clear_minded', label: 'Clear-minded', icon: '🧠', type: 'positive' },
+    { id: 'euphoric', label: 'Euphoric', icon: '🌟', type: 'positive' },
+    { id: 'breathless', label: 'Breathless', icon: '😮‍💨', type: 'symptom' },
+    { id: 'headache', label: 'Headache', icon: '🤕', type: 'symptom' },
+    { id: 'nausea', label: 'Nausea', icon: '🤢', type: 'symptom' },
+  ];
+
+  const isFormComplete = isPostSessionSurveyComplete({
+    ...surveyData,
+    symptoms,
+    overallRating
+  });
+
   useEffect(() => {
-    updateProgress();
+    const targetProgress = calculateProgress();
+    progressAnimation.value = withSpring(targetProgress, {
+      damping: 15,
+      stiffness: 100,
+    });
   }, [surveyData, symptoms, overallRating]);
 
-  const updateProgress = () => {
+  const calculateProgress = () => {
     let completed = 0;
-    if (surveyData.clarity) completed++;
-    if (surveyData.energy) completed++;
-    if (surveyData.stress) completed++;
-    if (overallRating) completed++;
-    
-    progressAnimation.value = withTiming(completed / 4, {
-      duration: 300,
-    });
+    const total = 4; // clarity, energy, stress, overallRating
+
+    if (surveyData.clarity !== null) completed++;
+    if (surveyData.energy !== null) completed++;
+    if (surveyData.stress !== null) completed++;
+    if (overallRating !== null) completed++;
+
+    return completed / total;
   };
 
-  const handleRatingChange = (field, value) => {
+  const animatedProgressStyle = useAnimatedStyle(() => ({
+    width: `${progressAnimation.value * 100}%`,
+  }));
+
+  const handleScaleChange = (field, value) => {
     setSurveyData(prev => ({
       ...prev,
       [field]: value
     }));
   };
 
-  const toggleSymptom = (symptomId) => {
-    if (symptomId === 'none') {
-      setSymptoms(['none']);
-    } else {
-      setSymptoms(prev => {
-        const filtered = prev.filter(s => s !== 'none');
-        if (filtered.includes(symptomId)) {
-          return filtered.filter(s => s !== symptomId);
-        } else {
-          return [...filtered, symptomId];
-        }
-      });
-    }
+  const handleSensationToggle = (sensationId) => {
+    setSymptoms(prev => {
+      if (prev.includes(sensationId)) {
+        return prev.filter(id => id !== sensationId);
+      } else {
+        return [...prev, sensationId];
+      }
+    });
   };
 
   const handleSubmit = async () => {
-    if (!isPostSessionSurveyComplete(surveyData) || !overallRating) {
-      Alert.alert(
-        'Incomplete Survey',
-        'Please complete all required fields before submitting.',
-        [{ text: 'OK' }]
-      );
+    if (!isFormComplete) {
+      Alert.alert('Incomplete Survey', 'Please complete all required fields.');
       return;
     }
 
     setIsSubmitting(true);
-    
     try {
-      await DatabaseService.init();
-      await DatabaseService.savePostSessionSurvey(
-        sessionId, 
-        surveyData.clarity, 
-        surveyData.energy, 
-        surveyData.stress, 
-        surveyData.notes,
-        symptoms,
-        overallRating
-      );
-      
-      await SupabaseService.syncPostSessionSurvey(
-        sessionId, 
-        surveyData.clarity, 
-        surveyData.energy, 
-        surveyData.stress, 
-        surveyData.notes,
-        symptoms,
-        overallRating
-      );
-      
-      navigation.navigate('MainTabs', {
-        screen: 'Profile',
-        params: {
-          justCompleted: true,
-          refreshSessions: true
-        }
+      const surveyPayload = {
+        session_id: sessionId,
+        clarity: surveyData.clarity,
+        energy: surveyData.energy,
+        stress_level: surveyData.stress,
+        symptoms: symptoms.join(','),
+        overall_rating: overallRating,
+        notes: surveyData.notes,
+        created_at: new Date().toISOString()
+      };
+
+      console.log('Saving post-session survey:', surveyPayload);
+
+      await DatabaseService.savePostSessionSurvey(surveyPayload);
+
+      await SupabaseService.logEvent('post_session_survey_completed', {
+        session_id: sessionId,
+        overall_rating: overallRating,
+        symptoms_count: symptoms.length
       });
-      
-      setTimeout(() => {
-        Alert.alert(
-          '✅ Survey Complete',
-          'Thank you for completing your post-session survey!',
-          [{ text: 'OK' }]
-        );
-      }, 500);
-      
-    } catch (error) {
-      console.error('Failed to save post-session survey:', error);
+
       Alert.alert(
-        'Save Error',
-        'Failed to save your survey responses. Please try again.',
-        [{ text: 'OK' }]
+        'Survey Completed',
+        'Thank you for your feedback!',
+        [{ text: 'OK', onPress: () => navigation.navigate('Main') }]
       );
+    } catch (error) {
+      console.error('Error saving post-session survey:', error);
+      Alert.alert('Error', 'Failed to save survey. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const symptomOptions = [
-    { id: 'zen', label: 'Zen', icon: 'leaf' },
-    { id: 'euphoria', label: 'Euphoria', icon: 'happy' },
-    { id: 'neck_tension', label: 'Neck tension', icon: 'warning' },
-    { id: 'tingling', label: 'Tingling', icon: 'flash' },
-    { id: 'lightheaded', label: 'Light-headed', icon: 'pulse' },
-    { id: 'sleepy', label: 'Sleepy', icon: 'moon' },
-    { id: 'muscle_fatigue', label: 'Muscle fatigue', icon: 'fitness' },
-    { id: 'trembling', label: 'Trembling', icon: 'hand-left' },
-    { id: 'none', label: 'None', icon: 'checkmark-circle' },
-  ];
-
-  const animatedProgressStyle = useAnimatedStyle(() => ({
-    width: `${progressAnimation.value * 100}%`,
-  }));
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      
-      {/* Premium gradient background - matching Session Setup */}
+
+      {/* Background gradient */}
       <LinearGradient
         colors={['#000000', '#0A0B0F', '#14161B']}
         style={StyleSheet.absoluteFillObject}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
       />
-      
+
       <SafeAreaView style={styles.safeArea}>
-        {/* Fixed Header Container with Blur - Like Session Setup */}
-        <BlurView intensity={85} tint="dark" style={styles.fixedHeader}>
-          {/* Navigation Bar */}
+        {/* Header */}
+        <BlurView intensity={85} tint="dark" style={styles.header}>
           <View style={styles.navigationBar}>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => navigation.goBack()}
               style={styles.backButton}
               activeOpacity={0.7}
@@ -190,10 +169,10 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
               <Ionicons name="chevron-back" size={28} color={colors.text.primary} />
             </TouchableOpacity>
             <Text style={styles.navigationTitle}>Post-Session Survey</Text>
-            <View style={styles.navSpacer} />
+            <View style={{ width: 44 }} />
           </View>
 
-          {/* Progress Bar - Part of sticky header */}
+          {/* Progress Bar */}
           <View style={styles.progressContainer}>
             <View style={styles.progressBackground}>
               <AnimatedAPI.View style={[styles.progressBar, animatedProgressStyle]}>
@@ -210,253 +189,193 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
             </Text>
           </View>
         </BlurView>
-        
-        <ScrollView 
-          style={styles.content} 
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-          bounces={true}
-        >
-          {/* Header */}
-          <AnimatedAPI.View
-            style={[styles.header, isExpoGo ? {} : { opacity: 1 }]}
-          >
-            <Text style={styles.title}>How was your session?</Text>
-            <Text style={styles.subtitle}>
-              Help us personalize your next training
-            </Text>
-          </AnimatedAPI.View>
 
+        {/* Scrollable content with padding for button */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Mental Clarity Card */}
-          <AnimatedAPI.View style={isExpoGo ? {} : { opacity: 1 }}>
-            <TouchableOpacity activeOpacity={0.98} style={styles.surveyCard}>
-              <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.01)']}
-                  style={StyleSheet.absoluteFillObject}
-                />
-                <View style={styles.cardContent}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.iconContainer}>
-                      <MaterialCommunityIcons name="head-lightbulb-outline" size={22} color={colors.brand.accent} />
-                    </View>
-                    <Text style={styles.cardTitle}>Mental Clarity</Text>
-                    {surveyData.clarity && (
-                      <View style={styles.checkmark}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.metrics.breath} />
-                      </View>
-                    )}
+          <AnimatedAPI.View
+            entering={isExpoGo ? undefined : FadeInDown.delay(100)}
+            style={styles.card}
+          >
+            <TouchableOpacity activeOpacity={0.95}>
+              <BlurView intensity={40} tint="dark" style={styles.cardContent}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardIconContainer}>
+                    <MaterialCommunityIcons name="head-cog" size={24} color={colors.brand.accent} />
                   </View>
-                  <SurveyScaleInput
-                    value={surveyData.clarity}
-                    onValueChange={(value) => handleRatingChange('clarity', value)}
-                    scaleLabels={{
-                      1: "Very Foggy",
-                      5: "Very Clear"
-                    }}
-                    style={styles.scaleInput}
-                  />
+                  <View style={styles.cardTitleContainer}>
+                    <Text style={styles.cardTitle}>Mental Clarity</Text>
+                    <Text style={styles.cardSubtitle}>How clear is your thinking?</Text>
+                  </View>
                 </View>
+                <SurveyScaleInput
+                  value={surveyData.clarity}
+                  onChange={(value) => handleScaleChange('clarity', value)}
+                  minLabel="Foggy"
+                  maxLabel="Crystal Clear"
+                  accentColor={colors.brand.accent}
+                />
               </BlurView>
             </TouchableOpacity>
           </AnimatedAPI.View>
 
           {/* Energy Level Card */}
-          <AnimatedAPI.View style={isExpoGo ? {} : { opacity: 1 }}>
-            <TouchableOpacity activeOpacity={0.98} style={styles.surveyCard}>
-              <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.01)']}
-                  style={StyleSheet.absoluteFillObject}
-                />
-                <View style={styles.cardContent}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.iconContainer}>
-                      <MaterialCommunityIcons name="lightning-bolt" size={22} color={colors.brand.accent} />
-                    </View>
-                    <Text style={styles.cardTitle}>Energy Level</Text>
-                    {surveyData.energy && (
-                      <View style={styles.checkmark}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.metrics.breath} />
-                      </View>
-                    )}
+          <AnimatedAPI.View
+            entering={isExpoGo ? undefined : FadeInDown.delay(200)}
+            style={styles.card}
+          >
+            <TouchableOpacity activeOpacity={0.95}>
+              <BlurView intensity={40} tint="dark" style={styles.cardContent}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardIconContainer}>
+                    <MaterialCommunityIcons name="lightning-bolt" size={24} color="#FFD700" />
                   </View>
-                  <SurveyScaleInput
-                    value={surveyData.energy}
-                    onValueChange={(value) => handleRatingChange('energy', value)}
-                    scaleLabels={{
-                      1: "Very Fatigued",
-                      5: "Very Energized"
-                    }}
-                    style={styles.scaleInput}
-                  />
+                  <View style={styles.cardTitleContainer}>
+                    <Text style={styles.cardTitle}>Energy Level</Text>
+                    <Text style={styles.cardSubtitle}>How energized do you feel?</Text>
+                  </View>
                 </View>
+                <SurveyScaleInput
+                  value={surveyData.energy}
+                  onChange={(value) => handleScaleChange('energy', value)}
+                  minLabel="Drained"
+                  maxLabel="Energized"
+                  accentColor="#FFD700"
+                />
               </BlurView>
             </TouchableOpacity>
           </AnimatedAPI.View>
 
           {/* Stress Level Card */}
-          <AnimatedAPI.View style={isExpoGo ? {} : { opacity: 1 }}>
-            <TouchableOpacity activeOpacity={0.98} style={styles.surveyCard}>
-              <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.01)']}
-                  style={StyleSheet.absoluteFillObject}
-                />
-                <View style={styles.cardContent}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.iconContainer}>
-                      <MaterialCommunityIcons name="heart-pulse" size={22} color={colors.brand.accent} />
-                    </View>
-                    <Text style={styles.cardTitle}>Stress Level</Text>
-                    {surveyData.stress && (
-                      <View style={styles.checkmark}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.metrics.breath} />
-                      </View>
-                    )}
+          <AnimatedAPI.View
+            entering={isExpoGo ? undefined : FadeInDown.delay(300)}
+            style={styles.card}
+          >
+            <TouchableOpacity activeOpacity={0.95}>
+              <BlurView intensity={40} tint="dark" style={styles.cardContent}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardIconContainer}>
+                    <MaterialCommunityIcons name="meditation" size={24} color="#60A5FA" />
                   </View>
-                  <SurveyScaleInput
-                    value={surveyData.stress}
-                    onValueChange={(value) => handleRatingChange('stress', value)}
-                    scaleLabels={{
-                      1: "Negative stress",
-                      5: "Positive stress"
-                    }}
-                    style={styles.scaleInput}
-                  />
+                  <View style={styles.cardTitleContainer}>
+                    <Text style={styles.cardTitle}>Stress Level</Text>
+                    <Text style={styles.cardSubtitle}>How relaxed are you?</Text>
+                  </View>
                 </View>
+                <SurveyScaleInput
+                  value={surveyData.stress}
+                  onChange={(value) => handleScaleChange('stress', value)}
+                  minLabel="Very Stressed"
+                  maxLabel="Very Relaxed"
+                  accentColor="#60A5FA"
+                  inverseScale={true}
+                />
               </BlurView>
             </TouchableOpacity>
           </AnimatedAPI.View>
 
           {/* Sensations Card */}
-          <AnimatedAPI.View style={isExpoGo ? {} : { opacity: 1 }}>
-            <TouchableOpacity activeOpacity={0.98} style={styles.surveyCard}>
-              <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.01)']}
-                  style={StyleSheet.absoluteFillObject}
-                />
-                <View style={styles.cardContent}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.iconContainer}>
-                      <MaterialCommunityIcons name="emoticon-outline" size={22} color={colors.brand.accent} />
-                    </View>
+          <AnimatedAPI.View
+            entering={isExpoGo ? undefined : FadeInDown.delay(400)}
+            style={styles.card}
+          >
+            <TouchableOpacity activeOpacity={0.95}>
+              <BlurView intensity={40} tint="dark" style={styles.cardContent}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardIconContainer}>
+                    <MaterialCommunityIcons name="gesture-tap" size={24} color="#F59E0B" />
+                  </View>
+                  <View style={styles.cardTitleContainer}>
                     <Text style={styles.cardTitle}>Sensations</Text>
+                    <Text style={styles.cardSubtitle}>What did you experience?</Text>
                   </View>
-                  <Text style={styles.cardSubtitle}>
-                    Did you experience any of the following?
-                  </Text>
-                  <View style={styles.sensationsGrid}>
-                    {symptomOptions.slice(0, 8).map((symptom) => (
-                      <TouchableOpacity
-                        key={symptom.id}
-                        style={[
-                          styles.sensationItem,
-                          symptoms.includes(symptom.id) && styles.sensationItemActive
-                        ]}
-                        onPress={() => toggleSymptom(symptom.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[
-                          styles.sensationText,
-                          symptoms.includes(symptom.id) && styles.sensationTextActive
-                        ]}>
-                          {symptom.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <TouchableOpacity
-                    style={[
-                      styles.noneButton,
-                      symptoms.includes('none') && styles.noneButtonActive
-                    ]}
-                    onPress={() => toggleSymptom('none')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[
-                      styles.noneButtonText,
-                      symptoms.includes('none') && styles.noneButtonTextActive
-                    ]}>
-                      None of the above
-                    </Text>
-                  </TouchableOpacity>
+                </View>
+                <View style={styles.sensationGrid}>
+                  {availableSensations.map((sensation) => (
+                    <SensationTag
+                      key={sensation.id}
+                      sensation={sensation}
+                      isSelected={symptoms.includes(sensation.id)}
+                      onPress={() => handleSensationToggle(sensation.id)}
+                    />
+                  ))}
                 </View>
               </BlurView>
             </TouchableOpacity>
           </AnimatedAPI.View>
 
           {/* Overall Rating Card */}
-          <AnimatedAPI.View style={isExpoGo ? {} : { opacity: 1 }}>
-            <TouchableOpacity activeOpacity={0.98} style={styles.surveyCard}>
-              <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.01)']}
-                  style={StyleSheet.absoluteFillObject}
-                />
-                <View style={styles.cardContent}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.iconContainer}>
-                      <MaterialCommunityIcons name="star" size={22} color={colors.brand.accent} />
-                    </View>
+          <AnimatedAPI.View
+            entering={isExpoGo ? undefined : FadeInDown.delay(500)}
+            style={styles.card}
+          >
+            <TouchableOpacity activeOpacity={0.95}>
+              <BlurView intensity={40} tint="dark" style={styles.cardContent}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardIconContainer}>
+                    <MaterialCommunityIcons name="star" size={24} color="#FFD700" />
+                  </View>
+                  <View style={styles.cardTitleContainer}>
                     <Text style={styles.cardTitle}>Overall Rating</Text>
-                    {overallRating && (
-                      <View style={styles.checkmark}>
-                        <Ionicons name="checkmark-circle" size={20} color={colors.metrics.breath} />
-                      </View>
-                    )}
+                    <Text style={styles.cardSubtitle}>Rate your session experience</Text>
                   </View>
-                  <Text style={styles.cardSubtitle}>
-                    How was your experience?
-                  </Text>
-                  <View style={styles.starContainer}>
-                    <StarRating
-                      rating={overallRating}
-                      onRatingChange={setOverallRating}
-                      size="lg"
-                    />
-                  </View>
+                </View>
+                <View style={styles.starContainer}>
+                  <StarRating
+                    rating={overallRating}
+                    onRatingChange={setOverallRating}
+                    size={44}
+                    color="#FFD700"
+                  />
                 </View>
               </BlurView>
             </TouchableOpacity>
           </AnimatedAPI.View>
 
-          {/* Submit Button - Now part of scroll content */}
-          <AnimatedAPI.View
-            style={[styles.submitButtonContainer, isExpoGo ? {} : { opacity: 1 }]}
-          >
+          {/* Submit Button - Inside scroll content */}
+          <View style={styles.submitButtonContainer}>
             <TouchableOpacity
-                style={[
-                  styles.submitButton,
-                  (!isPostSessionSurveyComplete(surveyData) || !overallRating) && styles.submitButtonDisabled
-                ]}
-                onPress={handleSubmit}
-                disabled={!isPostSessionSurveyComplete(surveyData) || !overallRating || isSubmitting}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={(!isPostSessionSurveyComplete(surveyData) || !overallRating)
-                    ? ['#2A2D35', '#1F2228']
-                    : [colors.brand.accent, colors.brand.accent + 'dd']
-                  }
-                  style={StyleSheet.absoluteFillObject}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
+            style={[
+              styles.submitButton,
+              !isFormComplete && styles.submitButtonDisabled
+            ]}
+            onPress={handleSubmit}
+            disabled={!isFormComplete || isSubmitting}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={!isFormComplete
+                ? ['#2A2D35', '#1F2228']
+                : [colors.brand.accent, colors.brand.accent + 'dd']
+              }
+              style={StyleSheet.absoluteFillObject}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            />
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <View style={styles.buttonContent}>
+                <Text style={[
+                  styles.buttonText,
+                  !isFormComplete && styles.buttonTextDisabled
+                ]}>
+                  {!isFormComplete ? 'Complete All Questions' : 'Complete Survey'}
+                </Text>
+                <Ionicons
+                  name={isFormComplete ? "checkmark-circle" : "alert-circle"}
+                  size={24}
+                  color={isFormComplete ? "white" : "rgba(255,255,255,0.5)"}
+                  style={{ marginLeft: 8 }}
                 />
-                {isSubmitting ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <View style={styles.buttonContent}>
-                    <Text style={styles.buttonText}>Complete Survey</Text>
-                    <Ionicons name="checkmark-circle" size={24} color="white" style={{ marginLeft: 8 }} />
-                  </View>
-                )}
-              </TouchableOpacity>
-          </AnimatedAPI.View>
-
-          {/* Bottom padding for safe scrolling - increased to ensure button is accessible */}
-          <View style={{ height: 120 }} />
+              </View>
+            )}
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -471,12 +390,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  fixedHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 100,
+  header: {
     borderBottomWidth: 0.5,
     borderBottomColor: 'rgba(255,255,255,0.08)',
   },
@@ -485,7 +399,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 50,
+    paddingTop: 10,
     paddingBottom: 16,
   },
   backButton: {
@@ -502,20 +416,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     letterSpacing: -0.4,
   },
-  navSpacer: {
-    width: 44,
-  },
   progressContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 8, // Tighter like Session Setup progress steps
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    paddingBottom: 16,
   },
   progressBackground: {
-    flex: 1,
     height: 6,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -525,138 +432,68 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 12,
-    color: colors.text.quaternary,
-    fontWeight: '600',
+    color: colors.text.tertiary,
+    marginTop: 8,
+    textAlign: 'center',
   },
-  content: {
+  scrollView: {
     flex: 1,
-    paddingTop: 125, // Adjusted for progress bar instead of steps
   },
   scrollContent: {
-    padding: 20, // EXACT same as Session Setup
-    paddingTop: 0,
-    paddingBottom: 100, // Increased padding to ensure Complete Survey button is accessible
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
   },
-  header: {
-    marginBottom: 12, // EXACT same as Session Setup
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 34, // EXACT same as Session Setup
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 8,
-    textAlign: 'center',
-    letterSpacing: -0.8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.6)', // EXACT same as Session Setup
-    textAlign: 'center',
-    lineHeight: 20,
-    fontWeight: '400',
-  },
-  surveyCard: {
-    marginBottom: 16, // EXACT same as Session Setup cards
-    borderRadius: 20, // EXACT same as Session Setup
+  card: {
+    marginBottom: 16,
+    borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 30,
-    elevation: 20,
-  },
-  cardBlur: {
-    borderRadius: 20, // EXACT same as Session Setup
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
   cardContent: {
-    padding: 20, // EXACT same as Session Setup
+    padding: 20,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 20,
   },
-  iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.brand.accent + '15',
+  cardIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  cardTitle: {
+  cardTitleContainer: {
     flex: 1,
-    fontSize: 17,
+  },
+  cardTitle: {
+    fontSize: 18,
     fontWeight: '600',
     color: colors.text.primary,
     letterSpacing: -0.4,
   },
   cardSubtitle: {
-    fontSize: 14,
-    color: colors.text.quaternary,
-    marginBottom: 16,
+    fontSize: 13,
+    color: colors.text.tertiary,
+    marginTop: 2,
   },
-  checkmark: {
-    marginLeft: 8,
-  },
-  scaleInput: {
-    marginTop: 8,
-  },
-  sensationsGrid: {
+  sensationGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-  },
-  sensationItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  sensationItemActive: {
-    backgroundColor: colors.brand.accent + '20',
-    borderColor: colors.brand.accent,
-  },
-  sensationText: {
-    fontSize: 14,
-    color: colors.text.secondary,
-    fontWeight: '500',
-  },
-  sensationTextActive: {
-    color: colors.brand.accent,
-  },
-  noneButton: {
-    marginTop: 12,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    alignItems: 'center',
-  },
-  noneButtonActive: {
-    backgroundColor: colors.brand.accent + '15',
-  },
-  noneButtonText: {
-    fontSize: 14,
-    color: colors.text.quaternary,
-    fontWeight: '500',
-  },
-  noneButtonTextActive: {
-    color: colors.brand.accent,
+    marginHorizontal: -4,
   },
   starContainer: {
     alignItems: 'center',
     paddingVertical: 8,
   },
+  // Submit button container
   submitButtonContainer: {
-    marginTop: 24,
-    marginHorizontal: 0, // Full width within padding
+    marginTop: 32,
+    marginBottom: Platform.OS === 'ios' ? 20 : 10,
+    paddingHorizontal: 0,
   },
   submitButton: {
     height: 56,
@@ -666,7 +503,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   submitButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.7,
   },
   buttonContent: {
     flexDirection: 'row',
@@ -677,6 +514,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'white',
     letterSpacing: -0.4,
+  },
+  buttonTextDisabled: {
+    color: 'rgba(255,255,255,0.6)',
   },
 });
 
