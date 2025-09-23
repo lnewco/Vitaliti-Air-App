@@ -163,7 +163,13 @@ export default function IHHTSessionSimple() {
   // Session completion modal state
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [sessionCompletedData, setSessionCompletedData] = useState(null);
-  
+
+  // Pulse ox monitoring state
+  const [isPulseOxStale, setIsPulseOxStale] = useState(false);
+  const [showPulseOxWarning, setShowPulseOxWarning] = useState(false);
+  const lastPulseOxUpdate = useRef(null);
+  const pulseOxStaleTimer = useRef(null);
+
   // Adaptive instruction state
   const [adaptiveInstruction, setAdaptiveInstruction] = useState(null);
   const [showAdaptiveInstruction, setShowAdaptiveInstruction] = useState(false);
@@ -498,40 +504,76 @@ export default function IHHTSessionSimple() {
     if (!sessionStarted || !sessionInfo?.isActive) {
       return;
     }
-    
+
+    const now = Date.now();
+
     // Use real data when available
     console.log('🔍 Debug - Pulse Ox Status:', {
       isPulseOxConnected,
       pulseOximeterData,
       hasData: !!pulseOximeterData,
       spo2: pulseOximeterData?.spo2,
-      heartRate: pulseOximeterData?.heartRate
+      heartRate: pulseOximeterData?.heartRate,
+      lastUpdate: lastPulseOxUpdate.current,
+      timeSinceLastUpdate: lastPulseOxUpdate.current ? now - lastPulseOxUpdate.current : null
     });
 
     if (isPulseOxConnected) {
-      // Pulse ox is connected - use real data or show null
+      // Pulse ox is connected - check if data is fresh or stale
       if (pulseOximeterData && pulseOximeterData.spo2 && pulseOximeterData.heartRate) {
-        const newMetrics = {
-          spo2: pulseOximeterData.spo2,
-          heartRate: pulseOximeterData.heartRate,
-          dialLevel: sessionInfo?.currentAltitudeLevel || metrics.dialLevel
-        };
+        // Check if this is new data by comparing with last update time
+        const isNewData = !lastPulseOxUpdate.current ||
+                         (pulseOximeterData.timestamp && pulseOximeterData.timestamp > lastPulseOxUpdate.current) ||
+                         (pulseOximeterData.spo2 !== metrics.spo2 || pulseOximeterData.heartRate !== metrics.heartRate);
 
-        console.log('📊 Updating metrics with real data:', newMetrics);
-        setMetrics(newMetrics);
+        if (isNewData) {
+          // Fresh data received - update metrics
+          lastPulseOxUpdate.current = now;
+          setIsPulseOxStale(false);
+          setShowPulseOxWarning(false);
 
-        // CRITICAL: Only send to manager if session is truly active
-        if (EnhancedSessionManager.isActive) {
-          console.log('Pulse oximeter data:', {
-            spo2: pulseOximeterData.spo2,
-            heartRate: pulseOximeterData.heartRate
-          });
-          EnhancedSessionManager.addReading({
+          // Clear any existing stale timer
+          if (pulseOxStaleTimer.current) {
+            clearTimeout(pulseOxStaleTimer.current);
+          }
+
+          // Set new timer to detect stale data (5 seconds without update means pulse ox is likely off finger)
+          pulseOxStaleTimer.current = setTimeout(() => {
+            console.log('⚠️ Pulse ox data is stale - likely removed from finger');
+            setIsPulseOxStale(true);
+            setShowPulseOxWarning(true);
+
+            // Haptic feedback to alert user
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+
+            // Clear metrics to show dashes
+            setMetrics(prev => ({
+              ...prev,
+              spo2: null,
+              heartRate: null,
+              dialLevel: sessionInfo?.currentAltitudeLevel || prev.dialLevel
+            }));
+          }, 5000);
+
+          const newMetrics = {
             spo2: pulseOximeterData.spo2,
             heartRate: pulseOximeterData.heartRate,
-            timestamp: Date.now()
-          });
+            dialLevel: sessionInfo?.currentAltitudeLevel || metrics.dialLevel
+          };
+
+          console.log('📊 Updating metrics with fresh data:', newMetrics);
+          setMetrics(newMetrics);
+
+          // CRITICAL: Only send to manager if session is truly active
+          if (EnhancedSessionManager.isActive) {
+            EnhancedSessionManager.addReading({
+              spo2: pulseOximeterData.spo2,
+              heartRate: pulseOximeterData.heartRate,
+              timestamp: now
+            });
+          }
         }
+        // If data hasn't changed, don't update (it's likely stale)
       } else {
         // Pulse ox connected but no data yet - show null values
         console.log('⏳ Pulse ox connected but waiting for data...');
@@ -553,6 +595,15 @@ export default function IHHTSessionSimple() {
       }));
     }
   }, [pulseOximeterData, isPulseOxConnected, sessionStarted, sessionInfo]);
+
+  // Cleanup stale timer on unmount
+  useEffect(() => {
+    return () => {
+      if (pulseOxStaleTimer.current) {
+        clearTimeout(pulseOxStaleTimer.current);
+      }
+    };
+  }, []);
   
   // Removed simulateMetrics - real users should see null/dashes when no data is available
   
@@ -1022,8 +1073,23 @@ export default function IHHTSessionSimple() {
       {!isPulseOxConnected && (
         <View style={styles.connectionWarning}>
           <Icon name="bluetooth-off" size={16} color="#FFA500" />
-          <Text style={styles.warningText}>Demo Mode</Text>
+          <Text style={styles.warningText}>Pulse Ox Not Connected</Text>
         </View>
+      )}
+
+      {/* Pulse Ox Removed Warning */}
+      {isPulseOxConnected && showPulseOxWarning && (
+        <Animated.View
+          style={[
+            styles.pulseOxWarning,
+            { opacity: glowAnim }
+          ]}
+        >
+          <Icon name="alert-circle" size={20} color="#FF6B6B" />
+          <Text style={styles.pulseOxWarningText}>
+            Pulse Ox removed - Please place on finger
+          </Text>
+        </Animated.View>
       )}
       
       {/* Bottom Controls */}
@@ -1409,6 +1475,25 @@ const styles = StyleSheet.create({
   warningText: {
     fontSize: 12,
     color: '#FFA500',
+  },
+  pulseOxWarning: {
+    position: 'absolute',
+    top: 100,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 107, 107, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 107, 0.3)',
+    gap: 8,
+  },
+  pulseOxWarningText: {
+    fontSize: 14,
+    color: '#FF6B6B',
+    fontWeight: '600',
   },
   
   // Controls
