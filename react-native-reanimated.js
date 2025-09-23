@@ -65,7 +65,9 @@ if (isExpoGo || !module.exports) {
     ScrollView: Animated.ScrollView,
     FlatList: Animated.FlatList,
     createAnimatedComponent: (Component) => {
-      // Return the component as-is in Expo Go
+      // In Expo Go, just return the original component without animation
+      // This prevents the "function component" error
+      console.log('📱 Using non-animated component in Expo Go');
       return Component;
     },
   };
