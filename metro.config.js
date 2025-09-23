@@ -5,18 +5,12 @@ const path = require('path');
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-// Add resolver for react-native-reanimated shim in Expo Go
-config.resolver.resolveRequest = (context, moduleName, platform) => {
-  // Use shim for reanimated in Expo Go
-  if (moduleName === 'react-native-reanimated' && process.env.EXPO_PUBLIC_USE_MOCK_BLE !== 'false') {
-    return {
-      filePath: path.resolve(__dirname, 'src/utils/reanimatedShim.js'),
-      type: 'sourceFile',
-    };
-  }
-
-  // Default resolver
-  return context.resolveRequest(context, moduleName, platform);
+// Redirect react-native-reanimated to our proxy module
+config.resolver = {
+  ...config.resolver,
+  extraNodeModules: {
+    'react-native-reanimated': path.resolve(__dirname, 'react-native-reanimated.js'),
+  },
 };
 
 module.exports = config;
