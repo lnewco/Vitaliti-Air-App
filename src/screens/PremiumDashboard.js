@@ -18,16 +18,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Animated } from 'react-native';
-import {
-  useAnimatedScrollHandler,
-  useSharedValue,
-  useAnimatedStyle,
-  interpolate,
-  Extrapolate,
-  withTiming,
-  AnimatedAPI,
-  isExpoGo
-} from '../utils/animationHelpers';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   colors,
@@ -63,8 +53,8 @@ const PremiumDashboard = ({ navigation }) => {
   const [userName, setUserName] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isContentReady, setIsContentReady] = useState(false); // Add this to prevent jittery animation
-  const scrollY = useSharedValue(0);
-  const contentOpacity = useSharedValue(0); // Use shared value for opacity
+  const scrollY = React.useRef(new Animated.Value(0)).current;
+  const contentOpacity = React.useRef(new Animated.Value(0)).current;
   const { user } = useAuth();
 
   useEffect(() => {
@@ -123,7 +113,11 @@ const PremiumDashboard = ({ navigation }) => {
     // Add a small delay to ensure smooth transition
     const timer = setTimeout(() => {
       setIsContentReady(true);
-      contentOpacity.value = withTiming(1, { duration: 300 });
+      Animated.timing(contentOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
     }, 150); // 150ms delay for smooth initial render
 
     return () => clearTimeout(timer);
@@ -280,21 +274,18 @@ const PremiumDashboard = ({ navigation }) => {
     await WearablesDataService.setPreferredWearable(nextVendor);
   };
 
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollY.value = event.contentOffset.y;
-    },
-  });
+  const scrollHandler = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { useNativeDriver: true }
+  );
 
-  const headerAnimatedStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
-      scrollY.value,
-      [0, 100],
-      [1, 0],
-      Extrapolate.CLAMP
-    );
-    return { opacity };
-  });
+  const headerAnimatedStyle = {
+    opacity: scrollY.interpolate({
+      inputRange: [0, 100],
+      outputRange: [1, 0],
+      extrapolate: 'clamp',
+    }),
+  };
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -391,16 +382,16 @@ const PremiumDashboard = ({ navigation }) => {
   );
 
   // Add fade-in animation style
-  const contentAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: contentOpacity.value,
-  }));
+  const contentAnimatedStyle = {
+    opacity: contentOpacity,
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.background.primary} />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <AnimatedAPI.View style={[styles.safeArea, contentAnimatedStyle]}>
-          <AnimatedAPI.ScrollView
+        <Animated.View style={[styles.safeArea, contentAnimatedStyle]}>
+          <Animated.ScrollView
             onScroll={scrollHandler}
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
@@ -419,9 +410,9 @@ const PremiumDashboard = ({ navigation }) => {
             {renderNotesCard()}
             
             <View style={styles.bottomSpacing} />
-          </AnimatedAPI.ScrollView>
+          </Animated.ScrollView>
           {renderHeader()}
-        </AnimatedAPI.View>
+        </Animated.View>
       </SafeAreaView>
     </View>
   );
