@@ -745,23 +745,34 @@ export default function IHHTSessionSimple() {
     setSessionStarted(false);
     
     try {
+      console.log('📊 Session completed, starting cleanup...');
+
       // Give a moment for any pending operations to complete
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       // End session in manager
-      await EnhancedSessionManager.endSession();
-      
+      console.log('📊 Ending session in EnhancedSessionManager...');
+      const sessionInfo = await EnhancedSessionManager.endSession();
+      console.log('📊 Session ended:', sessionInfo);
+
       // End mock BLE session (only for mock environments)
       const isUsingMock = Constants.appOwnership === 'expo' || process.env.EXPO_PUBLIC_USE_MOCK_BLE === 'true';
       if (isUsingMock && endSession) {
+        console.log('📊 Ending mock BLE session...');
         endSession();
       }
-      
+
       // Deactivate keep awake
-      deactivateKeepAwake();
-      
+      try {
+        await deactivateKeepAwake();
+        console.log('📊 Keep awake deactivated');
+      } catch (keepAwakeError) {
+        console.warn('⚠️ Failed to deactivate keep awake:', keepAwakeError);
+      }
+
       // Navigate directly to post-session survey using reset to clear the stack
       // This prevents the flash of the setup screen
+      console.log('📊 Navigating to post-session survey...');
       navigation.reset({
         index: 1,
         routes: [
@@ -789,37 +800,97 @@ export default function IHHTSessionSimple() {
   };
   
   const handleStop = () => {
+    // Ensure we have navigation before showing alert
+    if (!navigation) {
+      console.error('❌ Navigation object is not available');
+      return;
+    }
+
     Alert.alert(
       'End Session?',
       'Are you sure you want to end this session?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'End Session', 
+        {
+          text: 'End Session',
           style: 'destructive',
           onPress: async () => {
-            // Stop data collection first
-            if (updateInterval.current) {
-              clearInterval(updateInterval.current);
-              updateInterval.current = null;
+            try {
+              console.log('📊 User confirmed ending session');
+
+              // Stop data collection first
+              if (updateInterval.current) {
+                clearInterval(updateInterval.current);
+                updateInterval.current = null;
+              }
+
+              // Mark session as ended
+              setSessionStarted(false);
+
+              // End the session with proper error handling
+              console.log('📊 Calling EnhancedSessionManager.endSession()...');
+              const sessionInfo = await EnhancedSessionManager.endSession();
+              console.log('📊 Session ended successfully:', sessionInfo);
+
+              // End mock BLE session (only for mock environments)
+              const isUsingMock = Constants.appOwnership === 'expo' || process.env.EXPO_PUBLIC_USE_MOCK_BLE === 'true';
+              if (isUsingMock && endSession) {
+                console.log('📊 Ending mock BLE session...');
+                try {
+                  endSession();
+                } catch (bleError) {
+                  console.warn('⚠️ Failed to end BLE session:', bleError);
+                }
+              }
+
+              // Deactivate keep awake
+              try {
+                await deactivateKeepAwake();
+                console.log('📊 Keep awake deactivated');
+              } catch (keepAwakeError) {
+                console.warn('⚠️ Failed to deactivate keep awake:', keepAwakeError);
+              }
+
+              // Use setTimeout to ensure cleanup is complete before navigation
+              setTimeout(() => {
+                try {
+                  console.log('📊 Navigating back to MainTabs');
+                  // Check navigation is still valid
+                  if (navigation && navigation.navigate) {
+                    navigation.navigate('MainTabs');
+                  } else {
+                    console.error('❌ Navigation object is invalid');
+                  }
+                } catch (navError) {
+                  console.error('❌ Navigation error:', navError);
+                }
+              }, 100);
+
+            } catch (error) {
+              console.error('❌ Error ending session:', error);
+              console.error('Error stack:', error.stack);
+
+              // Show error alert but still try to navigate away
+              Alert.alert(
+                'Error Ending Session',
+                'There was an error ending the session. The app will return to the main screen.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      try {
+                        // Still navigate away even if there was an error
+                        if (navigation && navigation.navigate) {
+                          navigation.navigate('MainTabs');
+                        }
+                      } catch (navError) {
+                        console.error('❌ Error navigating after error:', navError);
+                      }
+                    }
+                  }
+                ]
+              );
             }
-            
-            // Mark session as ended
-            setSessionStarted(false);
-            
-            // End the session
-            await EnhancedSessionManager.endSession();
-            
-            // End mock BLE session (only for mock environments)
-            const isUsingMock = Constants.appOwnership === 'expo' || process.env.EXPO_PUBLIC_USE_MOCK_BLE === 'true';
-            if (isUsingMock && endSession) {
-              endSession();
-            }
-            
-            deactivateKeepAwake();
-            
-            // Use replace instead of goBack to avoid navigation errors
-            navigation.replace('MainTabs');
           }
         }
       ]
