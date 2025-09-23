@@ -455,8 +455,8 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
               </TouchableOpacity>
           </AnimatedAPI.View>
 
-          {/* Bottom padding for safe scrolling */}
-          <View style={{ height: 40 }} />
+          {/* Bottom padding for safe scrolling - increased to ensure button is accessible */}
+          <View style={{ height: 120 }} />
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20, // EXACT same as Session Setup
     paddingTop: 0,
-    paddingBottom: 20, // Normal padding since button is now in scroll content
+    paddingBottom: 100, // Increased padding to ensure Complete Survey button is accessible
   },
   header: {
     marginBottom: 12, // EXACT same as Session Setup

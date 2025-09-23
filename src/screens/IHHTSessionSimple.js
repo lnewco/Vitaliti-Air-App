@@ -14,6 +14,7 @@ import {
   Dimensions,
   Vibration,
   AppState,
+  Modal,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -158,6 +159,10 @@ export default function IHHTSessionSimple() {
   const [transitionToLevel, setTransitionToLevel] = useState(0);
   const [hasShownFeedbackForCycle, setHasShownFeedbackForCycle] = useState({});
   const [lastKnownCycle, setLastKnownCycle] = useState(0);
+
+  // Session completion modal state
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [sessionCompletedData, setSessionCompletedData] = useState(null);
   
   // Adaptive instruction state
   const [adaptiveInstruction, setAdaptiveInstruction] = useState(null);
@@ -776,26 +781,34 @@ export default function IHHTSessionSimple() {
         console.warn('⚠️ Failed to deactivate keep awake:', keepAwakeError);
       }
 
-      // Navigate directly to post-session survey using reset to clear the stack
-      // This prevents the flash of the setup screen
-      console.log('📊 Navigating to post-session survey...');
-      navigation.reset({
-        index: 1,
-        routes: [
-          { name: 'MainTabs' },
-          { 
-            name: 'PostSessionSurvey', 
-            params: {
-              sessionId,
-              sessionType: 'IHHT_TRAINING'
-            }
-          }
-        ],
-      });
+      // Store session data and show completion modal
+      setSessionCompletedData(sessionInfo);
+      setShowCompletionModal(true);
+      console.log('📊 Showing session completion modal');
     } catch (error) {
     }
   };
-  
+
+  // Handle completion modal button press
+  const handleCompletionModalContinue = () => {
+    setShowCompletionModal(false);
+
+    // Navigate to post-session survey
+    navigation.reset({
+      index: 1,
+      routes: [
+        { name: 'MainTabs' },
+        {
+          name: 'PostSessionSurvey',
+          params: {
+            sessionId,
+            sessionType: 'IHHT_TRAINING'
+          }
+        }
+      ],
+    });
+  };
+
   // Control handlers
   const handlePauseResume = () => {
     if (sessionInfo?.isPaused) {
@@ -1130,6 +1143,49 @@ export default function IHHTSessionSimple() {
         currentSpo2={metrics.spo2}
         currentHR={metrics.heartRate}
       />
+
+      {/* Session Completion Modal */}
+      <Modal
+        visible={showCompletionModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.completionModal}>
+            <Icon name="check-circle" size={60} color="#10B981" style={styles.completionIcon} />
+
+            <Text style={styles.completionTitle}>Session Complete!</Text>
+
+            <Text style={styles.completionMessage}>
+              Great work! You've completed your IHHT training session.
+            </Text>
+
+            {sessionCompletedData && (
+              <View style={styles.sessionStats}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>Duration</Text>
+                  <Text style={styles.statValue}>
+                    {formatTime(Math.floor((sessionCompletedData.endTime - sessionCompletedData.startTime) / 1000))}
+                  </Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>Cycles Completed</Text>
+                  <Text style={styles.statValue}>{sessionCompletedData.completedCycles || 0}</Text>
+                </View>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.completionButton}
+              onPress={handleCompletionModalContinue}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.completionButtonText}>Continue to Survey</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1440,6 +1496,72 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFF',
+  },
+
+  // Completion modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  completionModal: {
+    backgroundColor: '#1A1D23',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    width: '85%',
+    maxWidth: 360,
+  },
+  completionIcon: {
+    marginBottom: 20,
+  },
+  completionTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFF',
+    marginBottom: 10,
+  },
+  completionMessage: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.7)',
+    textAlign: 'center',
+    marginBottom: 25,
+    lineHeight: 22,
+  },
+  sessionStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginBottom: 30,
+    paddingHorizontal: 20,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#60A5FA',
+  },
+  completionButton: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 10,
+    width: '100%',
+  },
+  completionButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
+    textAlign: 'center',
   },
 });
 
