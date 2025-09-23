@@ -104,6 +104,19 @@ export const runOnJS = (fn) => {
   return fn;
 };
 
+// Add animated props support for SVG and other components
+export const useAnimatedProps = (propsFactory) => {
+  if (ReanimatedModule && !isExpoGo) {
+    return ReanimatedModule.useAnimatedProps(propsFactory);
+  }
+  // Fallback: try to return static props or empty object
+  try {
+    return typeof propsFactory === 'function' ? propsFactory() : {};
+  } catch {
+    return {};
+  }
+};
+
 export const Easing = ReanimatedModule && !isExpoGo ? ReanimatedModule.Easing : RNEasing;
 
 export const Extrapolate = ReanimatedModule && !isExpoGo ? ReanimatedModule.Extrapolate : {
