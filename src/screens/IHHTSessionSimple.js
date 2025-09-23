@@ -146,8 +146,8 @@ export default function IHHTSessionSimple() {
   
   // UI state
   const [metrics, setMetrics] = useState({
-    spo2: 99,
-    heartRate: 72,
+    spo2: null,  // Start with null to show no data
+    heartRate: null,  // Start with null to show no data
     dialLevel: protocolConfig.defaultAltitudeLevel || 6,
   });
   
@@ -495,55 +495,61 @@ export default function IHHTSessionSimple() {
     }
     
     // Use real data when available
-    if (isPulseOxConnected && pulseOximeterData) {
-      const newMetrics = {
-        spo2: pulseOximeterData.spo2 || metrics.spo2,
-        heartRate: pulseOximeterData.heartRate || metrics.heartRate,
-        dialLevel: sessionInfo?.currentAltitudeLevel || metrics.dialLevel
-      };
-      
-      setMetrics(newMetrics);
-      
-      // CRITICAL: Only send to manager if session is truly active
-      if (pulseOximeterData.spo2 && pulseOximeterData.heartRate && EnhancedSessionManager.isActive) {
-        console.log('Pulse oximeter data:', {
-          spo2: pulseOximeterData.spo2,
-          heartRate: pulseOximeterData.heartRate
-        });
-        EnhancedSessionManager.addReading({
+    console.log('🔍 Debug - Pulse Ox Status:', {
+      isPulseOxConnected,
+      pulseOximeterData,
+      hasData: !!pulseOximeterData,
+      spo2: pulseOximeterData?.spo2,
+      heartRate: pulseOximeterData?.heartRate
+    });
+
+    if (isPulseOxConnected) {
+      // Pulse ox is connected - use real data or show null
+      if (pulseOximeterData && pulseOximeterData.spo2 && pulseOximeterData.heartRate) {
+        const newMetrics = {
           spo2: pulseOximeterData.spo2,
           heartRate: pulseOximeterData.heartRate,
-          timestamp: Date.now()
-        });
-      } else if (!EnhancedSessionManager.isActive) {
+          dialLevel: sessionInfo?.currentAltitudeLevel || metrics.dialLevel
+        };
+
+        console.log('📊 Updating metrics with real data:', newMetrics);
+        setMetrics(newMetrics);
+
+        // CRITICAL: Only send to manager if session is truly active
+        if (EnhancedSessionManager.isActive) {
+          console.log('Pulse oximeter data:', {
+            spo2: pulseOximeterData.spo2,
+            heartRate: pulseOximeterData.heartRate
+          });
+          EnhancedSessionManager.addReading({
+            spo2: pulseOximeterData.spo2,
+            heartRate: pulseOximeterData.heartRate,
+            timestamp: Date.now()
+          });
+        }
+      } else {
+        // Pulse ox connected but no data yet - show null values
+        console.log('⏳ Pulse ox connected but waiting for data...');
+        setMetrics(prev => ({
+          ...prev,
+          spo2: null,
+          heartRate: null,
+          dialLevel: sessionInfo?.currentAltitudeLevel || prev.dialLevel
+        }));
       }
     } else {
-      // Demo mode - simulate metrics
-      simulateMetrics();
+      // No pulse ox connected - show null values (no simulation for real users)
+      console.log('❌ No pulse ox connected - showing no data');
+      setMetrics(prev => ({
+        ...prev,
+        spo2: null,
+        heartRate: null,
+        dialLevel: sessionInfo?.currentAltitudeLevel || prev.dialLevel
+      }));
     }
   }, [pulseOximeterData, isPulseOxConnected, sessionStarted, sessionInfo]);
   
-  // Simulate metrics for demo mode
-  const simulateMetrics = () => {
-    setMetrics(prev => {
-      const newMetrics = { ...prev };
-      
-      if (sessionInfo?.currentPhase === 'ALTITUDE') {
-        // During altitude phase, SpO2 gradually decreases
-        newMetrics.spo2 = Math.max(85, prev.spo2 - Math.random() * 0.5);
-        newMetrics.heartRate = Math.min(100, prev.heartRate + Math.random() * 0.5);
-      } else if (sessionInfo?.currentPhase === 'RECOVERY') {
-        // During recovery phase, SpO2 increases
-        newMetrics.spo2 = Math.min(99, prev.spo2 + Math.random() * 0.5);
-        newMetrics.heartRate = Math.max(60, prev.heartRate - Math.random() * 0.5);
-      }
-      
-      newMetrics.heartRate = Math.round(newMetrics.heartRate);
-      newMetrics.dialLevel = sessionInfo?.currentAltitudeLevel || prev.dialLevel;
-      
-      return newMetrics;
-    });
-  };
+  // Removed simulateMetrics - real users should see null/dashes when no data is available
   
   // Check for intra-session survey triggers
   useEffect(() => {

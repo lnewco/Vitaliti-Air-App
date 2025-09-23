@@ -43,6 +43,10 @@ export default function AppleMetricsDisplay({
   
   // Pulse animation for SpO2
   useEffect(() => {
+    // Skip animation if no heart rate data
+    if (!heartRate || heartRate === null) {
+      return;
+    }
     const pulseDuration = 60000 / heartRate; // Convert BPM to milliseconds per beat
     
     const pulseAnimation = Animated.loop(
@@ -88,6 +92,7 @@ export default function AppleMetricsDisplay({
 
   // Determine SpO2 color
   const getSpo2Color = () => {
+    if (spo2 === null || spo2 === undefined) return '#6B7280'; // Gray for no data
     if (spo2 >= 95) return '#10B981'; // Green
     if (spo2 >= 90) return '#3B82F6'; // Blue
     if (spo2 >= 85) return '#F59E0B'; // Orange
@@ -96,6 +101,7 @@ export default function AppleMetricsDisplay({
 
   // Determine HR color
   const getHRColor = () => {
+    if (heartRate === null || heartRate === undefined) return '#6B7280'; // Gray for no data
     if (heartRate < 50 || heartRate > 150) return '#EF4444'; // Red
     if (heartRate < 60 || heartRate > 120) return '#F59E0B'; // Orange
     return '#EC4899'; // Pink
@@ -114,7 +120,7 @@ export default function AppleMetricsDisplay({
           ]}
         >
           <Text style={[styles.spo2Value, { color: getSpo2Color() }]}>
-            {spo2}
+            {spo2 !== null && spo2 !== undefined ? spo2 : '--'}
           </Text>
           <Text style={styles.spo2Label}>SpO₂</Text>
           <View style={[styles.spo2Indicator, { backgroundColor: getSpo2Color() }]} />
@@ -124,7 +130,7 @@ export default function AppleMetricsDisplay({
         <View style={styles.heartRateContainer}>
           <View style={styles.hrValueContainer}>
             <Text style={[styles.hrValue, { color: getHRColor() }]}>
-              {heartRate}
+              {heartRate !== null && heartRate !== undefined ? heartRate : '--'}
             </Text>
             <Text style={styles.hrUnit}>BPM</Text>
           </View>
