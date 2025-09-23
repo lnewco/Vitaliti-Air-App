@@ -11,7 +11,9 @@ module.exports = function(api) {
         allowUndefined: true,
         verbose: false,
       }],
-      'react-native-reanimated/plugin',
+      // Temporarily disabled reanimated plugin for Expo Go compatibility
+      // Uncomment for development builds:
+      // 'react-native-reanimated/plugin',
     ],
   };
 };
