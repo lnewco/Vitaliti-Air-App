@@ -87,6 +87,23 @@ export const interpolate = (value, inputRange, outputRange, extrapolate) => {
   return outputRange[0];
 };
 
+// Add scroll handler support
+export const useAnimatedScrollHandler = (handlers) => {
+  if (ReanimatedModule && !isExpoGo) {
+    return ReanimatedModule.useAnimatedScrollHandler(handlers);
+  }
+  // Fallback: return a no-op handler for Expo Go
+  return () => {};
+};
+
+export const runOnJS = (fn) => {
+  if (ReanimatedModule && !isExpoGo) {
+    return ReanimatedModule.runOnJS(fn);
+  }
+  // Fallback: return the function directly
+  return fn;
+};
+
 export const Easing = ReanimatedModule && !isExpoGo ? ReanimatedModule.Easing : RNEasing;
 
 export const Extrapolate = ReanimatedModule && !isExpoGo ? ReanimatedModule.Extrapolate : {
