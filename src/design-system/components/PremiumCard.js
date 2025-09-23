@@ -1,18 +1,27 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  interpolate,
-} from 'react-native-reanimated';
+import Constants from 'expo-constants';
 // import HapticFeedback from 'react-native-haptic-feedback'; // Disabled for Expo Go
 import colors from '../colors';
 import typography from '../typography';
 import spacing from '../spacing';
 
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+// Detect if we're in Expo Go
+const isExpoGo = Constants.appOwnership === 'expo';
+
+// Only import reanimated in production builds
+let ReanimatedModule = null;
+let AnimatedTouchable = TouchableOpacity;
+
+if (!isExpoGo) {
+  try {
+    ReanimatedModule = require('react-native-reanimated');
+    AnimatedTouchable = ReanimatedModule.default.createAnimatedComponent(TouchableOpacity);
+  } catch (e) {
+    console.log('📱 Reanimated not available, using fallbacks');
+  }
+}
 
 const PremiumCard = ({
   children,
@@ -24,31 +33,77 @@ const PremiumCard = ({
   disabled = false,
   padding = spacing.cardPadding,
 }) => {
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
+  // Use React Native's built-in Animated API for Expo Go
+  const scaleValue = React.useRef(new Animated.Value(1)).current;
+  const opacityValue = React.useRef(new Animated.Value(1)).current;
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
+  // Reanimated values for production builds
+  let scale, opacity, animatedStyle;
+
+  if (!isExpoGo && ReanimatedModule) {
+    const { useSharedValue, useAnimatedStyle, withSpring } = ReanimatedModule;
+    scale = useSharedValue(1);
+    opacity = useSharedValue(1);
+
+    animatedStyle = useAnimatedStyle(() => ({
+      transform: [{ scale: scale.value }],
+      opacity: opacity.value,
+    }));
+  } else {
+    // Fallback style for Expo Go
+    animatedStyle = {
+      transform: [{ scale: scaleValue }],
+      opacity: opacityValue,
+    };
+  }
 
   const handlePressIn = () => {
     if (!disabled) {
-      scale.value = withSpring(0.98, {
-        damping: 15,
-        stiffness: 400,
-      });
-      opacity.value = withSpring(0.9);
+      if (!isExpoGo && ReanimatedModule) {
+        const { withSpring } = ReanimatedModule;
+        scale.value = withSpring(0.98, {
+          damping: 15,
+          stiffness: 400,
+        });
+        opacity.value = withSpring(0.9);
+      } else {
+        // Use React Native's Animated API for Expo Go
+        Animated.parallel([
+          Animated.spring(scaleValue, {
+            toValue: 0.98,
+            useNativeDriver: true,
+          }),
+          Animated.spring(opacityValue, {
+            toValue: 0.9,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
       // HapticFeedback.trigger(hapticType); // Disabled for Expo Go
     }
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, {
-      damping: 15,
-      stiffness: 400,
-    });
-    opacity.value = withSpring(1);
+    if (!isExpoGo && ReanimatedModule) {
+      const { withSpring } = ReanimatedModule;
+      scale.value = withSpring(1, {
+        damping: 15,
+        stiffness: 400,
+      });
+      opacity.value = withSpring(1);
+    } else {
+      // Use React Native's Animated API for Expo Go
+      Animated.parallel([
+        Animated.spring(scaleValue, {
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+        Animated.spring(opacityValue, {
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
   };
 
   const cardContent = (
@@ -85,17 +140,46 @@ const PremiumCard = ({
   );
 
   if (onPress && !disabled) {
-    return (
-      <AnimatedTouchable
-        activeOpacity={1}
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        style={animatedStyle}
-      >
-        {cardBase}
-      </AnimatedTouchable>
-    );
+    if (isExpoGo) {
+      // For Expo Go, use regular Animated.View wrapper
+      return (
+        <Animated.View style={animatedStyle}>
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={onPress}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+          >
+            {cardBase}
+          </TouchableOpacity>
+        </Animated.View>
+      );
+    } else if (AnimatedTouchable !== TouchableOpacity) {
+      // For production builds with reanimated
+      return (
+        <AnimatedTouchable
+          activeOpacity={1}
+          onPress={onPress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          style={animatedStyle}
+        >
+          {cardBase}
+        </AnimatedTouchable>
+      );
+    } else {
+      // Fallback if reanimated fails to load in production
+      return (
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={onPress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+        >
+          {cardBase}
+        </TouchableOpacity>
+      );
+    }
   }
 
   return cardBase;

@@ -14,7 +14,13 @@ import {
   StatusBar,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { Animated } from 'react-native';
+import {
+  FadeInDown,
+  FadeIn,
+  AnimatedAPI,
+  isExpoGo
+} from '../../utils/animationHelpers';
 import { useAuth } from '../AuthContext';
 import { colors, typography, spacing } from '../../design-system';
 import VitalitiLogo from '../../components/common/VitalitiLogo';
@@ -199,29 +205,26 @@ const PremiumOTPScreen = ({ route, navigation }) => {
             keyboardShouldPersistTaps="handled"
           >
             {/* Logo */}
-            <Animated.View 
-              entering={FadeInDown.duration(600)}
-              style={styles.logoContainer}
+            <AnimatedAPI.View
+              style={[styles.logoContainer, isExpoGo ? {} : { opacity: 1 }]}
             >
               <VitalitiLogo size="large" />
-            </Animated.View>
+            </AnimatedAPI.View>
 
             {/* Header */}
-            <Animated.View 
-              entering={FadeInDown.duration(600).delay(100)}
-              style={styles.header}
+            <AnimatedAPI.View
+              style={[styles.header, isExpoGo ? {} : { opacity: 1 }]}
             >
               <Text style={styles.title}>Enter Verification Code</Text>
               <Text style={styles.subtitle}>
                 We sent a 6-digit code to{'\n'}
                 <Text style={styles.phoneNumber}>{formatPhoneForDisplay()}</Text>
               </Text>
-            </Animated.View>
+            </AnimatedAPI.View>
 
             {/* OTP Input */}
-            <Animated.View 
-              entering={FadeInDown.duration(600).delay(200)}
-              style={styles.otpContainer}
+            <AnimatedAPI.View
+              style={[styles.otpContainer, isExpoGo ? {} : { opacity: 1 }]}
             >
               <Text style={styles.inputLabel}>Verification Code</Text>
               <View style={styles.otpInputsContainer}>
@@ -254,11 +257,11 @@ const PremiumOTPScreen = ({ route, navigation }) => {
                   </TouchableOpacity>
                 ))}
               </View>
-            </Animated.View>
+            </AnimatedAPI.View>
 
             {/* Verify Button */}
-            <Animated.View 
-              entering={FadeInDown.duration(600).delay(300)}
+            <AnimatedAPI.View
+              style={isExpoGo ? {} : { opacity: 1 }}
             >
               <TouchableOpacity
                 onPress={() => {
@@ -290,12 +293,11 @@ const PremiumOTPScreen = ({ route, navigation }) => {
                   )}
                 </LinearGradient>
               </TouchableOpacity>
-            </Animated.View>
+            </AnimatedAPI.View>
 
             {/* Resend Section */}
-            <Animated.View 
-              entering={FadeIn.duration(600).delay(400)}
-              style={styles.resendSection}
+            <AnimatedAPI.View
+              style={[styles.resendSection, isExpoGo ? {} : { opacity: 1 }]}
             >
               <Text style={styles.resendText}>Didn't receive the code?</Text>
               {canResend ? (
@@ -307,17 +309,16 @@ const PremiumOTPScreen = ({ route, navigation }) => {
                   Resend in {timer}s
                 </Text>
               )}
-            </Animated.View>
+            </AnimatedAPI.View>
 
             {/* Info Text */}
-            <Animated.View 
-              entering={FadeIn.duration(600).delay(500)}
-              style={styles.infoSection}
+            <AnimatedAPI.View
+              style={[styles.infoSection, isExpoGo ? {} : { opacity: 1 }]}
             >
               <Text style={styles.infoText}>
                 Make sure to check your messages and enter the 6-digit code
               </Text>
-            </Animated.View>
+            </AnimatedAPI.View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>

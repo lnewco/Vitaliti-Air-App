@@ -10,15 +10,18 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { 
-  FadeInDown, 
+import { Animated } from 'react-native';
+import {
+  FadeInDown,
   FadeInUp,
   useAnimatedStyle,
   withSpring,
   useSharedValue,
   withTiming,
-  Easing
-} from 'react-native-reanimated';
+  Easing,
+  AnimatedAPI,
+  isExpoGo
+} from '../../utils/animationHelpers';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import SafeIcon from '../../components/base/SafeIcon';
@@ -93,7 +96,7 @@ const WelcomeScreen = ({ navigation }) => {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
           {/* Logo Section */}
-          <Animated.View 
+          <AnimatedAPI.View 
             entering={FadeInDown.duration(800).delay(200)}
             style={styles.logoSection}
           >
@@ -112,10 +115,10 @@ const WelcomeScreen = ({ navigation }) => {
             
             <Text style={styles.logoText}>VITALITI</Text>
             <Text style={styles.logoSubtext}>AIR</Text>
-          </Animated.View>
+          </AnimatedAPI.View>
 
           {/* Welcome Text */}
-          <Animated.View 
+          <AnimatedAPI.View 
             entering={FadeInDown.duration(800).delay(400)}
             style={styles.welcomeSection}
           >
@@ -125,10 +128,10 @@ const WelcomeScreen = ({ navigation }) => {
             <Text style={styles.subtitle}>
               Advanced IHHT training with real-time biometric monitoring
             </Text>
-          </Animated.View>
+          </AnimatedAPI.View>
 
           {/* Feature Pills */}
-          <Animated.View 
+          <AnimatedAPI.View 
             entering={FadeInDown.duration(800).delay(600)}
             style={styles.featuresContainer}
           >
@@ -146,10 +149,10 @@ const WelcomeScreen = ({ navigation }) => {
                 <Text style={styles.featureText}>{feature.text}</Text>
               </View>
             ))}
-          </Animated.View>
+          </AnimatedAPI.View>
 
           {/* Buttons Section */}
-          <Animated.View 
+          <AnimatedAPI.View 
             entering={FadeInUp.duration(800).delay(800)}
             style={styles.buttonSection}
           >
@@ -158,7 +161,7 @@ const WelcomeScreen = ({ navigation }) => {
               onPress={handleGetStarted}
               activeOpacity={0.8}
             >
-              <Animated.View style={animatedButtonStyle}>
+              <AnimatedAPI.View style={animatedButtonStyle}>
                 <LinearGradient
                   colors={[colors.brand.accent, colors.brand.secondary]}
                   style={styles.primaryButton}
@@ -173,7 +176,7 @@ const WelcomeScreen = ({ navigation }) => {
                     style={{ marginLeft: 8 }}
                   />
                 </LinearGradient>
-              </Animated.View>
+              </AnimatedAPI.View>
             </TouchableOpacity>
 
             {/* Secondary Sign In */}
@@ -188,10 +191,10 @@ const WelcomeScreen = ({ navigation }) => {
                 </Text>
               </BlurView>
             </TouchableOpacity>
-          </Animated.View>
+          </AnimatedAPI.View>
 
           {/* Bottom Accent Line */}
-          <Animated.View 
+          <AnimatedAPI.View 
             entering={FadeInUp.duration(800).delay(1000)}
             style={styles.bottomAccent}
           >
@@ -207,7 +210,7 @@ const WelcomeScreen = ({ navigation }) => {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             />
-          </Animated.View>
+          </AnimatedAPI.View>
         </View>
       </SafeAreaView>
     </View>

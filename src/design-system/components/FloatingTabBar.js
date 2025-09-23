@@ -1,14 +1,18 @@
 import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
+import { Animated } from 'react-native';
+import {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withTiming,
   interpolate,
   Easing,
-} from 'react-native-reanimated';
+  AnimatedAPI,
+  isExpoGo,
+  createAnimatedComponent
+} from '../../utils/animationHelpers';
 // import HapticFeedback from 'react-native-haptic-feedback'; // Disabled for Expo Go
 // import { BlurView } from '@react-native-community/blur'; // Disabled for Expo Go
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -40,7 +44,7 @@ const TabIcon = ({ name, focused, label }) => {
   }));
 
   return (
-    <Animated.View style={[styles.tabIcon, animatedStyle]}>
+    <AnimatedAPI.View style={[styles.tabIcon, animatedStyle]}>
       <Ionicons
         name={name}
         size={24}
@@ -52,7 +56,7 @@ const TabIcon = ({ name, focused, label }) => {
       <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>
         {label}
       </Text>
-    </Animated.View>
+    </AnimatedAPI.View>
   );
 };
 
@@ -88,7 +92,7 @@ const FloatingTabBar = ({ state, descriptors, navigation }) => {
         
         <View style={styles.tabBar}>
           {/* Active tab background indicator */}
-          <Animated.View style={[styles.activeTabBackground, indicatorStyle]} />
+          <AnimatedAPI.View style={[styles.activeTabBackground, indicatorStyle]} />
           
           {state.routes.map((route, index) => {
             const { options } = descriptors[route.key];

@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, Text } from 'react-native';
-import Animated, { 
-  useAnimatedStyle, 
+import { View, StyleSheet, Text, Animated } from 'react-native';
+import {
+  useAnimatedStyle,
   withSpring,
-} from 'react-native-reanimated';
+  AnimatedAPI,
+  isExpoGo
+} from '../../utils/animationHelpers';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing } from '../../design-system';
 
@@ -28,14 +30,14 @@ const OnboardingProgressIndicator = ({ currentStep = 1, totalSteps = 5 }) => {
       {/* Background track */}
       <View style={styles.track}>
         {/* Progress fill */}
-        <Animated.View style={[styles.progressContainer, animatedStyle]}>
+        <AnimatedAPI.View style={[styles.progressContainer, animatedStyle]}>
           <LinearGradient
             colors={[colors.metrics.recovery, colors.metrics.spo2]}
             style={styles.progress}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
           />
-        </Animated.View>
+        </AnimatedAPI.View>
       </View>
 
       {/* Step dots */}

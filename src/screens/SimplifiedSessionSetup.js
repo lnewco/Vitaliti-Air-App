@@ -17,12 +17,15 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
+import { Animated } from 'react-native';
+import {
   FadeIn,
   FadeInDown,
   useAnimatedStyle,
   useSharedValue,
-} from 'react-native-reanimated';
+  AnimatedAPI,
+  isExpoGo
+} from '../utils/animationHelpers';
 import InlineDeviceScanner from '../components/InlineDeviceScanner';
 import {
   colors,
@@ -271,15 +274,14 @@ const SimplifiedSessionSetup = ({ navigation }) => {
           bounces={true}
         >
           {/* Header */}
-          <Animated.View 
-            entering={FadeInDown.duration(400).springify()}
-            style={styles.header}
+          <AnimatedAPI.View
+            style={[styles.header, isExpoGo ? {} : { opacity: 1 }]}
           >
             <Text style={styles.title}>Adaptive Training</Text>
             <Text style={styles.subtitle}>
               Configure your personalized session
             </Text>
-          </Animated.View>
+          </AnimatedAPI.View>
 
           {/* Protocol Card - Apple Style */}
           <View>
@@ -410,7 +412,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
                       </Text>
                     </View>
                     <View style={styles.statusIndicator}>
-                      <Animated.View style={[
+                      <AnimatedAPI.View style={[
                         styles.statusDot,
                         { backgroundColor: isPulseOxConnected ? colors.metrics.breath : colors.text.quaternary }
                       ]} />
@@ -467,9 +469,8 @@ const SimplifiedSessionSetup = ({ navigation }) => {
         </ScrollView>
 
         {/* Floating Action Button with Gradient Fade */}
-        <Animated.View 
-          entering={FadeInDown.duration(400).delay(300).springify()}
-          style={styles.floatingAction}
+        <AnimatedAPI.View
+          style={[styles.floatingAction, isExpoGo ? {} : { opacity: 1 }]}
         >
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']}
@@ -505,7 +506,7 @@ const SimplifiedSessionSetup = ({ navigation }) => {
               )}
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </AnimatedAPI.View>
       </SafeAreaView>
       
       {/* Pre-Session Survey Modal */}

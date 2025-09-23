@@ -1,19 +1,23 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Circle, G, Defs, LinearGradient, Stop } from 'react-native-svg';
-import Animated, {
+import { Animated } from 'react-native';
+import {
   useAnimatedProps,
   useSharedValue,
   withTiming,
   withSpring,
   interpolate,
   Easing,
-} from 'react-native-reanimated';
+  AnimatedAPI,
+  isExpoGo,
+  createAnimatedComponent
+} from '../../utils/animationHelpers';
 import colors from '../colors';
 import typography from '../typography';
 import spacing from '../spacing';
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedCircle = createAnimatedComponent(Circle);
 const { width: screenWidth } = Dimensions.get('window');
 
 const MetricRing = ({
@@ -64,7 +68,7 @@ const MetricRing = ({
   const gradientId = `gradient_${label}_${Date.now()}`;
 
   return (
-    <Animated.View style={[styles.container, animatedStyle, { width: size, height: size }]}>
+    <AnimatedAPI.View style={[styles.container, animatedStyle, { width: size, height: size }]}>
       <Svg width={size} height={size} style={StyleSheet.absoluteFillObject}>
         <Defs>
           {gradientColors && (
@@ -109,7 +113,7 @@ const MetricRing = ({
         )}
         {label && <Text style={styles.label}>{label}</Text>}
       </View>
-    </Animated.View>
+    </AnimatedAPI.View>
   );
 };
 

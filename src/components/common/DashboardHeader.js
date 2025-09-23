@@ -10,7 +10,8 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { Animated } from 'react-native';
+import { AnimatedAPI, isExpoGo } from '../../utils/animationHelpers';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, spacing } from '../../design-system';
 import VitalitiLogo from '../common/VitalitiLogo';
@@ -41,7 +42,7 @@ const DashboardHeader = ({
   userName,
 }) => {
   return (
-    <Animated.View style={[styles.header, animatedStyle]}>
+    <AnimatedAPI.View style={[styles.header, animatedStyle]}>
       <LinearGradient
         colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0)']}
         style={styles.headerGradient}
@@ -72,7 +73,7 @@ const DashboardHeader = ({
         </Text>
         <Text style={styles.dateText}>{dateText}</Text>
       </View>
-    </Animated.View>
+    </AnimatedAPI.View>
   );
 };
 

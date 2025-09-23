@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import { Animated } from 'react-native';
+import { FadeIn, FadeInDown, FadeOut, AnimatedAPI, isExpoGo } from '../../utils/animationHelpers';
 import { colors, typography, spacing, MetricRing, PremiumButton } from '../../design-system';
 
 /**
@@ -98,9 +99,8 @@ const WearablesMetricsCard = ({
   if (isLoading && !metrics) {
     // First load - show skeleton immediately
     return (
-      <Animated.View 
-        entering={FadeIn.duration(200)}
-        style={[styles.container, styles.skeletonContainer, style]}
+      <AnimatedAPI.View
+        style={[styles.container, styles.skeletonContainer, style, isExpoGo ? {} : { opacity: 1 }]}
       >
         <View style={styles.skeletonHeader}>
           <View style={styles.skeletonTitle} />
@@ -112,11 +112,11 @@ const WearablesMetricsCard = ({
           <View style={styles.skeletonRing} />
         </View>
         {showLoading && (
-          <Animated.View entering={FadeIn.duration(200)} style={styles.loadingOverlay}>
+          <AnimatedAPI.View style={[styles.loadingOverlay, isExpoGo ? {} : { opacity: 1 }]}>
             <ActivityIndicator size="small" color={colors.brand.accent} />
-          </Animated.View>
+          </AnimatedAPI.View>
         )}
-      </Animated.View>
+      </AnimatedAPI.View>
     );
   }
 
@@ -149,9 +149,8 @@ const WearablesMetricsCard = ({
   };
 
   return (
-    <Animated.View 
-      entering={FadeIn.duration(600)}
-      style={[styles.container, style]}
+    <AnimatedAPI.View
+      style={[styles.container, style, isExpoGo ? {} : { opacity: 1 }]}
     >
       {/* Header with training recommendation badge */}
       <View style={styles.header}>
@@ -320,7 +319,7 @@ const WearablesMetricsCard = ({
           </Text>
         </View>
       </View>
-    </Animated.View>
+    </AnimatedAPI.View>
   );
 };
 

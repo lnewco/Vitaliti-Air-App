@@ -15,14 +15,17 @@ import {
   Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
+import { Animated } from 'react-native';
+import {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withSequence,
   FadeIn,
   FadeInDown,
-} from 'react-native-reanimated';
+  AnimatedAPI,
+  isExpoGo
+} from '../../utils/animationHelpers';
 import { useAuth } from '../AuthContext';
 import { colors, typography, spacing } from '../../design-system';
 
@@ -142,7 +145,7 @@ const LoginScreen = ({ navigation }) => {
         >
           <View style={styles.content}>
             {/* Logo/Header with animation */}
-            <Animated.View 
+            <AnimatedAPI.View 
               entering={FadeInDown.duration(800).springify()}
               style={styles.header}
             >
@@ -154,10 +157,10 @@ const LoginScreen = ({ navigation }) => {
                 />
                 <Text style={styles.logoSubtext}>Breathe, Transform.</Text>
               </View>
-            </Animated.View>
+            </AnimatedAPI.View>
 
             {/* Welcome Text with animation */}
-            <Animated.View 
+            <AnimatedAPI.View 
               entering={FadeInDown.duration(800).delay(200).springify()}
               style={styles.welcomeSection}
             >
@@ -165,10 +168,10 @@ const LoginScreen = ({ navigation }) => {
               <Text style={styles.welcomeSubtitle}>
                 Enter your phone number to access your health data
               </Text>
-            </Animated.View>
+            </AnimatedAPI.View>
 
             {/* Phone Input Section with animation */}
-            <Animated.View 
+            <AnimatedAPI.View 
               entering={FadeInDown.duration(800).delay(400).springify()}
               style={styles.formSection}
             >
@@ -205,10 +208,10 @@ const LoginScreen = ({ navigation }) => {
                   Please enter a valid phone number
                 </Animated.Text>
               )}
-            </Animated.View>
+            </AnimatedAPI.View>
 
             {/* Send OTP Button with animation */}
-            <Animated.View 
+            <AnimatedAPI.View 
               entering={FadeInDown.duration(800).delay(600).springify()}
               style={buttonAnimatedStyle}
             >
@@ -237,10 +240,10 @@ const LoginScreen = ({ navigation }) => {
                   )}
                 </LinearGradient>
               </TouchableOpacity>
-            </Animated.View>
+            </AnimatedAPI.View>
 
             {/* Terms and Privacy with animation */}
-            <Animated.View 
+            <AnimatedAPI.View 
               entering={FadeInDown.duration(800).delay(800).springify()}
               style={styles.termsSection}
             >
@@ -250,7 +253,7 @@ const LoginScreen = ({ navigation }) => {
                 {' '}and{' '}
                 <Text style={styles.termsLink}>Privacy Policy</Text>
               </Text>
-            </Animated.View>
+            </AnimatedAPI.View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

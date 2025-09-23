@@ -1,12 +1,14 @@
 import React from 'react';
-import { Text, StyleSheet, ActivityIndicator, TouchableOpacity, View } from 'react-native';
+import { Text, StyleSheet, ActivityIndicator, TouchableOpacity, View, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
+import {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withSequence,
-} from 'react-native-reanimated';
+  isExpoGo,
+  useReanimated,
+} from '../../utils/animationHelpers';
 // import HapticFeedback from 'react-native-haptic-feedback'; // Disabled for Expo Go
 import colors from '../colors';
 import typography from '../typography';
@@ -23,38 +25,75 @@ const PremiumButton = ({
   fullWidth = false,
   style,
 }) => {
+  // Use React Native's built-in Animated API for Expo Go
+  const scaleValue = React.useRef(new Animated.Value(1)).current;
+  const opacityValue = React.useRef(new Animated.Value(1)).current;
+
+  // Reanimated values for production builds
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
+  const animatedStyle = useReanimated()
+    ? useAnimatedStyle(() => ({
+        transform: [{ scale: scale.value }],
+        opacity: opacity.value,
+      }))
+    : {
+        transform: [{ scale: scaleValue }],
+        opacity: opacityValue,
+      };
 
   const handlePressIn = () => {
     if (!disabled && !loading) {
-      scale.value = withSpring(0.96, {
-        damping: 15,
-        stiffness: 400,
-      });
+      if (useReanimated()) {
+        scale.value = withSpring(0.96, {
+          damping: 15,
+          stiffness: 400,
+        });
+      } else {
+        Animated.spring(scaleValue, {
+          toValue: 0.96,
+          useNativeDriver: true,
+        }).start();
+      }
       // HapticFeedback.trigger('impactMedium'); // Disabled for Expo Go
     }
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, {
-      damping: 15,
-      stiffness: 400,
-    });
+    if (useReanimated()) {
+      scale.value = withSpring(1, {
+        damping: 15,
+        stiffness: 400,
+      });
+    } else {
+      Animated.spring(scaleValue, {
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+    }
   };
 
   const handlePress = () => {
     if (!disabled && !loading && onPress) {
       // Add a subtle bounce animation
-      scale.value = withSequence(
-        withSpring(0.95, { damping: 15, stiffness: 400 }),
-        withSpring(1, { damping: 10, stiffness: 300 })
-      );
+      if (useReanimated()) {
+        scale.value = withSequence(
+          withSpring(0.95, { damping: 15, stiffness: 400 }),
+          withSpring(1, { damping: 10, stiffness: 300 })
+        );
+      } else {
+        Animated.sequence([
+          Animated.spring(scaleValue, {
+            toValue: 0.95,
+            useNativeDriver: true,
+          }),
+          Animated.spring(scaleValue, {
+            toValue: 1,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
       onPress();
     }
   };

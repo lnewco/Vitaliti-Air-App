@@ -13,15 +13,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import Animated, { 
-  FadeInDown, 
+import { Animated } from 'react-native';
+import {
+  FadeInDown,
   FadeIn,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withTiming,
-  interpolate
-} from 'react-native-reanimated';
+  interpolate,
+  AnimatedAPI,
+  isExpoGo
+} from '../utils/animationHelpers';
 import { colors, spacing, typography } from '../design-system';
 import SurveyScaleInput from '../components/SurveyScaleInput';
 import StarRating from '../components/feedback/StarRating';
@@ -193,14 +196,14 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
           {/* Progress Bar - Part of sticky header */}
           <View style={styles.progressContainer}>
             <View style={styles.progressBackground}>
-              <Animated.View style={[styles.progressBar, animatedProgressStyle]}>
+              <AnimatedAPI.View style={[styles.progressBar, animatedProgressStyle]}>
                 <LinearGradient
                   colors={[colors.brand.accent, colors.brand.accent + 'dd']}
                   style={StyleSheet.absoluteFillObject}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 />
-              </Animated.View>
+              </AnimatedAPI.View>
             </View>
             <Text style={styles.progressText}>
               {Math.round(progressAnimation.value * 100)}% Complete
@@ -215,18 +218,17 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
           bounces={true}
         >
           {/* Header */}
-          <Animated.View 
-            entering={FadeInDown.duration(400).springify()}
-            style={styles.header}
+          <AnimatedAPI.View
+            style={[styles.header, isExpoGo ? {} : { opacity: 1 }]}
           >
             <Text style={styles.title}>How was your session?</Text>
             <Text style={styles.subtitle}>
               Help us personalize your next training
             </Text>
-          </Animated.View>
+          </AnimatedAPI.View>
 
           {/* Mental Clarity Card */}
-          <Animated.View entering={FadeInDown.duration(500).delay(100).springify()}>
+          <AnimatedAPI.View style={isExpoGo ? {} : { opacity: 1 }}>
             <TouchableOpacity activeOpacity={0.98} style={styles.surveyCard}>
               <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
                 <LinearGradient
@@ -257,10 +259,10 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
                 </View>
               </BlurView>
             </TouchableOpacity>
-          </Animated.View>
+          </AnimatedAPI.View>
 
           {/* Energy Level Card */}
-          <Animated.View entering={FadeInDown.duration(500).delay(150).springify()}>
+          <AnimatedAPI.View style={isExpoGo ? {} : { opacity: 1 }}>
             <TouchableOpacity activeOpacity={0.98} style={styles.surveyCard}>
               <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
                 <LinearGradient
@@ -291,10 +293,10 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
                 </View>
               </BlurView>
             </TouchableOpacity>
-          </Animated.View>
+          </AnimatedAPI.View>
 
           {/* Stress Level Card */}
-          <Animated.View entering={FadeInDown.duration(500).delay(200).springify()}>
+          <AnimatedAPI.View style={isExpoGo ? {} : { opacity: 1 }}>
             <TouchableOpacity activeOpacity={0.98} style={styles.surveyCard}>
               <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
                 <LinearGradient
@@ -325,10 +327,10 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
                 </View>
               </BlurView>
             </TouchableOpacity>
-          </Animated.View>
+          </AnimatedAPI.View>
 
           {/* Sensations Card */}
-          <Animated.View entering={FadeInDown.duration(500).delay(250).springify()}>
+          <AnimatedAPI.View style={isExpoGo ? {} : { opacity: 1 }}>
             <TouchableOpacity activeOpacity={0.98} style={styles.surveyCard}>
               <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
                 <LinearGradient
@@ -383,10 +385,10 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
                 </View>
               </BlurView>
             </TouchableOpacity>
-          </Animated.View>
+          </AnimatedAPI.View>
 
           {/* Overall Rating Card */}
-          <Animated.View entering={FadeInDown.duration(500).delay(300).springify()}>
+          <AnimatedAPI.View style={isExpoGo ? {} : { opacity: 1 }}>
             <TouchableOpacity activeOpacity={0.98} style={styles.surveyCard}>
               <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
                 <LinearGradient
@@ -418,12 +420,11 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
                 </View>
               </BlurView>
             </TouchableOpacity>
-          </Animated.View>
+          </AnimatedAPI.View>
 
           {/* Submit Button - Now part of scroll content */}
-          <Animated.View
-            entering={FadeIn.duration(400).delay(400).springify()}
-            style={styles.submitButtonContainer}
+          <AnimatedAPI.View
+            style={[styles.submitButtonContainer, isExpoGo ? {} : { opacity: 1 }]}
           >
             <TouchableOpacity
                 style={[
@@ -452,7 +453,7 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
                   </View>
                 )}
               </TouchableOpacity>
-          </Animated.View>
+          </AnimatedAPI.View>
 
           {/* Bottom padding for safe scrolling */}
           <View style={{ height: 40 }} />

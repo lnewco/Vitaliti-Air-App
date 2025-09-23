@@ -14,14 +14,17 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, {
+import { Animated } from 'react-native';
+import {
   FadeInDown,
   useAnimatedScrollHandler,
   useSharedValue,
   useAnimatedStyle,
   interpolate,
   Extrapolate,
-} from 'react-native-reanimated';
+  AnimatedAPI,
+  isExpoGo
+} from '../utils/animationHelpers';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CommonActions, useFocusEffect } from '@react-navigation/native';
@@ -317,7 +320,7 @@ const PremiumProfileScreen = ({ navigation, route }) => {
   // Profile actions moved to Settings screen
 
   const renderHeader = () => (
-    <Animated.View style={[styles.header, headerAnimatedStyle]}>
+    <AnimatedAPI.View style={[styles.header, headerAnimatedStyle]}>
       <View style={styles.headerTop}>
         <Image
           source={require('../../assets/IMG_4490.png')}
@@ -332,11 +335,11 @@ const PremiumProfileScreen = ({ navigation, route }) => {
         </TouchableOpacity>
       </View>
       <Text style={styles.screenTitle}>Profile</Text>
-    </Animated.View>
+    </AnimatedAPI.View>
   );
 
   const renderUserCard = () => (
-    <Animated.View entering={FadeInDown.duration(600).springify()}>
+    <AnimatedAPI.View style={isExpoGo ? {} : { opacity: 1 }}>
       <PremiumCard style={styles.userCard} gradient>
         <LinearGradient
           colors={[colors.brand.accent + '20', 'transparent']}
@@ -382,7 +385,7 @@ const PremiumProfileScreen = ({ navigation, route }) => {
           </View>
         </View>
       </PremiumCard>
-    </Animated.View>
+    </AnimatedAPI.View>
   );
 
   // Actions section removed - moved to Settings screen
@@ -479,7 +482,7 @@ const PremiumProfileScreen = ({ navigation, route }) => {
   );
 
   const renderSessionHistory = () => (
-    <Animated.View entering={FadeInDown.duration(600).delay(200).springify()}>
+    <AnimatedAPI.View style={isExpoGo ? {} : { opacity: 1 }}>
       <View style={styles.sessionHistorySection}>
         {loading ? (
           <ActivityIndicator color={colors.brand.primary} style={styles.loader} />
@@ -511,7 +514,7 @@ const PremiumProfileScreen = ({ navigation, route }) => {
           </View>
         )}
       </View>
-    </Animated.View>
+    </AnimatedAPI.View>
   );
 
   // Logout section removed - moved to Settings screen
@@ -527,7 +530,7 @@ const PremiumProfileScreen = ({ navigation, route }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.background.primary} />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <Animated.ScrollView
+        <AnimatedAPI.ScrollView
           onScroll={scrollHandler}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
@@ -547,7 +550,7 @@ const PremiumProfileScreen = ({ navigation, route }) => {
           {renderUserCard()}
           {renderSessionHistory()}
           {renderFooter()}
-        </Animated.ScrollView>
+        </AnimatedAPI.ScrollView>
         {renderHeader()}
         
         {/* Session Details Modal */}

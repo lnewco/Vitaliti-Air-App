@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
-import Animated, {
+import { Animated } from 'react-native';
+import {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -9,11 +10,14 @@ import Animated, {
   withRepeat,
   Easing,
   interpolate,
-} from 'react-native-reanimated';
+  AnimatedAPI,
+  isExpoGo,
+  createAnimatedComponent
+} from '../../utils/animationHelpers';
 import Svg, { Path, Circle, Ellipse, G, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 
-const AnimatedG = Animated.createAnimatedComponent(G);
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedG = createAnimatedComponent(G);
+const AnimatedCircle = createAnimatedComponent(Circle);
 
 const PulseOxRingAnimation = ({ isPlaying = true, size = 300 }) => {
   const slideProgress = useSharedValue(0);

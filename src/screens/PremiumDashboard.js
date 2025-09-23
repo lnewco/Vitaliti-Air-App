@@ -17,14 +17,17 @@ import {
   AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, {
+import { Animated } from 'react-native';
+import {
   useAnimatedScrollHandler,
   useSharedValue,
   useAnimatedStyle,
   interpolate,
   Extrapolate,
   withTiming,
-} from 'react-native-reanimated';
+  AnimatedAPI,
+  isExpoGo
+} from '../utils/animationHelpers';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   colors,
@@ -396,8 +399,8 @@ const PremiumDashboard = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.background.primary} />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <Animated.View style={[styles.safeArea, contentAnimatedStyle]}>
-          <Animated.ScrollView
+        <AnimatedAPI.View style={[styles.safeArea, contentAnimatedStyle]}>
+          <AnimatedAPI.ScrollView
             onScroll={scrollHandler}
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
@@ -416,9 +419,9 @@ const PremiumDashboard = ({ navigation }) => {
             {renderNotesCard()}
             
             <View style={styles.bottomSpacing} />
-          </Animated.ScrollView>
+          </AnimatedAPI.ScrollView>
           {renderHeader()}
-        </Animated.View>
+        </AnimatedAPI.View>
       </SafeAreaView>
     </View>
   );
