@@ -190,7 +190,7 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
           </View>
         </BlurView>
 
-        {/* Scrollable content with padding for button */}
+        {/* Scrollable content */}
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
@@ -335,48 +335,55 @@ const PostSessionSurveyScreen = ({ route, navigation }) => {
               </BlurView>
             </TouchableOpacity>
           </AnimatedAPI.View>
+        </ScrollView>
 
-          {/* Submit Button - Inside scroll content */}
-          <View style={styles.submitButtonContainer}>
+        {/* Fixed Complete Survey Button with Gradient Fade */}
+        <AnimatedAPI.View style={styles.floatingAction}>
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.8)', 'rgba(0,0,0,0.95)']}
+            style={styles.gradientFade}
+            locations={[0, 0.5, 1]}
+          />
+          <View style={styles.buttonContainer}>
             <TouchableOpacity
-            style={[
-              styles.submitButton,
-              !isFormComplete && styles.submitButtonDisabled
-            ]}
-            onPress={handleSubmit}
-            disabled={!isFormComplete || isSubmitting}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={!isFormComplete
-                ? ['#2A2D35', '#1F2228']
-                : [colors.brand.accent, colors.brand.accent + 'dd']
-              }
-              style={StyleSheet.absoluteFillObject}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            />
-            {isSubmitting ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <View style={styles.buttonContent}>
-                <Text style={[
-                  styles.buttonText,
-                  !isFormComplete && styles.buttonTextDisabled
-                ]}>
-                  {!isFormComplete ? 'Complete All Questions' : 'Complete Survey'}
-                </Text>
-                <Ionicons
-                  name={isFormComplete ? "checkmark-circle" : "alert-circle"}
-                  size={24}
-                  color={isFormComplete ? "white" : "rgba(255,255,255,0.5)"}
-                  style={{ marginLeft: 8 }}
-                />
-              </View>
-            )}
+              style={[
+                styles.submitButton,
+                !isFormComplete && styles.submitButtonDisabled
+              ]}
+              onPress={handleSubmit}
+              disabled={!isFormComplete || isSubmitting}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={!isFormComplete
+                  ? ['#2A2D35', '#1F2228']
+                  : [colors.brand.accent, colors.brand.accent + 'dd']
+                }
+                style={StyleSheet.absoluteFillObject}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <View style={styles.buttonContent}>
+                  <Text style={[
+                    styles.buttonText,
+                    !isFormComplete && styles.buttonTextDisabled
+                  ]}>
+                    {!isFormComplete ? 'Complete All Questions' : 'Complete Survey'}
+                  </Text>
+                  <Ionicons
+                    name={isFormComplete ? "checkmark-circle" : "alert-circle"}
+                    size={24}
+                    color={isFormComplete ? "white" : "rgba(255,255,255,0.5)"}
+                    style={{ marginLeft: 8 }}
+                  />
+                </View>
+              )}
             </TouchableOpacity>
           </View>
-        </ScrollView>
+        </AnimatedAPI.View>
       </SafeAreaView>
     </View>
   );
@@ -442,7 +449,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    paddingBottom: 120, // Increased to ensure content doesn't hide behind fixed button
   },
   card: {
     marginBottom: 16,
@@ -489,18 +496,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
   },
-  // Submit button container
-  submitButtonContainer: {
-    marginTop: 32,
-    marginBottom: Platform.OS === 'ios' ? 20 : 10,
-    paddingHorizontal: 0,
+  // Fixed button styles
+  floatingAction: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  gradientFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 150,
+  },
+  buttonContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+    paddingTop: 5,
   },
   submitButton: {
     height: 56,
-    borderRadius: 16,
+    borderRadius: 28,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
   },
   submitButtonDisabled: {
     opacity: 0.7,
