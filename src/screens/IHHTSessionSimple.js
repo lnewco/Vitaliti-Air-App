@@ -996,7 +996,7 @@ export default function IHHTSessionSimple() {
       }
 
       // Store session data and show completion modal
-      console.log('📊 Session info received from EnhancedSessionManager:', {
+      console.log('🔴🔴🔴 CODE VERSION 2 - Session info received from EnhancedSessionManager:', {
         sessionInfo,
         hasSessionInfo: !!sessionInfo,
         duration: sessionInfo?.duration,
@@ -1004,9 +1004,12 @@ export default function IHHTSessionSimple() {
         sessionId: sessionInfo?.sessionId
       });
 
+      // Add an alert to verify code is updated
+      Alert.alert('Debug', `Code Version 2 - Duration: ${sessionInfo?.duration}, Cycles: ${sessionInfo?.cycles}`);
+
       setSessionCompletedData(sessionInfo);
       setShowCompletionModal(true);
-      console.log('📊 Showing session completion modal with data:', sessionInfo);
+      console.log('🔴🔴🔴 CODE VERSION 2 - Showing session completion modal with data:', sessionInfo);
     } catch (error) {
     }
   };
@@ -1402,10 +1405,10 @@ export default function IHHTSessionSimple() {
           <View style={styles.completionModal}>
             <Icon name="check-circle" size={60} color="#10B981" style={styles.completionIcon} />
 
-            <Text style={styles.completionTitle}>Session Complete!</Text>
+            <Text style={styles.completionTitle}>Session Complete! v2</Text>
 
             <Text style={styles.completionMessage}>
-              Great work! You've completed your IHHT training session.
+              Great work! You've completed your IHHT training session. (UPDATED CODE)
             </Text>
 
             {sessionCompletedData && (

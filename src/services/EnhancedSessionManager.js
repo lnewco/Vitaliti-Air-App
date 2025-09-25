@@ -1275,7 +1275,21 @@ class EnhancedSessionManager {
 
   async completeSession() {
     console.log('🎉 Session completed successfully!');
-    
+
+    // CRITICAL: Store session info BEFORE it gets cleared
+    const completedSessionInfo = {
+      sessionId: this.currentSession?.id,
+      duration: this.startTime ? Date.now() - this.startTime : 0,
+      cycles: this.currentCycle || 0,
+      totalCycles: this.protocolConfig?.totalCycles || 5,
+      startTime: this.startTime,
+      endTime: Date.now()
+    };
+
+    // Store it for retrieval by endSession()
+    await AsyncStorage.setItem('lastEndedSession', JSON.stringify(completedSessionInfo));
+    console.log('📊 Stored completed session info:', completedSessionInfo);
+
     // Mark session as completed
     if (this.currentSession) {
       // Session will be marked as completed in stopSession
@@ -1285,7 +1299,7 @@ class EnhancedSessionManager {
     // Set phase to COMPLETED and time to 0 immediately so UI can detect it
     this.currentPhase = 'COMPLETED';
     this.phaseTimeRemaining = 0;
-    
+
     // Notify listeners that session is complete
     this.notify('sessionCompleted', {
       sessionId: this.currentSession?.id,
