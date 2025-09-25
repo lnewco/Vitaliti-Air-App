@@ -565,10 +565,10 @@ export default function IHHTSessionSimple() {
         lastValidHeartRate.current === pulseOximeterData.heartRate;
 
       // Values haven't changed from initial readings
-      const valuesUnchanged = matchesInitialCachedValues && timeSinceConnection < 10000;
+      const valuesUnchanged = matchesInitialCachedValues && timeSinceConnection < 3000;
 
-      // General cooldown period where we're extra careful
-      const isInCooldownPeriod = timeSinceConnection < 8000; // 8 second cooldown
+      // General cooldown period where we're extra careful - reduced from 8s to 1s
+      const isInCooldownPeriod = timeSinceConnection < 1000; // 1 second cooldown
 
       console.log('📊 Pulse ox validation:', {
         isFingerOnDevice,
@@ -581,26 +581,25 @@ export default function IHHTSessionSimple() {
         hasReceivedValidData: hasReceivedValidData.current
       });
 
-      // AGGRESSIVE BLOCKING: Block data if any of these conditions are true
+      // SMARTER BLOCKING: Only block if we have real reasons to suspect cached data
       const shouldBlockData =
         !isFingerOnDevice || // No finger on device
-        isInCooldownPeriod || // Still in initial cooldown
-        valuesUnchanged || // Values haven't changed from initial cached values
-        (!hasReceivedValidData.current && timeSinceConnection < 5000) || // First 5 seconds always block unless data changes
+        isInCooldownPeriod || // Still in initial 1-second cooldown
+        (valuesUnchanged && !hasReceivedValidData.current) || // Values haven't changed from initial cached values AND we haven't seen real data yet
         // CRITICAL: Block ANY data in the first second no matter what
         timeSinceConnection < 1000;
 
       // During cooldown, if no finger detected, or if we detect cached values, clear values
       if (shouldBlockData) {
-        // Show appropriate warning
-        if (!isFingerOnDevice && !isInCooldownPeriod) {
+        // Show appropriate warning - ONLY if session is still active
+        if (!isFingerOnDevice && !isInCooldownPeriod && sessionStarted) {
           console.log('👆 No finger detected on pulse ox device');
           if (!showNoFingerWarning) {
             setShowNoFingerWarning(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           }
         } else if (isInCooldownPeriod) {
-          console.log('⏳ In connection cooldown period, ignoring all data for 8 seconds');
+          console.log('⏳ In connection cooldown period, waiting 1 second for real data');
         } else if (valuesUnchanged) {
           console.log('🚫 Detected likely cached values, waiting for real data');
         }
@@ -657,12 +656,15 @@ export default function IHHTSessionSimple() {
 
           // Set new timer to detect stale data (5 seconds without update means pulse ox is likely off finger)
           pulseOxStaleTimer.current = setTimeout(() => {
-            console.log('⚠️ Pulse ox data is stale - likely removed from finger');
-            setIsPulseOxStale(true);
-            setShowPulseOxWarning(true);
+            // Only show warning if session is still active
+            if (sessionStarted) {
+              console.log('⚠️ Pulse ox data is stale - likely removed from finger');
+              setIsPulseOxStale(true);
+              setShowPulseOxWarning(true);
 
-            // Haptic feedback to alert user
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              // Haptic feedback to alert user
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            }
 
             // Clear metrics to show dashes
             setMetrics(prev => ({
@@ -714,7 +716,7 @@ export default function IHHTSessionSimple() {
     } else if (isPulseOxConnected && !pulseOximeterData) {
       // Connected but no data at all yet
       console.log('⏳ Pulse ox connected, waiting for initial data...');
-      if (!showNoFingerWarning) {
+      if (!showNoFingerWarning && sessionStarted) {
         setShowNoFingerWarning(true);
       }
       setMetrics(prev => ({
@@ -949,7 +951,18 @@ export default function IHHTSessionSimple() {
       clearInterval(updateInterval.current);
       updateInterval.current = null;
     }
-    
+
+    // Clear any pulse ox warnings immediately
+    setShowPulseOxWarning(false);
+    setShowNoFingerWarning(false);
+    setIsPulseOxStale(false);
+
+    // Clear pulse ox stale timer
+    if (pulseOxStaleTimer.current) {
+      clearTimeout(pulseOxStaleTimer.current);
+      pulseOxStaleTimer.current = null;
+    }
+
     // Mark session as ended to prevent further data processing
     setSessionStarted(false);
     
@@ -991,19 +1004,10 @@ export default function IHHTSessionSimple() {
   const handleCompletionModalContinue = () => {
     setShowCompletionModal(false);
 
-    // Navigate to post-session survey
-    navigation.reset({
-      index: 1,
-      routes: [
-        { name: 'MainTabs' },
-        {
-          name: 'PostSessionSurvey',
-          params: {
-            sessionId,
-            sessionType: 'IHHT_TRAINING'
-          }
-        }
-      ],
+    // Navigate to post-session survey - use replace to avoid going back to session
+    navigation.replace('PostSessionSurvey', {
+      sessionId,
+      sessionType: 'IHHT_TRAINING'
     });
   };
 
@@ -1381,12 +1385,12 @@ export default function IHHTSessionSimple() {
                 <View style={styles.statItem}>
                   <Text style={styles.statLabel}>Duration</Text>
                   <Text style={styles.statValue}>
-                    {formatTime(Math.floor((sessionCompletedData.endTime - sessionCompletedData.startTime) / 1000))}
+                    {formatTime(Math.floor((sessionCompletedData.duration || 0) / 1000))}
                   </Text>
                 </View>
                 <View style={styles.statItem}>
                   <Text style={styles.statLabel}>Cycles Completed</Text>
-                  <Text style={styles.statValue}>{sessionCompletedData.completedCycles || 0}</Text>
+                  <Text style={styles.statValue}>{sessionCompletedData.cycles || 0}</Text>
                 </View>
               </View>
             )}
