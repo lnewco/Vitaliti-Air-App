@@ -550,11 +550,12 @@ export default function IHHTSessionSimple() {
           }));
 
           return;
-        } else if (pulseOximeterData.isFingerDetected) {
-          // We have real data right away! Use it immediately
+        } else {
+          // We have data that's not 99/72 - assume it's real!
           console.log('✅ Real data detected immediately:', {
             spo2: pulseOximeterData.spo2,
-            heartRate: pulseOximeterData.heartRate
+            heartRate: pulseOximeterData.heartRate,
+            isFingerDetected: pulseOximeterData.isFingerDetected
           });
 
           // Mark that we have valid data
@@ -566,8 +567,12 @@ export default function IHHTSessionSimple() {
 
       const timeSinceConnection = Date.now() - connectionCooldown.current;
 
-      // CRITICAL: Check if finger is actually detected by the device
-      const isFingerOnDevice = pulseOximeterData.isFingerDetected === true;
+      // Check if finger is detected - but don't rely on this field if undefined
+      const isFingerOnDevice = pulseOximeterData.isFingerDetected !== false; // Default to true if undefined
+
+      // Check if we have reasonable values that indicate a real reading
+      const hasReasonableValues = pulseOximeterData.spo2 >= 70 && pulseOximeterData.spo2 <= 100 &&
+                                  pulseOximeterData.heartRate >= 40 && pulseOximeterData.heartRate <= 200;
 
       // Only check for cached 99/72 values specifically
       const isKnownCachedValue = pulseOximeterData.spo2 === 99 && pulseOximeterData.heartRate === 72;
@@ -575,29 +580,26 @@ export default function IHHTSessionSimple() {
       // Values haven't changed from 99/72 cached values
       const valuesUnchanged = isKnownCachedValue && !hasReceivedValidData.current && timeSinceConnection < 1000;
 
-      // Very short cooldown - only for actual cached values
-      const isInCooldownPeriod = isKnownCachedValue && timeSinceConnection < 1000;
-
       console.log('📊 Pulse ox validation:', {
         isFingerOnDevice,
+        hasReasonableValues,
         timeSinceConnection,
         isKnownCachedValue,
         valuesUnchanged,
-        isInCooldownPeriod,
         currentValues: { spo2: pulseOximeterData.spo2, hr: pulseOximeterData.heartRate },
         hasReceivedValidData: hasReceivedValidData.current
       });
 
-      // MINIMAL BLOCKING: Only block if no finger or known cached values
+      // SMART BLOCKING: Only block if we're certain the data is invalid
       const shouldBlockData =
-        !isFingerOnDevice || // No finger on device
+        (!hasReasonableValues && !isFingerOnDevice) || // No reasonable values AND no finger
         valuesUnchanged; // Still showing 99/72 cached values
 
       // During cooldown, if no finger detected, or if we detect cached values, clear values
       if (shouldBlockData) {
         // Show appropriate warning - ONLY if session is still active
-        if (!isFingerOnDevice && !isInCooldownPeriod && sessionStarted) {
-          console.log('👆 No finger detected on pulse ox device');
+        if (!hasReasonableValues && !isFingerOnDevice && sessionStarted) {
+          console.log('👆 No finger detected or invalid values');
           if (!showNoFingerWarning) {
             setShowNoFingerWarning(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
