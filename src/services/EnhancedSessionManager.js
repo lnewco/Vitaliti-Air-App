@@ -1300,7 +1300,7 @@ class EnhancedSessionManager {
   // Alias for stopSession to maintain compatibility with IHHTTrainingScreen
   async endSession() {
     console.log('📊 Ending session (called from UI)');
-    
+
     // Check if session is already ended
     if (!this.isActive && !this.currentSession) {
       console.log('⚠️ Session already ended - returning last known info');
@@ -1311,26 +1311,30 @@ class EnhancedSessionManager {
       }
       return null;
     }
-    
-    // Get the current session info before stopping
-    const sessionInfo = this.currentSession ? {
+
+    // CRITICAL: Get the current session info BEFORE stopping (which clears it)
+    const sessionInfo = this.currentSession && this.startTime ? {
       sessionId: this.currentSession.id,
       duration: Date.now() - this.startTime,
-      cycles: this.currentCycle,
-      totalCycles: this.protocolConfig?.totalCycles
+      cycles: this.currentCycle || 0,
+      totalCycles: this.protocolConfig?.totalCycles || 5,
+      startTime: this.startTime,
+      endTime: Date.now()
     } : null;
-    
-    // Store session info for later retrieval
+
+    console.log('📊 Session info captured before stopping:', sessionInfo);
+
+    // Store session info for later retrieval BEFORE clearing
     if (sessionInfo) {
       await AsyncStorage.setItem('lastEndedSession', JSON.stringify(sessionInfo));
     }
-    
-    // Stop the session if it's still active
+
+    // NOW stop the session (which will clear the data)
     if (this.isActive) {
       await this.stopSession('manual');
     }
-    
-    // Return session info for navigation
+
+    // Return the captured session info
     return sessionInfo;
   }
 

@@ -994,22 +994,47 @@ export default function IHHTSessionSimple() {
       }
 
       // Store session data and show completion modal
+      console.log('📊 Session info received from EnhancedSessionManager:', {
+        sessionInfo,
+        hasSessionInfo: !!sessionInfo,
+        duration: sessionInfo?.duration,
+        cycles: sessionInfo?.cycles,
+        sessionId: sessionInfo?.sessionId
+      });
+
       setSessionCompletedData(sessionInfo);
       setShowCompletionModal(true);
-      console.log('📊 Showing session completion modal');
+      console.log('📊 Showing session completion modal with data:', sessionInfo);
     } catch (error) {
     }
   };
 
   // Handle completion modal button press
   const handleCompletionModalContinue = () => {
-    setShowCompletionModal(false);
+    try {
+      console.log('🔄 Attempting to navigate to PostSessionSurvey with:', {
+        sessionId,
+        sessionType: 'IHHT_TRAINING',
+        navigationAvailable: !!navigation,
+        navigationType: typeof navigation
+      });
 
-    // Navigate to post-session survey - use replace to avoid going back to session
-    navigation.replace('PostSessionSurvey', {
-      sessionId,
-      sessionType: 'IHHT_TRAINING'
-    });
+      setShowCompletionModal(false);
+
+      // Navigate to post-session survey - use navigate instead of replace
+      if (navigation && navigation.navigate) {
+        navigation.navigate('PostSessionSurvey', {
+          sessionId: sessionId || `session_${Date.now()}`,
+          sessionType: 'IHHT_TRAINING'
+        });
+      } else {
+        console.error('❌ Navigation object not available');
+        Alert.alert('Error', 'Unable to navigate to survey. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Error navigating to PostSessionSurvey:', error);
+      Alert.alert('Error', 'Failed to navigate to survey. Please try again.');
+    }
   };
 
   // Control handlers
