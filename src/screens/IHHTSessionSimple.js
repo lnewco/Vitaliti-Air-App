@@ -527,120 +527,66 @@ export default function IHHTSessionSimple() {
     });
 
     if (isPulseOxConnected && pulseOximeterData) {
-      // Initialize connection tracking if needed
+      // SIMPLIFIED LOGIC: Just check if the values are reasonable
+      const hasValidValues =
+        pulseOximeterData.spo2 &&
+        pulseOximeterData.heartRate &&
+        pulseOximeterData.spo2 >= 50 &&
+        pulseOximeterData.spo2 <= 100 &&
+        pulseOximeterData.heartRate >= 30 &&
+        pulseOximeterData.heartRate <= 250;
+
+      // Special case: block the exact 99/72 cached values for 1 second max
+      const isCachedValue = pulseOximeterData.spo2 === 99 && pulseOximeterData.heartRate === 72;
+
       if (!connectionCooldown.current) {
         connectionCooldown.current = Date.now();
 
-        // Only block if we detect the known cached values (99/72)
-        const isCachedValue = pulseOximeterData.spo2 === 99 && pulseOximeterData.heartRate === 72;
-
+        // If we have the cached 99/72 values, wait 1 second
         if (isCachedValue) {
-          console.log('🔌 Detected cached values (99/72) - blocking for 1 second');
-
-          // Store these as cached values to track
-          lastValidSpo2.current = pulseOximeterData.spo2;
-          lastValidHeartRate.current = pulseOximeterData.heartRate;
-
-          // Clear metrics and exit
+          console.log('⏳ Detected cached 99/72, waiting 1 second for real data');
           setMetrics(prev => ({
             ...prev,
             spo2: null,
             heartRate: null,
             dialLevel: sessionInfo?.currentAltitudeLevel || prev.dialLevel
           }));
-
           return;
-        } else {
-          // We have data that's not 99/72 - assume it's real!
-          console.log('✅ Real data detected immediately:', {
-            spo2: pulseOximeterData.spo2,
-            heartRate: pulseOximeterData.heartRate,
-            isFingerDetected: pulseOximeterData.isFingerDetected
-          });
-
-          // Mark that we have valid data
-          hasReceivedValidData.current = true;
-          lastValidSpo2.current = pulseOximeterData.spo2;
-          lastValidHeartRate.current = pulseOximeterData.heartRate;
         }
       }
 
       const timeSinceConnection = Date.now() - connectionCooldown.current;
 
-      // Check if finger is detected - but don't rely on this field if undefined
-      const isFingerOnDevice = pulseOximeterData.isFingerDetected !== false; // Default to true if undefined
+      // Only block 99/72 for the first second
+      const shouldBlockData = isCachedValue && timeSinceConnection < 1000;
 
-      // Check if we have reasonable values that indicate a real reading
-      const hasReasonableValues = pulseOximeterData.spo2 >= 70 && pulseOximeterData.spo2 <= 100 &&
-                                  pulseOximeterData.heartRate >= 40 && pulseOximeterData.heartRate <= 200;
-
-      // Only check for cached 99/72 values specifically
-      const isKnownCachedValue = pulseOximeterData.spo2 === 99 && pulseOximeterData.heartRate === 72;
-
-      // Values haven't changed from 99/72 cached values
-      const valuesUnchanged = isKnownCachedValue && !hasReceivedValidData.current && timeSinceConnection < 1000;
-
-      console.log('📊 Pulse ox validation:', {
-        isFingerOnDevice,
-        hasReasonableValues,
+      console.log('📊 Simplified validation:', {
+        hasValidValues,
+        isCachedValue,
+        shouldBlockData,
         timeSinceConnection,
-        isKnownCachedValue,
-        valuesUnchanged,
-        currentValues: { spo2: pulseOximeterData.spo2, hr: pulseOximeterData.heartRate },
-        hasReceivedValidData: hasReceivedValidData.current
+        currentValues: { spo2: pulseOximeterData.spo2, hr: pulseOximeterData.heartRate }
       });
 
-      // SMART BLOCKING: Only block if we're certain the data is invalid
-      const shouldBlockData =
-        (!hasReasonableValues && !isFingerOnDevice) || // No reasonable values AND no finger
-        valuesUnchanged; // Still showing 99/72 cached values
-
-      // During cooldown, if no finger detected, or if we detect cached values, clear values
+      // If we should block data, show dashes
       if (shouldBlockData) {
-        // Show appropriate warning - ONLY if session is still active
-        if (!hasReasonableValues && !isFingerOnDevice && sessionStarted) {
-          console.log('👆 No finger detected or invalid values');
-          if (!showNoFingerWarning) {
-            setShowNoFingerWarning(true);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          }
-        } else if (valuesUnchanged) {
-          console.log('🚫 Detected cached values (99/72), waiting for real data');
-        }
-
-        // Clear metrics to show dashes
+        console.log('🚫 Blocking cached 99/72 values');
         setMetrics(prev => ({
           ...prev,
           spo2: null,
           heartRate: null,
           dialLevel: sessionInfo?.currentAltitudeLevel || prev.dialLevel
         }));
-
-        // Clear any stale timer
-        if (pulseOxStaleTimer.current) {
-          clearTimeout(pulseOxStaleTimer.current);
-        }
-
-        return; // Exit early - no need to process further
+        return;
       }
 
-      // Finger IS detected - clear no-finger warning
+      // Clear any warnings since we have data
       if (showNoFingerWarning) {
         setShowNoFingerWarning(false);
       }
 
-      // Check if we have valid readings - ONLY if finger is detected
-      const hasValidReadings = isFingerOnDevice &&  // Must have finger on device
-                              pulseOximeterData.spo2 &&
-                              pulseOximeterData.heartRate &&
-                              pulseOximeterData.spo2 > 0 &&
-                              pulseOximeterData.spo2 <= 100 &&
-                              pulseOximeterData.heartRate > 0 &&
-                              pulseOximeterData.heartRate <= 250 &&
-                              // Only block 99/72 if we haven't seen other data yet
-                              (hasReceivedValidData.current || !(pulseOximeterData.spo2 === 99 && pulseOximeterData.heartRate === 72));
-
-      if (hasValidReadings) {
+      // If we have valid values, display them immediately
+      if (hasValidValues) {
         // Always update when we have valid data to ensure real-time display
         const isNewData = !lastPulseOxUpdate.current ||
                          pulseOximeterData.timestamp !== lastPulseOxUpdate.current ||
@@ -1021,24 +967,40 @@ export default function IHHTSessionSimple() {
         sessionId,
         sessionType: 'IHHT_TRAINING',
         navigationAvailable: !!navigation,
-        navigationType: typeof navigation
+        navigationType: typeof navigation,
+        routes: navigation?.getState?.()?.routes
       });
 
+      // Close modal first
       setShowCompletionModal(false);
 
-      // Navigate to post-session survey - use navigate instead of replace
-      if (navigation && navigation.navigate) {
-        navigation.navigate('PostSessionSurvey', {
-          sessionId: sessionId || `session_${Date.now()}`,
-          sessionType: 'IHHT_TRAINING'
-        });
-      } else {
-        console.error('❌ Navigation object not available');
-        Alert.alert('Error', 'Unable to navigate to survey. Please try again.');
-      }
+      // Small delay to ensure modal closes before navigation
+      setTimeout(() => {
+        try {
+          // Use navigation.navigate which should work with the stack navigator
+          if (navigation && navigation.navigate) {
+            console.log('🔄 Navigating to PostSessionSurvey...');
+            navigation.navigate('PostSessionSurvey', {
+              sessionId: sessionId || `session_${Date.now()}`,
+              sessionType: 'IHHT_TRAINING'
+            });
+            console.log('✅ Navigation command sent');
+          } else {
+            console.error('❌ Navigation object not available:', navigation);
+            Alert.alert('Error', 'Unable to navigate to survey. Please return to home and try again.');
+          }
+        } catch (navError) {
+          console.error('❌ Navigation error:', navError.message, navError.stack);
+          Alert.alert(
+            'Navigation Error',
+            `Unable to navigate to survey: ${navError.message}. Please return to home.`,
+            [{ text: 'OK', onPress: () => navigation?.navigate?.('MainTabs') }]
+          );
+        }
+      }, 100);
     } catch (error) {
-      console.error('❌ Error navigating to PostSessionSurvey:', error);
-      Alert.alert('Error', 'Failed to navigate to survey. Please try again.');
+      console.error('❌ Error in handleCompletionModalContinue:', error);
+      Alert.alert('Error', `Failed to proceed: ${error.message}`);
     }
   };
 
