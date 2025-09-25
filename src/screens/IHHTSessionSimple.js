@@ -527,30 +527,41 @@ export default function IHHTSessionSimple() {
     });
 
     if (isPulseOxConnected && pulseOximeterData) {
-      // EARLY EXIT: Block ALL data for the first second after detecting pulse ox data
+      // Initialize connection tracking if needed
       if (!connectionCooldown.current) {
         connectionCooldown.current = Date.now();
 
-        // Store the first values we see - these are likely cached
-        lastValidSpo2.current = pulseOximeterData.spo2;
-        lastValidHeartRate.current = pulseOximeterData.heartRate;
+        // Only block if we detect the known cached values (99/72)
+        const isCachedValue = pulseOximeterData.spo2 === 99 && pulseOximeterData.heartRate === 72;
 
-        console.log('🔌 BLOCKING INITIAL DATA - Pulse ox just connected with values:', {
-          spo2: pulseOximeterData.spo2,
-          heartRate: pulseOximeterData.heartRate,
-          message: 'These are likely cached - ignoring for first second'
-        });
+        if (isCachedValue) {
+          console.log('🔌 Detected cached values (99/72) - blocking for 1 second');
 
-        // CRITICAL: Clear metrics and exit immediately
-        setMetrics(prev => ({
-          ...prev,
-          spo2: null,
-          heartRate: null,
-          dialLevel: sessionInfo?.currentAltitudeLevel || prev.dialLevel
-        }));
+          // Store these as cached values to track
+          lastValidSpo2.current = pulseOximeterData.spo2;
+          lastValidHeartRate.current = pulseOximeterData.heartRate;
 
-        // Exit early - don't process any data on first detection
-        return;
+          // Clear metrics and exit
+          setMetrics(prev => ({
+            ...prev,
+            spo2: null,
+            heartRate: null,
+            dialLevel: sessionInfo?.currentAltitudeLevel || prev.dialLevel
+          }));
+
+          return;
+        } else if (pulseOximeterData.isFingerDetected) {
+          // We have real data right away! Use it immediately
+          console.log('✅ Real data detected immediately:', {
+            spo2: pulseOximeterData.spo2,
+            heartRate: pulseOximeterData.heartRate
+          });
+
+          // Mark that we have valid data
+          hasReceivedValidData.current = true;
+          lastValidSpo2.current = pulseOximeterData.spo2;
+          lastValidHeartRate.current = pulseOximeterData.heartRate;
+        }
       }
 
       const timeSinceConnection = Date.now() - connectionCooldown.current;
@@ -558,36 +569,29 @@ export default function IHHTSessionSimple() {
       // CRITICAL: Check if finger is actually detected by the device
       const isFingerOnDevice = pulseOximeterData.isFingerDetected === true;
 
-      // Smart cached data detection - check if values match the initial cached values
-      const matchesInitialCachedValues =
-        !hasReceivedValidData.current &&
-        lastValidSpo2.current === pulseOximeterData.spo2 &&
-        lastValidHeartRate.current === pulseOximeterData.heartRate;
+      // Only check for cached 99/72 values specifically
+      const isKnownCachedValue = pulseOximeterData.spo2 === 99 && pulseOximeterData.heartRate === 72;
 
-      // Values haven't changed from initial readings
-      const valuesUnchanged = matchesInitialCachedValues && timeSinceConnection < 3000;
+      // Values haven't changed from 99/72 cached values
+      const valuesUnchanged = isKnownCachedValue && !hasReceivedValidData.current && timeSinceConnection < 1000;
 
-      // General cooldown period where we're extra careful - reduced from 8s to 1s
-      const isInCooldownPeriod = timeSinceConnection < 1000; // 1 second cooldown
+      // Very short cooldown - only for actual cached values
+      const isInCooldownPeriod = isKnownCachedValue && timeSinceConnection < 1000;
 
       console.log('📊 Pulse ox validation:', {
         isFingerOnDevice,
         timeSinceConnection,
-        matchesInitialCachedValues,
+        isKnownCachedValue,
         valuesUnchanged,
         isInCooldownPeriod,
         currentValues: { spo2: pulseOximeterData.spo2, hr: pulseOximeterData.heartRate },
-        initialCachedValues: { spo2: lastValidSpo2.current, hr: lastValidHeartRate.current },
         hasReceivedValidData: hasReceivedValidData.current
       });
 
-      // SMARTER BLOCKING: Only block if we have real reasons to suspect cached data
+      // MINIMAL BLOCKING: Only block if no finger or known cached values
       const shouldBlockData =
         !isFingerOnDevice || // No finger on device
-        isInCooldownPeriod || // Still in initial 1-second cooldown
-        (valuesUnchanged && !hasReceivedValidData.current) || // Values haven't changed from initial cached values AND we haven't seen real data yet
-        // CRITICAL: Block ANY data in the first second no matter what
-        timeSinceConnection < 1000;
+        valuesUnchanged; // Still showing 99/72 cached values
 
       // During cooldown, if no finger detected, or if we detect cached values, clear values
       if (shouldBlockData) {
@@ -598,10 +602,8 @@ export default function IHHTSessionSimple() {
             setShowNoFingerWarning(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           }
-        } else if (isInCooldownPeriod) {
-          console.log('⏳ In connection cooldown period, waiting 1 second for real data');
         } else if (valuesUnchanged) {
-          console.log('🚫 Detected likely cached values, waiting for real data');
+          console.log('🚫 Detected cached values (99/72), waiting for real data');
         }
 
         // Clear metrics to show dashes
@@ -626,7 +628,6 @@ export default function IHHTSessionSimple() {
       }
 
       // Check if we have valid readings - ONLY if finger is detected
-      // Also reject 99/72 unless we've already received other valid data
       const hasValidReadings = isFingerOnDevice &&  // Must have finger on device
                               pulseOximeterData.spo2 &&
                               pulseOximeterData.heartRate &&
@@ -634,7 +635,7 @@ export default function IHHTSessionSimple() {
                               pulseOximeterData.spo2 <= 100 &&
                               pulseOximeterData.heartRate > 0 &&
                               pulseOximeterData.heartRate <= 250 &&
-                              // Block 99/72 unless we've already seen real data
+                              // Only block 99/72 if we haven't seen other data yet
                               (hasReceivedValidData.current || !(pulseOximeterData.spo2 === 99 && pulseOximeterData.heartRate === 72));
 
       if (hasValidReadings) {
