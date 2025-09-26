@@ -330,6 +330,101 @@ class AdaptiveInstructionEngine {
     return null;
   }
 
+  /**
+   * Complete altitude phase and save statistics
+   * Called when altitude phase ends (before transition to recovery)
+   */
+  async completeAltitudePhase() {
+    if (!this.currentPhaseStats || this.currentPhaseStats.phaseType !== 'altitude') {
+      log.warn('No active altitude phase to complete');
+      return null;
+    }
+
+    const endTime = Date.now();
+    const duration = Math.floor((endTime - this.currentPhaseStats.startTime) / 1000);
+
+    // Calculate metrics for altitude phase
+    const spo2History = this.currentPhaseSpO2Readings || [];
+    const heartRateHistory = this.heartRateReadings || [];
+
+    // Calculate time-based metrics
+    let timeInTherapeuticZone = 0;
+    let timeToTherapeuticZone = null;
+    let timeBelow83 = 0;
+    let firstEnteredZone = false;
+
+    spo2History.forEach((reading, index) => {
+      if (reading.spo2 >= 83 && reading.spo2 <= 87) {
+        timeInTherapeuticZone++;
+        if (!firstEnteredZone) {
+          timeToTherapeuticZone = index; // seconds until first entering zone
+          firstEnteredZone = true;
+        }
+      }
+      if (reading.spo2 < 83) {
+        timeBelow83++;
+      }
+    });
+
+    // Calculate volatility metrics
+    const calculateVolatility = (readings) => {
+      if (readings.length < 2) return null;
+      const mean = readings.reduce((a, b) => a + b, 0) / readings.length;
+      const variance = readings.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / readings.length;
+      return Math.sqrt(variance);
+    };
+
+    const spo2Values = spo2History.map(r => r.spo2);
+    const inZoneReadings = spo2Values.filter(s => s >= 83 && s <= 87);
+    const outOfZoneReadings = spo2Values.filter(s => s < 83 || s > 87);
+
+    const phaseStats = {
+      ...this.currentPhaseStats,
+      endTime,
+      durationSeconds: duration,
+      minSpO2: spo2Values.length > 0 ? Math.min(...spo2Values) : null,
+      maxSpO2: spo2Values.length > 0 ? Math.max(...spo2Values) : null,
+      avgSpO2: this.currentPhaseStats.avgSpO2, // Already calculated
+      spo2ReadingsCount: spo2Values.length,
+      maskLiftCount: this.currentPhaseMaskLifts || 0,
+      timeInTherapeuticZone,
+      timeToTherapeuticZone,
+      timeBelow83,
+      spo2VolatilityTotal: calculateVolatility(spo2Values),
+      spo2VolatilityInZone: calculateVolatility(inZoneReadings),
+      spo2VolatilityOutOfZone: calculateVolatility(outOfZoneReadings),
+      peakHeartRate: heartRateHistory.length > 0 ? Math.max(...heartRateHistory) : null,
+      hrAtPhaseEnd: heartRateHistory.length > 0 ? heartRateHistory[heartRateHistory.length - 1] : null
+    };
+
+    // Save phase stats immediately
+    try {
+      await DatabaseService.savePhaseStats(phaseStats);
+      await SupabaseService.savePhaseStats(phaseStats);
+      log.info('Altitude phase stats saved successfully');
+    } catch (error) {
+      log.error('Error saving altitude phase stats:', error);
+    }
+
+    // Record altitude complete event
+    await this.recordAdaptiveEvent('altitude_complete', {
+      phaseNumber: phaseStats.phaseNumber,
+      durationSeconds: duration,
+      minSpO2: phaseStats.minSpO2,
+      avgSpO2: phaseStats.avgSpO2,
+      maskLifts: phaseStats.maskLiftCount
+    });
+
+    log.info(`Altitude phase ${phaseStats.phaseNumber} completed`, {
+      duration,
+      avgSpO2: phaseStats.avgSpO2,
+      maskLifts: phaseStats.maskLiftCount
+    });
+
+    this.currentPhaseStats = null;
+    return phaseStats;
+  }
+
   // REMOVED: endAltitudePhase() - This method was never called and contained duplicate logic
   // The actual altitude adjustment logic is in calculateNextAltitudeLevel() which is called by EnhancedSessionManager
 

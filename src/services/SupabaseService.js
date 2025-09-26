@@ -448,11 +448,90 @@ class SupabaseService {
     }
   }
 
+  async savePhaseStats(phaseStats) {
+    try {
+      // Get the Supabase UUID for this local session ID
+      const localSessionId = phaseStats.sessionId;
+      let supabaseSessionId = this.sessionMapping.get(localSessionId);
+
+      if (!supabaseSessionId) {
+        log.warn('⚠️ No Supabase session mapping found for phase stats:', localSessionId);
+        // Try to recover the mapping
+        supabaseSessionId = await this.recoverSessionMapping(localSessionId);
+        if (!supabaseSessionId) {
+          log.error('❌ Failed to recover session mapping for phase stats');
+          this.queueForSync('savePhaseStats', phaseStats);
+          return null;
+        }
+      }
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || null;
+
+      // Map phaseStats fields to session_phase_stats table columns
+      const phaseStatsData = {
+        session_id: supabaseSessionId,
+        phase_type: phaseStats.phaseType === 'altitude' ? 'hypoxia' : phaseStats.phaseType,
+        phase_number: phaseStats.phaseNumber,
+        altitude_level: phaseStats.altitudeLevel || 0,
+        start_time: new Date(phaseStats.startTime).toISOString(),
+        end_time: phaseStats.endTime ? new Date(phaseStats.endTime).toISOString() : null,
+        duration_seconds: phaseStats.durationSeconds || null,
+        min_spo2: phaseStats.minSpO2 || null,
+        max_spo2: phaseStats.maxSpO2 || null,
+        avg_spo2: phaseStats.avgSpO2 || null,
+        spo2_readings_count: phaseStats.spo2ReadingsCount || 0,
+        mask_lift_count: phaseStats.maskLiftCount || 0,
+        target_min_spo2: phaseStats.targetMinSpO2,
+        target_max_spo2: phaseStats.targetMaxSpO2,
+        recovery_trigger: phaseStats.recoveryTrigger || null,
+        time_to_95_percent_seconds: phaseStats.timeTo95PercentSeconds || null,
+        time_above_95_percent_seconds: phaseStats.timeAbove95PercentSeconds || null,
+        time_in_therapeutic_zone: phaseStats.timeInTherapeuticZone || null,
+        time_to_therapeutic_zone: phaseStats.timeToTherapeuticZone || null,
+        spo2_volatility_in_zone: phaseStats.spo2VolatilityInZone || null,
+        spo2_volatility_out_of_zone: phaseStats.spo2VolatilityOutOfZone || null,
+        spo2_volatility_total: phaseStats.spo2VolatilityTotal || null,
+        time_below_83: phaseStats.timeBelow83 || null,
+        peak_heart_rate: phaseStats.peakHeartRate || null,
+        hr_at_phase_end: phaseStats.hrAtPhaseEnd || null,
+        hr_recovery_60s: phaseStats.hrRecovery60s || null,
+        spo2_recovery_slope: phaseStats.spo2RecoverySlope || null,
+        created_at: new Date().toISOString()
+      };
+
+      log.info('📊 Saving phase stats to Supabase:', {
+        sessionId: supabaseSessionId,
+        phaseType: phaseStatsData.phase_type,
+        phaseNumber: phaseStatsData.phase_number
+      });
+
+      const { data, error } = await supabase
+        .from('session_phase_stats')
+        .insert([phaseStatsData])
+        .select();
+
+      if (error) {
+        log.error('❌ Failed to save phase stats to Supabase:', error);
+        this.queueForSync('savePhaseStats', phaseStats);
+        return null;
+      }
+
+      log.info('✅ Phase stats saved successfully to Supabase');
+      return data[0];
+    } catch (error) {
+      log.error('❌ Error saving phase stats:', error.message);
+      this.queueForSync('savePhaseStats', phaseStats);
+      return null;
+    }
+  }
+
   async updateSessionCycle(sessionId, currentCycle) {
     try {
       // Get the Supabase UUID for this local session ID
       let supabaseSessionId = this.sessionMapping.get(sessionId);
-      
+
       if (!supabaseSessionId) {
         log.warn('⚠️ No Supabase session mapping found for cycle update:', sessionId);
         this.queueForSync('updateSessionCycle', { sessionId, currentCycle });

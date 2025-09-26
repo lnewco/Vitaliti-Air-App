@@ -997,13 +997,24 @@ class EnhancedSessionManager {
 
     // When transitioning from ALTITUDE, go to TRANSITION first
     if (this.currentPhase === 'ALTITUDE') {
+      // Complete and save altitude phase stats
+      if (this.adaptiveEngine) {
+        try {
+          // Save altitude phase stats before transitioning
+          await this.adaptiveEngine.completeAltitudePhase();
+          console.log('✅ Altitude phase stats saved');
+        } catch (error) {
+          console.error('❌ Error saving altitude phase stats:', error);
+        }
+      }
+
       // Calculate altitude adjustment for NEXT altitude phase (if any)
       if (this.adaptiveEngine) {
         try {
           // First calculate the average SpO2 for the phase that's ending
           const avgSpO2 = this.adaptiveEngine.calculateCurrentPhaseAvgSpO2();
           console.log(`📊 Phase ending with avgSpO2: ${avgSpO2}%`);
-          
+
           // Now calculate altitude adjustment based on the updated avgSpO2
           const altitudeAdjustment = this.adaptiveEngine.calculateNextAltitudeLevel();
           console.log('🎯 Altitude adjustment calculation:', altitudeAdjustment);
