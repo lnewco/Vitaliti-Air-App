@@ -31,6 +31,7 @@ class AdaptiveInstructionEngine {
     this.currentPhaseMinSpO2 = null;
     this.currentPhaseMaxSpO2 = null;
     this.currentPhaseSpO2Readings = [];
+    this.heartRateReadings = []; // Initialize heart rate tracking
     
     // Recovery phase tracking
     this.recoveryPhaseTimer = {
@@ -138,6 +139,7 @@ class AdaptiveInstructionEngine {
     this.currentPhaseMinSpO2 = null;
     this.currentPhaseMaxSpO2 = null;
     this.currentPhaseSpO2Readings = [];
+    this.heartRateReadings = []; // Reset heart rate tracking
     
     // Always reset mask lift state when starting a new altitude phase
     // This ensures we get fresh mask lift triggers for each altitude phase
